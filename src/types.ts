@@ -59,3 +59,13 @@ export interface Announcement {
   text: string;
   date: string;
 }
+
+export interface AppNotification {
+  id: string;
+  phone: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  isRead: boolean;
+  slotId?: string;
+}
