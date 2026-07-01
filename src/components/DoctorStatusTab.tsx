@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ClipboardList, ShieldAlert, AlertCircle, Clock, Trash, MapPin, CheckCircle } from 'lucide-react';
+import { ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2 } from 'lucide-react';
 import { LocumSlot, UserProfile } from '../types';
 
 interface DoctorStatusTabProps {
@@ -15,6 +15,9 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
   onCancelSlot
 }) => {
   const [filterType, setFilterType] = useState<'All' | 'Approved' | 'Pending'>('All');
+  const [pendingCancelSlot, setPendingCancelSlot] = useState<LocumSlot | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [resultMessage, setResultMessage] = useState<string | null>(null);
 
   // Find slots booked by this doctor (by phone) — whether self-booked or assigned by admin.
   // Slots reset back to "Available" (cancelled by admin or withdrawn by the doctor) should
@@ -46,15 +49,21 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
     return true; // All
   });
 
-  const handleCancelClick = async (slot: LocumSlot) => {
-    // Show warnings if canceling already approved shift
-    const msg = slot.status === 'Approved'
-      ? "🚨 CRITICAL WARNING!\nThis shift is already APPROVED. Withdrawing within short order will be logged. It will disqualify you from earning the coveted 'The Unstoppable' monthly recognition award (which yields RM/Points boosters).\n\nProceed with cancellation anyway?"
-      : "Are you sure you want to withdraw this application?";
+  const handleCancelClick = (slot: LocumSlot) => {
+    setPendingCancelSlot(slot);
+  };
 
-    if (window.confirm(msg)) {
-      const response = await onCancelSlot(slot.id, slot.status, currentUser.phone);
-      alert(response);
+  const confirmCancel = async () => {
+    if (!pendingCancelSlot) return;
+    setIsCancelling(true);
+    try {
+      const response = await onCancelSlot(pendingCancelSlot.id, pendingCancelSlot.status, currentUser.phone);
+      setPendingCancelSlot(null);
+      setResultMessage(response);
+    } catch (err) {
+      setResultMessage('⚠️ Something went wrong while withdrawing. Please try again.');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -81,7 +90,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       <div className="p-3 bg-amber-50/50 border border-amber-200/40 rounded-2xl flex gap-2 text-xs text-amber-800 leading-snug">
         <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
         <p className="font-semibold font-sans">
-          Cancellation policy: Approved slots cancelled with less than 48 hours notice triggers review and locks automated monthly reward evaluation routines.
+          For last-minute cancellations of approved shifts, kindly notify the admin directly via PM as well.
         </p>
       </div>
 
@@ -164,6 +173,91 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
           )}
         </AnimatePresence>
       </div>
+
+      {/* ===================== Confirm Withdraw Dialog ===================== */}
+      <AnimatePresence>
+        {pendingCancelSlot && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !isCancelling && setPendingCancelSlot(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-3xl shadow-xl w-full max-w-sm p-6 space-y-5 relative"
+            >
+              <button
+                onClick={() => !isCancelling && setPendingCancelSlot(null)}
+                className="absolute top-4 right-4 text-slate-300 hover:text-slate-500 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-8 h-8 text-rose-500 flex-shrink-0" />
+                <div className="space-y-1">
+                  <h4 className="font-display font-bold text-slate-800 text-base">
+                    Cancel this slot?
+                  </h4>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Are you sure you want to cancel this slot?
+                  </p>
+                  {pendingCancelSlot.status === 'Approved' && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 mt-2 leading-relaxed">
+                      For last-minute cancellations, kindly notify the admin directly via PM too.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-slate-50 rounded-2xl p-4 space-y-1.5 border border-slate-100 text-xs">
+                <p className="font-semibold text-slate-700">Klinik ARA {pendingCancelSlot.cawangan}</p>
+                <p className="text-slate-500">{pendingCancelSlot.tarikh} &middot; {pendingCancelSlot.masa}</p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setPendingCancelSlot(null)}
+                  disabled={isCancelling}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition disabled:opacity-50"
+                >
+                  Keep Shift
+                </button>
+                <button
+                  onClick={confirmCancel}
+                  disabled={isCancelling}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition disabled:opacity-50"
+                >
+                  {isCancelling ? 'Withdrawing...' : 'Yes, Withdraw'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ===================== Result Toast ===================== */}
+      <AnimatePresence>
+        {resultMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-2.5 max-w-[90vw]"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <span>{resultMessage}</span>
+            <button onClick={() => setResultMessage(null)} className="text-slate-400 hover:text-white ml-2">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
