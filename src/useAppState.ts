@@ -726,16 +726,29 @@ export function useAppState() {
           branch: slot.cawangan,
         }),
       })
-        .then((res) => res.json())
+        .then(async (res) => {
+          const isJson = res.headers.get("content-type")?.includes("application/json");
+          const data = isJson ? await res.json() : null;
+
+          if (!res.ok) {
+            const errMsg = data?.error || `HTTP error ${res.status}`;
+            throw new Error(errMsg);
+          }
+          return data;
+        })
         .then((data) => {
           console.log("Email API response:", data);
-          if (data.sentRealEmail) {
+          if (data && data.sentRealEmail) {
             logActivity(`Confirmation email sent to ${doctorEmail} for slot on ${slot.tarikh} at ${slot.cawangan}`);
           } else {
-            logActivity(`Confirmation email simulated for Dr ${slot.dr} (${doctorEmail})`);
+            const msg = data?.message || "Email simulated successfully";
+            logActivity(`Confirmation email simulated for Dr ${slot.dr}: ${msg}`);
           }
         })
-        .catch((err) => console.error("Failed to send email API call:", err));
+        .catch((err) => {
+          console.error("Failed to send email API call:", err);
+          logActivity(`Email failed to send to Dr ${slot.dr}: ${err.message || err}`);
+        });
     } else {
       console.warn(`No email found for doctor ${slot.dr} (${slot.phone})`);
       logActivity(`Could not send approval email: No registered email for Dr ${slot.dr}`);
