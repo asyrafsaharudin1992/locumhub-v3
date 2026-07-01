@@ -6,6 +6,7 @@ import {
   FeedbackRecord,
   NewApplication,
   AppNotification,
+  AdminAlert,
 } from "./types";
 
 // Check if Supabase connection is active
@@ -318,6 +319,26 @@ export async function fetchNotificationsFromSupabase(): Promise<
     timestamp: row.timestamp || "",
     isRead: row.is_read ?? row.isRead ?? false,
     slotId: row.slot_id || row.slotId || undefined,
+  }));
+}
+
+export async function fetchAdminAlertsFromSupabase(): Promise<
+  AdminAlert[] | null
+> {
+  const { data, error } = await queryTableWithFallback([
+    "admin_alerts",
+    "AdminAlerts",
+  ]);
+  if (error) return null;
+  return (data || []).map((row) => ({
+    id: row.id || "",
+    slotId: row.slot_id || row.slotId || "",
+    drName: row.dr_name || row.drName || "",
+    cawangan: row.cawangan || "",
+    tarikh: row.tarikh || "",
+    masa: row.masa || "",
+    message: row.message || "",
+    timestamp: row.timestamp || "",
   }));
 }
 
@@ -780,6 +801,40 @@ export async function deleteNotificationFromSupabase(notifId: string) {
   if (!success) {
     console.error("Supabase deleteNotification failed:", error);
     throw error || new Error("Failed to delete notification from Supabase");
+  }
+}
+
+export async function saveAdminAlertToSupabase(alert: AdminAlert) {
+  const record = {
+    id: alert.id,
+    slot_id: alert.slotId,
+    dr_name: alert.drName,
+    cawangan: alert.cawangan,
+    tarikh: alert.tarikh,
+    masa: alert.masa,
+    message: alert.message,
+    timestamp: alert.timestamp,
+  };
+  const { success, error } = await upsertTableWithFallback(
+    ["admin_alerts", "AdminAlerts"],
+    record,
+    "id",
+  );
+  if (!success) {
+    console.error("Supabase saveAdminAlert failed:", error);
+    throw error || new Error("Failed to save admin alert to Supabase");
+  }
+}
+
+export async function deleteAdminAlertFromSupabase(alertId: string) {
+  const { success, error } = await deleteTableWithFallback(
+    ["admin_alerts", "AdminAlerts"],
+    "id",
+    alertId,
+  );
+  if (!success) {
+    console.error("Supabase deleteAdminAlert failed:", error);
+    throw error || new Error("Failed to delete admin alert from Supabase");
   }
 }
 
