@@ -9,12 +9,14 @@ interface CustomCalendarProps {
   currentUserRole?: string;
   currentUserPhone?: string;
   selectedBranch?: string; // "Seri Kembangan" | "Kajang" | "All"
+  openSlotColorMode?: 'red' | 'branch'; // how to colour Available/open slots — defaults to red (admin view)
 }
 
 export const CustomCalendar: React.FC<CustomCalendarProps> = ({
   slots,
   onSlotClick,
-  selectedBranch = 'All'
+  selectedBranch = 'All',
+  openSlotColorMode = 'red'
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 14)); // Initialised to June 14, 2026
   const [selectedDay, setSelectedDay] = useState<number>(14);
@@ -102,7 +104,19 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
       return 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-sm';
     }
 
-    // Available / Open turns to a bright red color to stand out immediately
+    // Available / Open — colour by branch when requested (doctor view), otherwise the classic red flag (admin view)
+    if (openSlotColorMode === 'branch') {
+      if (isSK) {
+        return 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-600 shadow-sm font-bold';
+      }
+      if (isKajang) {
+        return 'bg-sky-500 hover:bg-sky-600 text-white border-sky-600 shadow-sm font-bold';
+      }
+      if (isCME) {
+        return 'bg-purple-500 hover:bg-purple-600 text-white border-purple-600 shadow-sm font-bold';
+      }
+      return 'bg-indigo-500 hover:bg-indigo-600 text-white border-indigo-600 shadow-sm font-bold';
+    }
     return 'bg-red-500 hover:bg-red-600 text-white border-red-600 shadow-sm font-bold';
   };
 
@@ -205,10 +219,12 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                 <span className="w-3 h-3 rounded-md bg-amber-500 inline-block" />
                 Pending Approval
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-md bg-red-500 inline-block" />
-                Open Shift (Red)
-              </span>
+              {openSlotColorMode !== 'branch' && (
+                <span className="flex items-center gap-1.5">
+                  <span className="w-3 h-3 rounded-md bg-red-500 inline-block" />
+                  Open Shift (Red)
+                </span>
+              )}
             </div>
 
             {/* Pagination Controls */}
@@ -421,8 +437,15 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
               <div className="space-y-2">
                 {selectedDateSlots.map((slot) => {
                   const isSK = slot.cawangan.toLowerCase().includes('sk') || slot.cawangan.toLowerCase().includes('seri');
+                  const isKajangSlot = slot.cawangan.toLowerCase().includes('kajang') || slot.cawangan.toLowerCase().includes('kj');
                   const badgeStyle = slot.status === 'Available'
-                    ? 'bg-red-50 text-red-700 border-red-100'
+                    ? (openSlotColorMode === 'branch'
+                        ? (isSK
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : isKajangSlot
+                            ? 'bg-sky-50 text-sky-700 border-sky-100'
+                            : 'bg-indigo-50 text-indigo-700 border-indigo-100')
+                        : 'bg-red-50 text-red-700 border-red-100')
                     : slot.status === 'Pending'
                     ? 'bg-amber-50 text-amber-700 border-amber-100'
                     : 'bg-indigo-50 text-indigo-700 border-indigo-100';
