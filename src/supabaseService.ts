@@ -157,7 +157,7 @@ export async function fetchSlotsFromSupabase(): Promise<LocumSlot[] | null> {
       cawangan: row.cawangan || row.Cawangan || "",
       status: finalStatus as any,
       dr: finalDr,
-      phone: row.phone || row.Phone || "",
+      phone: row.phone || row.Phone || row.no_telefon_locum || "",
       gaji: Number(row.bayaran || row.gaji || row.Gaji || 0), // Menyokong kolum bayaran & gaji sekali gus!
       sales: row.sales !== undefined ? Number(row.sales) : undefined,
       pesakit:
