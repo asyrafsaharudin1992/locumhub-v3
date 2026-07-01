@@ -69,3 +69,14 @@ export interface AppNotification {
   isRead: boolean;
   slotId?: string;
 }
+
+export interface AdminAlert {
+  id: string;
+  slotId: string;
+  drName: string;
+  cawangan: string;
+  tarikh: string;
+  masa: string;
+  message: string;
+  timestamp: string;
+}
