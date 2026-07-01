@@ -141,10 +141,6 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
                   <Clock className="w-4 h-4 text-indigo-500 flex-shrink-0" />
                   <span className="font-semibold text-slate-700">{pendingSlot.tarikh} &middot; {pendingSlot.masa}</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="w-4 h-4 flex items-center justify-center text-indigo-500 flex-shrink-0">🪙</span>
-                  <span className="font-semibold text-slate-700">RM {pendingSlot.gaji} base rate</span>
-                </div>
               </div>
 
               <div className="flex gap-3">
