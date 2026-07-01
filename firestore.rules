@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Users
+    match /users/{phone} {
+      allow read, write: if true;
+    }
+
+    // Slots
+    match /slots/{slotId} {
+      allow read, write: if true;
+    }
+
+    // Announcements
+    match /announcements/{annId} {
+      allow read, write: if true;
+    }
+
+    // Patient feedback
+    match /feedbacks_patient/{id} {
+      allow read, write: if true;
+    }
+
+    // Staff feedback
+    match /feedbacks_staff/{id} {
+      allow read, write: if true;
+    }
+
+    // Locum feedback
+    match /feedbacks_locum/{id} {
+      allow read, write: if true;
+    }
+
+    // Recruitment Applications
+    match /applications/{id} {
+      allow read, write: if true;
+    }
+
+    // Activity Logs
+    match /activity_logs/{id} {
+      allow read, write: if true;
+    }
+  }
+}
+

@@ -1,0 +1,122 @@
+{
+  "collections": {
+    "users": {
+      "schema": {
+        "phone": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "role": { "type": "string", "required": true },
+        "email": { "type": "string", "required": true },
+        "mmc": { "type": "string", "required": true },
+        "apc": { "type": "string", "required": false },
+        "indemnity": { "type": "string", "required": true },
+        "workplace": { "type": "string", "required": false },
+        "points": { "type": "number", "required": true },
+        "badges": { "type": "string", "required": false },
+        "locks": { "type": "string", "required": false },
+        "password": { "type": "string", "required": false }
+      },
+      "rules": {
+        "read": "true",
+        "write": "true"
+      }
+    },
+    "slots": {
+      "schema": {
+        "id": { "type": "string", "required": true },
+        "tarikh": { "type": "string", "required": true },
+        "masa": { "type": "string", "required": true },
+        "cawangan": { "type": "string", "required": true },
+        "status": { "type": "string", "required": true },
+        "dr": { "type": "string", "required": false },
+        "phone": { "type": "string", "required": false },
+        "gaji": { "type": "number", "required": true },
+        "sales": { "type": "number", "required": false },
+        "pesakit": { "type": "number", "required": false },
+        "bookedAt": { "type": "string", "required": false }
+      },
+      "rules": {
+        "read": "true",
+        "write": "true"
+      }
+    },
+    "announcements": {
+      "schema": {
+        "id": { "type": "string", "required": true },
+        "text": { "type": "string", "required": true },
+        "date": { "type": "string", "required": true }
+      },
+      "rules": {
+        "read": "true",
+        "write": "true"
+      }
+    },
+    "feedbacks_patient": {
+      "schema": {
+        "tarikh": { "type": "string", "required": true },
+        "nama": { "type": "string", "required": true },
+        "reviewer": { "type": "string", "required": true },
+        "target": { "type": "string", "required": true },
+        "rating": { "type": "number", "required": true },
+        "komen": { "type": "string", "required": true }
+      },
+      "rules": {
+        "read": "true",
+        "write": "true"
+      }
+    },
+    "feedbacks_staff": {
+      "schema": {
+        "tarikh": { "type": "string", "required": true },
+        "nama": { "type": "string", "required": true },
+        "reviewer": { "type": "string", "required": true },
+        "target": { "type": "string", "required": true },
+        "rating": { "type": "number", "required": true },
+        "komen": { "type": "string", "required": true }
+      },
+      "rules": {
+        "read": "true",
+        "write": "true"
+      }
+    },
+    "feedbacks_locum": {
+      "schema": {
+        "tarikh": { "type": "string", "required": true },
+        "nama": { "type": "string", "required": true },
+        "reviewer": { "type": "string", "required": true },
+        "target": { "type": "string", "required": true },
+        "rating": { "type": "number", "required": true },
+        "komen": { "type": "string", "required": true }
+      },
+      "rules": {
+        "read": "true",
+        "write": "true"
+      }
+    },
+    "applications": {
+      "schema": {
+        "timestamp": { "type": "string", "required": true },
+        "nama": { "type": "string", "required": true },
+        "phone": { "type": "string", "required": true },
+        "mmc": { "type": "string", "required": true },
+        "apc": { "type": "string", "required": true },
+        "ins": { "type": "string", "required": true },
+        "cvUrl": { "type": "string", "required": true },
+        "skills": { "type": "string", "required": true }
+      },
+      "rules": {
+        "read": "true",
+        "write": "true"
+      }
+    },
+    "activity_logs": {
+      "schema": {
+        "timestamp": { "type": "string", "required": true },
+        "action": { "type": "string", "required": true }
+      },
+      "rules": {
+        "read": "true",
+        "write": "true"
+      }
+    }
+  }
+}

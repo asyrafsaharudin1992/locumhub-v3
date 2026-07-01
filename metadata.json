@@ -1,0 +1,8 @@
+{
+  "name": "Ara Locum Hub",
+  "description": "High-performance locum booking, scheduling, and reward tracking portal for Klinik ARA 24 Jam.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
