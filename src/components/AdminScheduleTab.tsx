@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CustomCalendar } from './CustomCalendar';
 import { SlotManageModal } from './SlotManageModal';
-import { LocumSlot, UserProfile } from '../types';
-import { Plus, Trash2, Calendar, MapPin, Clock, DollarSign, CalendarDays, Key, Users, AlertCircle, CheckCircle2, X } from 'lucide-react';
+import { LocumSlot, UserProfile, AdminAlert } from '../types';
+import { Plus, Trash2, Calendar, MapPin, Clock, DollarSign, CalendarDays, Key, Users, AlertCircle, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 
 interface AdminScheduleTabProps {
   slots: LocumSlot[];
@@ -11,6 +11,8 @@ interface AdminScheduleTabProps {
   currentUserRole: string;
   onManageSlot: (action: 'DELETE' | 'CANCEL' | 'REPLACE', id: string, phone?: string, manualName?: string) => Promise<string>;
   onBulkCreateSlots: (dates: string[], branch: string, time: string, pay: number) => string;
+  adminAlerts?: AdminAlert[];
+  onDismissAlert?: (id: string) => void;
 }
 
 export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
@@ -18,7 +20,9 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
   users = [], 
   currentUserRole,
   onManageSlot,
-  onBulkCreateSlots
+  onBulkCreateSlots,
+  adminAlerts = [],
+  onDismissAlert
 }) => {
   const [selectedBranch, setSelectedBranch] = useState<'All' | 'Seri Kembangan' | 'Kajang'>('All');
   const [managingSlot, setManagingSlot] = useState<LocumSlot | null>(null);
@@ -118,7 +122,43 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+    <div className="space-y-4">
+      {/* Cancellation heads-up alerts — dismiss once handled */}
+      <AnimatePresence mode="popLayout">
+        {adminAlerts.length > 0 && (
+          <div className="space-y-2.5">
+            {adminAlerts.map((alert) => (
+              <motion.div
+                layout
+                key={alert.id}
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3 shadow-sm"
+              >
+                <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-0.5">
+                  <p className="text-xs font-bold text-amber-900 leading-snug">
+                    {alert.message}
+                  </p>
+                  <p className="text-[10px] text-amber-600 font-mono">{alert.timestamp}</p>
+                </div>
+                {onDismissAlert && (
+                  <button
+                    onClick={() => onDismissAlert(alert.id)}
+                    className="text-[11px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition flex items-center gap-1 flex-shrink-0"
+                  >
+                    <X className="w-3 h-3" />
+                    Read
+                  </button>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </AnimatePresence>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
       {/* Visual calendar display on left side (Col 8) */}
       <div className="xl:col-span-8 space-y-4">
         <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200 shadow-sm">
@@ -300,6 +340,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         onClose={() => setManagingSlot(null)}
         onManage={onManageSlot}
       />
+    </div>
     </div>
   );
 };
