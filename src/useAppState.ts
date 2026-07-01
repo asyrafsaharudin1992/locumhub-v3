@@ -5,6 +5,7 @@ import {
   FeedbackRecord,
   NewApplication,
   Announcement,
+  AppNotification,
 } from "./types";
 import { getSupabaseConfig, getSupabaseClient } from "./supabaseClient";
 import {
@@ -60,6 +61,7 @@ export interface AppState {
   newApplications: NewApplication[];
   currentUser: UserProfile | null;
   activityLogs: { timestamp: string; action: string }[];
+  notifications: AppNotification[];
 }
 
 export function useAppState() {
@@ -74,6 +76,7 @@ export function useAppState() {
     const savedApp = localStorage.getItem("ara_applications");
     const savedLogs = localStorage.getItem("ara_logs");
     const savedCurrentUser = localStorage.getItem("ara_current_user");
+    const savedNotifications = localStorage.getItem("ara_notifications");
 
     return {
       users: savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS,
@@ -91,6 +94,7 @@ export function useAppState() {
         : INITIAL_NEW_APPLICATIONS,
       currentUser: savedCurrentUser ? JSON.parse(savedCurrentUser) : null,
       activityLogs: savedLogs ? JSON.parse(savedLogs) : [],
+      notifications: savedNotifications ? JSON.parse(savedNotifications) : [],
     };
   });
 
@@ -388,6 +392,7 @@ export function useAppState() {
       JSON.stringify(state.newApplications),
     );
     localStorage.setItem("ara_logs", JSON.stringify(state.activityLogs));
+    localStorage.setItem("ara_notifications", JSON.stringify(state.notifications || []));
     if (state.currentUser) {
       localStorage.setItem(
         "ara_current_user",
@@ -703,56 +708,47 @@ export function useAppState() {
 
   // --- ADMIN SYSTEM FUNCTIONS ---
 
-  const triggerApprovalEmail = (slot: LocumSlot) => {
-    // Find doctor's email in existing state.users with robust trimmed and lowercase matching
-    const doctorUser = state.users.find(
-      (u) =>
-        (u.phone && slot.phone && u.phone.trim() === slot.phone.trim()) ||
-        (u.name && slot.dr && u.name.trim().toLowerCase() === slot.dr.trim().toLowerCase()),
-    );
-    const doctorEmail = doctorUser?.email || "";
+  const triggerApprovalNotification = (slot: LocumSlot) => {
+    const newNotif: AppNotification = {
+      id: "notif_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+      phone: slot.phone,
+      title: "Slot Approved 🎉",
+      message: `Your booking for a slot at ARA ${slot.cawangan} on ${slot.tarikh} (${slot.masa}) has been approved!`,
+      timestamp: new Date().toLocaleString("en-GB"),
+      isRead: false,
+      slotId: slot.id,
+    };
 
-    if (doctorEmail) {
-      fetch("/api/send-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          to: doctorEmail,
-          doctorName: slot.dr,
-          date: slot.tarikh,
-          time: slot.masa,
-          branch: slot.cawangan,
-        }),
-      })
-        .then(async (res) => {
-          const isJson = res.headers.get("content-type")?.includes("application/json");
-          const data = isJson ? await res.json() : null;
+    setState((prev) => {
+      const currentNotifs = prev.notifications || [];
+      return {
+        ...prev,
+        notifications: [newNotif, ...currentNotifs],
+      };
+    });
 
-          if (!res.ok) {
-            const errMsg = data?.error || `HTTP error ${res.status}`;
-            throw new Error(errMsg);
-          }
-          return data;
-        })
-        .then((data) => {
-          console.log("Email API response:", data);
-          if (data && data.sentRealEmail) {
-            logActivity(`Confirmation email sent to ${doctorEmail} for slot on ${slot.tarikh} at ${slot.cawangan}`);
-          } else {
-            const msg = data?.message || "Email simulated successfully";
-            logActivity(`Confirmation email simulated for Dr ${slot.dr}: ${msg}`);
-          }
-        })
-        .catch((err) => {
-          console.error("Failed to send email API call:", err);
-          logActivity(`Email failed to send to Dr ${slot.dr}: ${err.message || err}`);
-        });
-    } else {
-      console.warn(`No email found for doctor ${slot.dr} (${slot.phone})`);
-      logActivity(`Could not send approval email: No registered email for Dr ${slot.dr}`);
-    }
+    logActivity(`LocumHub Notification created for Dr ${slot.dr} (Phone: ${slot.phone})`);
+  };
+
+  const markNotificationsAsRead = (phone: string) => {
+    setState((prev) => {
+      const updated = (prev.notifications || []).map((n) => {
+        if (n.phone.trim() === phone.trim()) {
+          return { ...n, isRead: true };
+        }
+        return n;
+      });
+      return { ...prev, notifications: updated };
+    });
+    logActivity(`Cleared unread notifications count for phone: ${phone}`);
+  };
+
+  const deleteNotification = (id: string) => {
+    setState((prev) => {
+      const updated = (prev.notifications || []).filter((n) => n.id !== id);
+      return { ...prev, notifications: updated };
+    });
+    logActivity(`Deleted notification record ${id}`);
   };
 
   const adminApproveSlot = async (id: string): Promise<string> => {
@@ -779,8 +775,8 @@ export function useAppState() {
       await cloudSaveSlot(slot).catch((err) =>
         console.error("Cloud adminApproveSlot failed:", err),
       );
-      // Trigger the approval email
-      triggerApprovalEmail(slot);
+      // Trigger local application notification
+      triggerApprovalNotification(slot);
     }
 
     if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
@@ -793,7 +789,7 @@ export function useAppState() {
     }
 
     logActivity(`ADMIN APPROVED: Slot ${id} for Dr ${docName}`);
-    return `Slot Approved! Confirmation email prepared for Dr. ${docName} regarding shift on ${dateStr} at ARA ${branchName}`;
+    return `Slot Approved! LocumHub Notification dispatched directly to Dr. ${docName} for shift on ${dateStr} at ARA ${branchName}`;
   };
 
   const adminManageSlot = async (
@@ -913,8 +909,8 @@ export function useAppState() {
           console.error("Cloud adminManageSlot REPLACE failed:", err),
         );
 
-        // Trigger the approval email
-        triggerApprovalEmail(updatedSlot);
+        // Trigger local application notification
+        triggerApprovalNotification(updatedSlot);
 
         if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
           await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
@@ -1827,6 +1823,8 @@ export function useAppState() {
     getManualHeartCandidates,
     submitRecruitment,
     logActivity,
+    markNotificationsAsRead,
+    deleteNotification,
 
     // Google synchronization exposed properties
     googleUser,
