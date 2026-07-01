@@ -16,10 +16,27 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<'All' | 'Approved' | 'Pending'>('All');
 
-  // Find slots booked by this doctor (by phone)
+  // Find slots booked by this doctor (by phone) — whether self-booked or assigned by admin
   const mySlots = slots.filter(s => s.phone === currentUser.phone);
 
-  const filteredSlots = mySlots.filter(s => {
+  // Parse "DD/MM/YYYY, HH:MM:SS" (en-GB toLocaleString format) safely; unknown/missing dates sort last
+  const parseBookedAt = (raw?: string): number => {
+    if (!raw) return 0;
+    const parts = raw.split(/[\s,/:]+/).filter(Boolean);
+    if (parts.length >= 6) {
+      const [d, m, y, h, min, s] = parts.map((p) => parseInt(p, 10));
+      const dt = new Date(y, (m || 1) - 1, d, h || 0, min || 0, s || 0);
+      if (!isNaN(dt.getTime())) return dt.getTime();
+    }
+    const fallback = new Date(raw).getTime();
+    return isNaN(fallback) ? 0 : fallback;
+  };
+
+  const sortedMySlots = [...mySlots].sort(
+    (a, b) => parseBookedAt(b.bookedAt) - parseBookedAt(a.bookedAt)
+  );
+
+  const filteredSlots = sortedMySlots.filter(s => {
     if (filterType === 'Approved') return s.status === 'Approved';
     if (filterType === 'Pending') return s.status === 'Pending';
     return true; // All
