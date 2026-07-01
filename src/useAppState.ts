@@ -902,6 +902,7 @@ export function useAppState() {
       }
 
       if (finalName) {
+        const assignedAt = new Date().toLocaleString("en-GB");
         const updatedSlots = state.slots.map((s) => {
           if (s.id === id) {
             return {
@@ -909,6 +910,7 @@ export function useAppState() {
               status: "Approved",
               dr: finalName,
               phone: finalPhone,
+              bookedAt: assignedAt,
             } as LocumSlot;
           }
           return s;
@@ -921,6 +923,7 @@ export function useAppState() {
           status: "Approved",
           dr: finalName,
           phone: finalPhone,
+          bookedAt: assignedAt,
         } as LocumSlot;
 
         await cloudSaveSlot(updatedSlot).catch((err) =>
