@@ -41,24 +41,13 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  const { to, doctorName, date, time, branch } = req.body;
+  const { to, subject, text, html } = req.body;
 
-  if (!to) {
-    return res.status(400).json({ error: "Recipient email is required" });
+  if (!to || !subject || !text) {
+    return res.status(400).json({ 
+      error: "Missing required fields: to, subject, and text are required" 
+    });
   }
-
-  const subject = `Confirmation of Slot - ${branch}`;
-  const text = `Hi/salam Dr ${doctorName || "Doctor"},
-
-Thank you for taking up the slot, details as below:
-
-Date: ${date || "N/A"}
-Time: ${time || "N/A"}
-Branch: ${branch || "N/A"}
-
-Please check the app for more info.
-
-Thank you.`;
 
   const fromEmail = "operation@hsohealthcare.com";
 
@@ -71,25 +60,24 @@ Thank you.`;
         to,
         subject,
         text,
+        html: html || undefined,
       });
 
       console.log(`[Email Sent Successfully on Vercel] To: ${to}, Subject: ${subject}`);
       return res.status(200).json({
         success: true,
-        message: "Email sent successfully via SMTP on Vercel",
-        sentRealEmail: true,
+        message: "Email sent successfully",
       });
     } else {
       console.warn("[Vercel SMTP Error] SMTP credentials are not configured.");
       return res.status(500).json({
-        error: "SMTP configuration is missing on Vercel dashboard. Please add SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS under Vercel Settings.",
-        sentRealEmail: false,
+        error: "SMTP configuration is missing. Please add SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS to environment variables.",
       });
     }
   } catch (error: any) {
-    console.error("Error sending email on Vercel:", error);
+    console.error("Error sending email:", error);
     return res.status(500).json({
-      error: error.message || "Failed to send email through SMTP mailer on Vercel",
+      error: error.message || "Failed to send email",
     });
   }
 }
