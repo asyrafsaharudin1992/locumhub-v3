@@ -703,6 +703,45 @@ export function useAppState() {
 
   // --- ADMIN SYSTEM FUNCTIONS ---
 
+  const triggerApprovalEmail = (slot: LocumSlot) => {
+    // Find doctor's email in existing state.users with robust trimmed and lowercase matching
+    const doctorUser = state.users.find(
+      (u) =>
+        (u.phone && slot.phone && u.phone.trim() === slot.phone.trim()) ||
+        (u.name && slot.dr && u.name.trim().toLowerCase() === slot.dr.trim().toLowerCase()),
+    );
+    const doctorEmail = doctorUser?.email || "";
+
+    if (doctorEmail) {
+      fetch("/api/send-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: doctorEmail,
+          doctorName: slot.dr,
+          date: slot.tarikh,
+          time: slot.masa,
+          branch: slot.cawangan,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("Email API response:", data);
+          if (data.sentRealEmail) {
+            logActivity(`Confirmation email sent to ${doctorEmail} for slot on ${slot.tarikh} at ${slot.cawangan}`);
+          } else {
+            logActivity(`Confirmation email simulated for Dr ${slot.dr} (${doctorEmail})`);
+          }
+        })
+        .catch((err) => console.error("Failed to send email API call:", err));
+    } else {
+      console.warn(`No email found for doctor ${slot.dr} (${slot.phone})`);
+      logActivity(`Could not send approval email: No registered email for Dr ${slot.dr}`);
+    }
+  };
+
   const adminApproveSlot = async (id: string): Promise<string> => {
     let docName = "";
     let branchName = "";
@@ -727,6 +766,8 @@ export function useAppState() {
       await cloudSaveSlot(slot).catch((err) =>
         console.error("Cloud adminApproveSlot failed:", err),
       );
+      // Trigger the approval email
+      triggerApprovalEmail(slot);
     }
 
     if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
@@ -858,6 +899,9 @@ export function useAppState() {
         await cloudSaveSlot(updatedSlot).catch((err) =>
           console.error("Cloud adminManageSlot REPLACE failed:", err),
         );
+
+        // Trigger the approval email
+        triggerApprovalEmail(updatedSlot);
 
         if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
           await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
