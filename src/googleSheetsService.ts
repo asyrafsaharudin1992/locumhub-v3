@@ -615,7 +615,11 @@ export async function loadAllDataFromPublicGoogleSheet(
     const usersRaw = await fetchPublicTab("Users");
     const fbRaw = await fetchPublicTab("Feedback");
     const annRaw = await fetchPublicTab("Announcements");
-    const appRaw = await fetchPublicTab("Applications");
+    // Google Forms creates a tab literally named "Form responses 1" by default —
+    // fall back to "Applications" for spreadsheets that were manually renamed.
+    const appRaw =
+      (await fetchPublicTab("Form responses 1")) ||
+      (await fetchPublicTab("Applications"));
 
     const slots = slotsRaw ? parseSlots(slotsRaw) : [];
     const users = usersRaw ? parseUsers(usersRaw) : [];
