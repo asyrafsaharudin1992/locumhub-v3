@@ -100,6 +100,7 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
         currentUserRole={currentUser.role}
         currentUserPhone={currentUser.phone}
         selectedBranch={selectedBranch}
+        openSlotColorMode="branch"
       />
 
       {/* ===================== Confirm Booking Dialog ===================== */}
