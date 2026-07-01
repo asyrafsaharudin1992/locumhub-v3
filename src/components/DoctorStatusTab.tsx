@@ -16,8 +16,12 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
 }) => {
   const [filterType, setFilterType] = useState<'All' | 'Approved' | 'Pending'>('All');
 
-  // Find slots booked by this doctor (by phone) — whether self-booked or assigned by admin
-  const mySlots = slots.filter(s => s.phone === currentUser.phone);
+  // Find slots booked by this doctor (by phone) — whether self-booked or assigned by admin.
+  // Slots reset back to "Available" (cancelled by admin or withdrawn by the doctor) should
+  // never appear here, even if a stale phone value lingers on the record.
+  const mySlots = slots.filter(
+    s => s.phone === currentUser.phone && s.status !== 'Available'
+  );
 
   // Parse "DD/MM/YYYY, HH:MM:SS" (en-GB toLocaleString format) safely; unknown/missing dates sort last
   const parseBookedAt = (raw?: string): number => {
@@ -123,7 +127,6 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
                       <span className="font-bold text-slate-700">{slot.tarikh}</span>
                       <span className="font-mono">({slot.masa})</span>
-                      <span className="font-mono font-semibold text-slate-600">RM {slot.gaji} payout</span>
                     </div>
 
                     {/* Booked timer note */}
