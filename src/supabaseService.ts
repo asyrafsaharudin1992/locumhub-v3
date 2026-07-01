@@ -5,6 +5,7 @@ import {
   Announcement,
   FeedbackRecord,
   NewApplication,
+  AppNotification,
 } from "./types";
 
 // Check if Supabase connection is active
@@ -298,6 +299,25 @@ export async function fetchActivityLogsFromSupabase(): Promise<
   return (data || []).map((row) => ({
     timestamp: row.timestamp || "",
     action: row.action || "",
+  }));
+}
+
+export async function fetchNotificationsFromSupabase(): Promise<
+  AppNotification[] | null
+> {
+  const { data, error } = await queryTableWithFallback([
+    "notifications",
+    "Notifications",
+  ]);
+  if (error) return null;
+  return (data || []).map((row) => ({
+    id: row.id || "",
+    phone: row.phone || "",
+    title: row.title || "",
+    message: row.message || "",
+    timestamp: row.timestamp || "",
+    isRead: row.is_read ?? row.isRead ?? false,
+    slotId: row.slot_id || row.slotId || undefined,
   }));
 }
 
@@ -713,6 +733,53 @@ export async function saveActivityLogToSupabase(log: {
         .insert({ id, timestamp: log.timestamp, action: log.action });
       break;
     } catch {}
+  }
+}
+
+export async function saveNotificationToSupabase(notif: AppNotification) {
+  const record = {
+    id: notif.id,
+    phone: notif.phone,
+    title: notif.title,
+    message: notif.message,
+    timestamp: notif.timestamp,
+    is_read: notif.isRead,
+    slot_id: notif.slotId || null,
+  };
+  const { success, error } = await upsertTableWithFallback(
+    ["notifications", "Notifications"],
+    record,
+    "id",
+  );
+  if (!success) {
+    console.error("Supabase saveNotification failed:", error);
+    throw error || new Error("Failed to save notification to Supabase");
+  }
+}
+
+export async function markNotificationsReadInSupabase(phone: string) {
+  const client = getSupabaseClient();
+  if (!client) return;
+  for (const table of ["notifications", "Notifications"]) {
+    try {
+      const { error } = await client
+        .from(table)
+        .update({ is_read: true })
+        .eq("phone", phone);
+      if (!error) return;
+    } catch {}
+  }
+}
+
+export async function deleteNotificationFromSupabase(notifId: string) {
+  const { success, error } = await deleteTableWithFallback(
+    ["notifications", "Notifications"],
+    "id",
+    notifId,
+  );
+  if (!success) {
+    console.error("Supabase deleteNotification failed:", error);
+    throw error || new Error("Failed to delete notification from Supabase");
   }
 }
 
