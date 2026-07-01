@@ -87,6 +87,7 @@ export default function App() {
     logActivity,
     markNotificationsAsRead,
     deleteNotification,
+    dismissAdminAlert,
 
     googleUser,
     googleToken,
@@ -329,6 +330,10 @@ export default function App() {
     ? (state.notifications || []).filter(
         (n) => n.phone?.trim() === state.currentUser?.phone?.trim() && !n.isRead
       ).length
+    : 0;
+
+  const pendingApprovalCount = state.currentUser && state.currentUser.role === "Admin"
+    ? (state.slots || []).filter((s) => s.status === "Pending").length
     : 0;
 
   const DOCTOR_TABS = [
@@ -587,7 +592,13 @@ export default function App() {
                 {activeTabsList.map((tab) => {
                   const isCur = activeTab === tab.id;
                   const isNotificationTab = tab.id === "notifications";
-                  const showRedBadge = isNotificationTab && unreadNotificationsCount > 0;
+                  const isPendingTasksTab = tab.id === "admin-tasks";
+                  const badgeCount = isNotificationTab
+                    ? unreadNotificationsCount
+                    : isPendingTasksTab
+                      ? pendingApprovalCount
+                      : 0;
+                  const showRedBadge = badgeCount > 0;
                   return (
                     <button
                       key={tab.id}
@@ -620,7 +631,7 @@ export default function App() {
                           {tab.label}
                           {showRedBadge && (
                             <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold inline-flex items-center justify-center leading-none">
-                              {unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount}
+                              {badgeCount > 99 ? "99+" : badgeCount}
                             </span>
                           )}
                         </span>
@@ -924,6 +935,8 @@ export default function App() {
                         currentUserRole={activeRole || "Admin"}
                         onManageSlot={adminManageSlot}
                         onBulkCreateSlots={adminCreateBulkSlots}
+                        adminAlerts={state.adminAlerts}
+                        onDismissAlert={dismissAdminAlert}
                       />
                     )}
 
@@ -1542,7 +1555,13 @@ export default function App() {
               {activeTabsList.slice(0, 5).map((tab) => {
                 const isCur = activeTab === tab.id;
                 const isNotificationTab = tab.id === "notifications";
-                const showRedBadge = isNotificationTab && unreadNotificationsCount > 0;
+                const isPendingTasksTab = tab.id === "admin-tasks";
+                const badgeCount = isNotificationTab
+                  ? unreadNotificationsCount
+                  : isPendingTasksTab
+                    ? pendingApprovalCount
+                    : 0;
+                const showRedBadge = badgeCount > 0;
                 return (
                   <button
                     key={tab.id}
@@ -1561,7 +1580,7 @@ export default function App() {
                       {tab.icon}
                       {showRedBadge && (
                         <span className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-[3px] rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center leading-none ring-2 ring-white">
-                          {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
+                          {badgeCount > 9 ? "9+" : badgeCount}
                         </span>
                       )}
                     </div>
