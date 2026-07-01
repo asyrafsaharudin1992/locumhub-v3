@@ -619,7 +619,9 @@ export default function App() {
                         <span className={showRedBadge ? "text-rose-600 font-bold animate-pulse flex items-center gap-1.5" : ""}>
                           {tab.label}
                           {showRedBadge && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block animate-ping" />
+                            <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold inline-flex items-center justify-center leading-none">
+                              {unreadNotificationsCount > 99 ? "99+" : unreadNotificationsCount}
+                            </span>
                           )}
                         </span>
                       </div>
@@ -1558,7 +1560,9 @@ export default function App() {
                     <div className="w-5 h-5 flex items-center justify-center mb-0.5 relative">
                       {tab.icon}
                       {showRedBadge && (
-                        <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
+                        <span className="absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-[3px] rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center leading-none ring-2 ring-white">
+                          {unreadNotificationsCount > 9 ? "9+" : unreadNotificationsCount}
+                        </span>
                       )}
                     </div>
                     <span className="text-[9px] truncate max-w-[56px] leading-tight select-none">
