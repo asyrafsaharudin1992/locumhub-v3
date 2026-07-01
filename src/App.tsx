@@ -133,6 +133,15 @@ export default function App() {
   >([]);
   const [loadingRecruitment, setLoadingRecruitment] = useState(false);
 
+  // SMTP Diagnostics states
+  const [smtpTestEmail, setSmtpTestEmail] = useState("");
+  const [smtpTestLoading, setSmtpTestLoading] = useState(false);
+  const [smtpTestResult, setSmtpTestResult] = useState<{
+    success: boolean;
+    message: string;
+    errorDetails?: string;
+  } | null>(null);
+
   useEffect(() => {
     if (activeTab === "admin-tasks") {
       if (isSupabaseEnabled && isSupabaseActive() && state.newApplications && state.newApplications.length > 0) {
@@ -270,6 +279,52 @@ export default function App() {
     const response = publishAnnouncement(annText.trim());
     alert(response);
     setAnnText("");
+  };
+
+  const handleTestSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!smtpTestEmail) return;
+    setSmtpTestLoading(true);
+    setSmtpTestResult(null);
+    try {
+      const origin = window.location.origin;
+      const res = await fetch(`${origin}/api/send-email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: smtpTestEmail.trim(),
+          doctorName: "Diagnostic Test",
+          date: new Date().toLocaleDateString("en-GB"),
+          time: "09:00 - 17:00",
+          branch: "HSO HQ (SMTP TEST)",
+        }),
+      });
+
+      const isJson = res.headers.get("content-type")?.includes("application/json");
+      const data = isJson ? await res.json() : null;
+
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP Error ${res.status}`);
+      }
+
+      setSmtpTestResult({
+        success: true,
+        message: data?.message || "Test email dispatched successfully!",
+      });
+      logActivity(`SMTP Manual Test succeeded for ${smtpTestEmail}`);
+    } catch (err: any) {
+      console.error("Test SMTP failed:", err);
+      setSmtpTestResult({
+        success: false,
+        message: "Failed to dispatch test email.",
+        errorDetails: err.message || String(err),
+      });
+      logActivity(`SMTP Manual Test failed for ${smtpTestEmail}: ${err.message || err}`);
+    } finally {
+      setSmtpTestLoading(false);
+    }
   };
 
   const handleManualPointsAward = (e: React.FormEvent) => {
@@ -979,6 +1034,153 @@ export default function App() {
                             applications={recruitmentApplications}
                           />
                         )}
+                      </div>
+
+                      {/* Email Dispatch Logs & SMTP Diagnostics */}
+                      <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm space-y-6">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Mail className="w-5 h-5 text-indigo-500" />
+                            <h5 className="font-display font-bold text-slate-800 tracking-tight text-sm uppercase">
+                              Email Notifications & SMTP Diagnostics
+                            </h5>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Verify SMTP mailer functionality on the live web (Vercel) and review transaction logs.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* SMTP Testing Tool */}
+                          <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-5 space-y-4">
+                            <h6 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                              <Server className="w-3.5 h-3.5 text-slate-500" />
+                              SMTP Mailer Tester
+                            </h6>
+                            <p className="text-[11px] text-slate-500 leading-relaxed">
+                              Send a manual diagnostic message to verify Vercel environment variables configuration (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASS</code>).
+                            </p>
+
+                            <form onSubmit={handleTestSmtp} className="space-y-3">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Test Recipient Email</label>
+                                <input
+                                  type="email"
+                                  required
+                                  placeholder="dr.name@example.com"
+                                  value={smtpTestEmail}
+                                  onChange={(e) => setSmtpTestEmail(e.target.value)}
+                                  className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                                />
+                              </div>
+
+                              <button
+                                type="submit"
+                                disabled={smtpTestLoading}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold py-2.5 px-4 rounded-xl text-xs shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer uppercase tracking-wider"
+                              >
+                                {smtpTestLoading ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    Dispatching Test...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Mail className="w-3.5 h-3.5" />
+                                    Send Test Email
+                                  </>
+                                )}
+                              </button>
+                            </form>
+
+                            {smtpTestResult && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className={`p-4 rounded-xl border text-xs leading-relaxed space-y-1 ${
+                                  smtpTestResult.success
+                                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                                    : "bg-rose-50 border-rose-200 text-rose-800"
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 font-bold">
+                                  {smtpTestResult.success ? (
+                                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                  ) : (
+                                    <AlertTriangle className="w-4 h-4 text-rose-600" />
+                                  )}
+                                  {smtpTestResult.success ? "Mailer Succeeded!" : "Mailer Failed!"}
+                                </div>
+                                <p className="text-[11px]">{smtpTestResult.message}</p>
+                                {smtpTestResult.errorDetails && (
+                                  <div className="mt-2 bg-rose-100/50 p-2.5 rounded-lg border border-rose-200 font-mono text-[10px] break-all max-h-32 overflow-y-auto">
+                                    <strong>Error Details:</strong> {smtpTestResult.errorDetails}
+                                  </div>
+                                )}
+                              </motion.div>
+                            )}
+                          </div>
+
+                          {/* Email-related dispatch logs */}
+                          <div className="space-y-3">
+                            <h6 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                              <ClipboardList className="w-3.5 h-3.5 text-slate-500" />
+                              Recent Mail Dispatch Logs
+                            </h6>
+                            
+                            <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-4 max-h-64 overflow-y-auto space-y-2">
+                              {state.activityLogs.filter(
+                                (log) =>
+                                  log.action.toLowerCase().includes("email") ||
+                                  log.action.toLowerCase().includes("smtp") ||
+                                  log.action.toLowerCase().includes("mailer")
+                              ).length === 0 ? (
+                                <p className="text-xs text-slate-400 italic text-center py-6">
+                                  No email transaction logs recorded in this session.
+                                </p>
+                              ) : (
+                                state.activityLogs
+                                  .filter(
+                                    (log) =>
+                                      log.action.toLowerCase().includes("email") ||
+                                      log.action.toLowerCase().includes("smtp") ||
+                                      log.action.toLowerCase().includes("mailer")
+                                  )
+                                  .slice(0, 10)
+                                  .map((log, idx) => {
+                                    const isError = log.action.toLowerCase().includes("failed");
+                                    const isSimulation = log.action.toLowerCase().includes("simulated");
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className={`p-3 rounded-xl border text-[11px] leading-normal flex gap-2.5 items-start ${
+                                          isError
+                                            ? "bg-rose-50/40 border-rose-100 text-rose-800"
+                                            : isSimulation
+                                            ? "bg-amber-50/30 border-amber-100 text-amber-800"
+                                            : "bg-emerald-50/30 border-emerald-100 text-emerald-800"
+                                        }`}
+                                      >
+                                        <div className="mt-0.5">
+                                          {isError ? (
+                                            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                                          ) : isSimulation ? (
+                                            <Info className="w-3.5 h-3.5 text-amber-500" />
+                                          ) : (
+                                            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                                          )}
+                                        </div>
+                                        <div className="flex-1 space-y-1">
+                                          <p className="font-medium text-slate-700">{log.action}</p>
+                                          <p className="text-[9px] text-slate-400 font-mono">{log.timestamp}</p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
