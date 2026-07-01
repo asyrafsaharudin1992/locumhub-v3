@@ -306,6 +306,17 @@ export function useAppState() {
     }
   }, []);
 
+  // Poll Supabase database every 10 seconds for real-time changes
+  useEffect(() => {
+    if (!isSupabaseEnabled || !isSupabaseActive()) return;
+
+    const interval = setInterval(() => {
+      pullFromSupabase();
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [isSupabaseEnabled]);
+
   // Check Google Auth on mount
   useEffect(() => {
     const unsubscribe = initAuth(
@@ -711,13 +722,9 @@ export function useAppState() {
 
     setState((prev) => ({ ...prev, slots: updatedSlots }));
 
-    const slot = state.slots.find((s) => s.id === id);
+    const slot = updatedSlots.find((s) => s.id === id);
     if (slot) {
-      const updatedSlot: LocumSlot = {
-        ...slot,
-        status: "Approved",
-      };
-      await cloudSaveSlot(updatedSlot).catch((err) =>
+      await cloudSaveSlot(slot).catch((err) =>
         console.error("Cloud adminApproveSlot failed:", err),
       );
     }
