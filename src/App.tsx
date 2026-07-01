@@ -139,15 +139,8 @@ export default function App() {
 
   useEffect(() => {
     if (activeTab === "admin-tasks") {
-      if (isSupabaseEnabled && isSupabaseActive() && state.newApplications && state.newApplications.length > 0) {
-        const sorted = [...state.newApplications].sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() -
-            new Date(a.timestamp).getTime(),
-        );
-        setRecruitmentApplications(sorted);
-        return;
-      }
+      // The recruitment pipeline is sourced directly from the "NEW LOCUM" Google Form
+      // responses sheet — not from Supabase — so it always reflects real submissions.
       setLoadingRecruitment(true);
       loadAllDataFromPublicGoogleSheet(
         "1JhLEA8DjNyt0-fIVybtUY5MCuaP2XsN0UftHlYfe6lM",
@@ -167,7 +160,7 @@ export default function App() {
         )
         .finally(() => setLoadingRecruitment(false));
     }
-  }, [activeTab, isSupabaseEnabled, state.newApplications]);
+  }, [activeTab]);
 
   // Admin announcement state
   const [annText, setAnnText] = useState("");
