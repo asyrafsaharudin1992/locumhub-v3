@@ -6,6 +6,7 @@ import {
   NewApplication,
   Announcement,
   AppNotification,
+  AdminAlert,
 } from "./types";
 import { getSupabaseConfig, getSupabaseClient } from "./supabaseClient";
 import {
@@ -34,6 +35,9 @@ import {
   saveNotificationToSupabase,
   markNotificationsReadInSupabase,
   deleteNotificationFromSupabase,
+  fetchAdminAlertsFromSupabase,
+  saveAdminAlertToSupabase,
+  deleteAdminAlertFromSupabase,
 } from "./supabaseService";
 
 import {
@@ -66,6 +70,7 @@ export interface AppState {
   currentUser: UserProfile | null;
   activityLogs: { timestamp: string; action: string }[];
   notifications: AppNotification[];
+  adminAlerts: AdminAlert[];
 }
 
 export function useAppState() {
@@ -81,6 +86,7 @@ export function useAppState() {
     const savedLogs = localStorage.getItem("ara_logs");
     const savedCurrentUser = localStorage.getItem("ara_current_user");
     const savedNotifications = localStorage.getItem("ara_notifications");
+    const savedAdminAlerts = localStorage.getItem("ara_admin_alerts");
 
     return {
       users: savedUsers ? JSON.parse(savedUsers) : INITIAL_USERS,
@@ -99,6 +105,7 @@ export function useAppState() {
       currentUser: savedCurrentUser ? JSON.parse(savedCurrentUser) : null,
       activityLogs: savedLogs ? JSON.parse(savedLogs) : [],
       notifications: savedNotifications ? JSON.parse(savedNotifications) : [],
+      adminAlerts: savedAdminAlerts ? JSON.parse(savedAdminAlerts) : [],
     };
   });
 
@@ -145,6 +152,7 @@ export function useAppState() {
         sbApps,
         sbLogs,
         sbNotifs,
+        sbAlerts,
       ] = await Promise.all([
         fetchUsersFromSupabase(),
         fetchSlotsFromSupabase(),
@@ -155,6 +163,7 @@ export function useAppState() {
         fetchApplicationsFromSupabase(),
         fetchActivityLogsFromSupabase(),
         fetchNotificationsFromSupabase(),
+        fetchAdminAlertsFromSupabase(),
       ]);
 
       console.log("Supabase pull results:", {
@@ -173,6 +182,7 @@ export function useAppState() {
           newApplications: sbApps || prev.newApplications,
           activityLogs: sbLogs || prev.activityLogs,
           notifications: sbNotifs || prev.notifications,
+          adminAlerts: sbAlerts || prev.adminAlerts,
           currentUser: prev.currentUser
             ? sbUsers?.find((u) => u.phone === prev.currentUser?.phone) ||
               prev.currentUser
@@ -400,6 +410,7 @@ export function useAppState() {
     );
     localStorage.setItem("ara_logs", JSON.stringify(state.activityLogs));
     localStorage.setItem("ara_notifications", JSON.stringify(state.notifications || []));
+    localStorage.setItem("ara_admin_alerts", JSON.stringify(state.adminAlerts || []));
     if (state.currentUser) {
       localStorage.setItem(
         "ara_current_user",
@@ -661,6 +672,51 @@ export function useAppState() {
     return resultMessage;
   };
 
+  const triggerCancellationAlert = (
+    slot: LocumSlot,
+    priorStatus: string,
+  ) => {
+    const drLabel = slot.dr
+      ? slot.dr.toUpperCase().trim().replace(/^DR\s+/i, "")
+      : "Unknown";
+    const urgencyNote =
+      priorStatus === "Approved"
+        ? "Please find a replacement."
+        : "The shift is now back to Open.";
+
+    const newAlert: AdminAlert = {
+      id: "alert_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+      slotId: slot.id,
+      drName: drLabel,
+      cawangan: slot.cawangan,
+      tarikh: slot.tarikh,
+      masa: slot.masa,
+      message: `Dr ${drLabel} cancelled their slot on ${slot.tarikh} (${slot.masa}) at Klinik ARA ${slot.cawangan}. ${urgencyNote}`,
+      timestamp: new Date().toLocaleString("en-GB"),
+    };
+
+    setState((prev) => ({
+      ...prev,
+      adminAlerts: [newAlert, ...(prev.adminAlerts || [])],
+    }));
+
+    saveAdminAlertToSupabase(newAlert).catch((err) =>
+      console.error("Cloud saveAdminAlert failed:", err),
+    );
+
+    logActivity(`ALERT: Dr ${drLabel} cancelled slot ${slot.id}`);
+  };
+
+  const dismissAdminAlert = (id: string) => {
+    setState((prev) => ({
+      ...prev,
+      adminAlerts: (prev.adminAlerts || []).filter((a) => a.id !== id),
+    }));
+    deleteAdminAlertFromSupabase(id).catch((err) =>
+      console.error("Cloud deleteAdminAlert failed:", err),
+    );
+  };
+
   const cancelSlotByDoctor = async (
     slotId: string,
     statusAsal: string,
@@ -697,6 +753,9 @@ export function useAppState() {
     await cloudSaveSlot(updatedSlot).catch((err) =>
       console.error("Cloud cancelSlotByDoctor failed:", err),
     );
+
+    // Heads-up alert for admins so they know to find a replacement
+    triggerCancellationAlert(slot, statusAsal);
 
     if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
       await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
@@ -1846,6 +1905,7 @@ export function useAppState() {
     logActivity,
     markNotificationsAsRead,
     deleteNotification,
+    dismissAdminAlert,
 
     // Google synchronization exposed properties
     googleUser,
