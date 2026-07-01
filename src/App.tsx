@@ -334,12 +334,12 @@ export default function App() {
   const DOCTOR_TABS = [
     {
       id: "booking",
-      label: "Book Hour slots",
+      label: "Book Slot",
       icon: <CalendarDays className="w-4 h-4" />,
     },
     {
       id: "status",
-      label: "My Status timeline",
+      label: "MyStatus",
       icon: <ClipboardList className="w-4 h-4" />,
     },
     {
