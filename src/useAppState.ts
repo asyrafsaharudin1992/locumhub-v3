@@ -30,6 +30,10 @@ import {
   saveApplicationToSupabase,
   saveActivityLogToSupabase,
   pushAllLocalStateToSupabase,
+  fetchNotificationsFromSupabase,
+  saveNotificationToSupabase,
+  markNotificationsReadInSupabase,
+  deleteNotificationFromSupabase,
 } from "./supabaseService";
 
 import {
@@ -140,6 +144,7 @@ export function useAppState() {
         sbFbL,
         sbApps,
         sbLogs,
+        sbNotifs,
       ] = await Promise.all([
         fetchUsersFromSupabase(),
         fetchSlotsFromSupabase(),
@@ -149,6 +154,7 @@ export function useAppState() {
         fetchFeedbacksLocumFromSupabase(),
         fetchApplicationsFromSupabase(),
         fetchActivityLogsFromSupabase(),
+        fetchNotificationsFromSupabase(),
       ]);
 
       console.log("Supabase pull results:", {
@@ -166,6 +172,7 @@ export function useAppState() {
           feedbacksLocum: sbFbL || prev.feedbacksLocum,
           newApplications: sbApps || prev.newApplications,
           activityLogs: sbLogs || prev.activityLogs,
+          notifications: sbNotifs || prev.notifications,
           currentUser: prev.currentUser
             ? sbUsers?.find((u) => u.phone === prev.currentUser?.phone) ||
               prev.currentUser
@@ -727,6 +734,11 @@ export function useAppState() {
       };
     });
 
+    // Persist to Supabase so the doctor's device (a different browser/session) actually receives it
+    saveNotificationToSupabase(newNotif).catch((err) =>
+      console.error("Cloud saveNotification failed:", err),
+    );
+
     logActivity(`LocumHub Notification created for Dr ${slot.dr} (Phone: ${slot.phone})`);
   };
 
@@ -740,6 +752,9 @@ export function useAppState() {
       });
       return { ...prev, notifications: updated };
     });
+    markNotificationsReadInSupabase(phone).catch((err) =>
+      console.error("Cloud markNotificationsRead failed:", err),
+    );
     logActivity(`Cleared unread notifications count for phone: ${phone}`);
   };
 
@@ -748,6 +763,9 @@ export function useAppState() {
       const updated = (prev.notifications || []).filter((n) => n.id !== id);
       return { ...prev, notifications: updated };
     });
+    deleteNotificationFromSupabase(id).catch((err) =>
+      console.error("Cloud deleteNotification failed:", err),
+    );
     logActivity(`Deleted notification record ${id}`);
   };
 
