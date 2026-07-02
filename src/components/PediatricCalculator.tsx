@@ -133,9 +133,6 @@ export const PediatricCalculator: React.FC = () => {
               ml
             </span>
           </div>
-          <div className="text-[11px] font-mono text-slate-500 mt-2">
-            Required: {(totalMgRequired).toFixed(1)} mg total dosage plan
-          </div>
         </motion.div>
 
         {/* Important security caution warning panel */}
