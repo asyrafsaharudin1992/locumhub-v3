@@ -19,12 +19,35 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
   const [isCancelling, setIsCancelling] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
 
-  // Find slots booked by this doctor (by phone) — whether self-booked or assigned by admin.
-  // Slots reset back to "Available" (cancelled by admin or withdrawn by the doctor) should
-  // never appear here, even if a stale phone value lingers on the record.
-  const mySlots = slots.filter(
-    s => s.phone === currentUser.phone && s.status !== 'Available'
-  );
+  // Word-boundary name matching (same logic used elsewhere in the app) —
+  // "Ain" matches "Dr Ain"/"Nur Ain" but not "Aini" or "Wan Zainol".
+  const normalizeDoctorName = (s: string): string =>
+    (s || "").toUpperCase().trim().replace(/^DR\.?\s+/i, "");
+
+  const doctorNameMatches = (slotDr: string, myName: string): boolean => {
+    const a = normalizeDoctorName(slotDr);
+    const b = normalizeDoctorName(myName);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const wordsA = a.split(/\s+/).filter(Boolean);
+    const wordsB = b.split(/\s+/).filter(Boolean);
+    const [shortWords, longWords] =
+      wordsA.length <= wordsB.length ? [wordsA, wordsB] : [wordsB, wordsA];
+    return shortWords.every((w) => longWords.includes(w));
+  };
+
+  // Find slots booked by this doctor — whether self-booked or assigned by
+  // admin. Match by phone when present, but fall back to name matching since
+  // a lot of historical/manually-entered slots never captured a phone number
+  // at all (leaving that field blank), which would otherwise hide real
+  // approved shifts from the doctor's own My Status view.
+  // Slots reset back to "Available" (cancelled by admin or withdrawn by the
+  // doctor) should never appear here, even if a stale phone/name lingers.
+  const mySlots = slots.filter((s) => {
+    if (s.status === 'Available') return false;
+    const phoneMatches = !!s.phone && s.phone === currentUser.phone;
+    return phoneMatches || doctorNameMatches(s.dr || '', currentUser.name);
+  });
 
   // Parse "DD/MM/YYYY, HH:MM:SS" (en-GB toLocaleString format) safely; unknown/missing dates sort last
   const parseBookedAt = (raw?: string): number => {
