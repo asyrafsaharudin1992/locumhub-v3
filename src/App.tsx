@@ -221,6 +221,7 @@ export default function App() {
   const [activeInspectorFb, setActiveInspectorFb] = useState<
     "patient" | "staff" | "locum"
   >("patient");
+  const [expandedFbRow, setExpandedFbRow] = useState<string | null>(null);
 
   // Direct login credentials shortcuts for demo reviews
   const handleQuickLogin = (phone: string, role: string) => {
@@ -1410,7 +1411,15 @@ export default function App() {
                                   <td className="p-3 font-bold font-mono text-center text-amber-500">
                                     ⭐ {f.rating.toFixed(1)}
                                   </td>
-                                  <td className="p-3 italic text-slate-650 max-w-xs truncate">"{f.komen}"</td>
+                                  <td
+                                    onClick={() => setExpandedFbRow(expandedFbRow === `p-${i}` ? null : `p-${i}`)}
+                                    title="Click to expand"
+                                    className={`p-3 italic text-slate-650 cursor-pointer hover:bg-slate-100/70 transition ${
+                                      expandedFbRow === `p-${i}` ? "" : "max-w-xs truncate"
+                                    }`}
+                                  >
+                                    "{f.komen}"
+                                  </td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1453,7 +1462,15 @@ export default function App() {
                                         {f.category}
                                       </span>
                                     </td>
-                                    <td className="p-3 italic text-slate-650 max-w-xs truncate">"{f.details}"</td>
+                                    <td
+                                      onClick={() => setExpandedFbRow(expandedFbRow === `s-${i}` ? null : `s-${i}`)}
+                                      title="Click to expand"
+                                      className={`p-3 italic text-slate-650 cursor-pointer hover:bg-slate-100/70 transition ${
+                                        expandedFbRow === `s-${i}` ? "" : "max-w-xs truncate"
+                                      }`}
+                                    >
+                                      "{f.details}"
+                                    </td>
                                   </tr>
                                 );
                               })}
