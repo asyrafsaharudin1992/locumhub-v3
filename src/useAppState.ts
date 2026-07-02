@@ -508,6 +508,49 @@ export function useAppState() {
     return { success: true, message: "Successfully registered Dr. " + name };
   };
 
+  const adminCreateUser = (
+    name: string,
+    phone: string,
+    initialPassword: string,
+    role: "Doctor" | "Admin" | "Staff",
+    email: string = "",
+  ): { success: boolean; message: string } => {
+    const trimmedPhone = phone.trim();
+    if (!trimmedPhone || !name.trim()) {
+      return { success: false, message: "Name and phone number are required." };
+    }
+    if (state.users.some((u) => u.phone.trim() === trimmedPhone)) {
+      return { success: false, message: "That phone number is already registered." };
+    }
+    if (initialPassword.trim().length < 6) {
+      return { success: false, message: "Initial password must be at least 6 characters." };
+    }
+
+    const newUser: UserProfile = {
+      phone: trimmedPhone,
+      password: btoa(initialPassword.trim()),
+      name: name.trim(),
+      role,
+      email,
+      mmc: "",
+      apc: "",
+      indemnity: "Tiada",
+      points: 0,
+      badges: "",
+      locks: "",
+    };
+
+    setState((prev) => ({
+      ...prev,
+      users: [...prev.users, newUser],
+    }));
+    cloudSaveUser(newUser).catch((err) =>
+      console.error("Cloud adminCreateUser failed:", err),
+    );
+    logActivity(`Admin created new ${role} account: ${name} (${trimmedPhone})`);
+    return { success: true, message: `Account created for ${name}.` };
+  };
+
   const logout = () => {
     if (state.currentUser) {
       logActivity(`Logged out: ${state.currentUser.name}`);
@@ -1941,6 +1984,7 @@ export function useAppState() {
     state,
     loginUser,
     registerUser,
+    adminCreateUser,
     deleteUser,
     logout,
     changePassword,
