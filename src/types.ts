@@ -39,6 +39,7 @@ export interface FeedbackRecord {
   nama: string; // Sender or Subject
   reviewer: string; // Reviewer name
   target: string; // Doctor name or Clinic
+  cawangan?: string; // Branch, when available
   rating: number; // 1-5 scale
   komen: string;
 }
