@@ -549,8 +549,8 @@ export default function App() {
           >
             <div className="w-full max-w-sm sm:max-w-md overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-xl p-6 sm:p-8 space-y-6 text-center">
               {/* Clinic Logo */}
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 border border-indigo-150">
-                <Heart className="w-7 h-7 text-indigo-600 fill-current" />
+              <div className="mx-auto flex h-14 w-14 items-center justify-center">
+                <img src="/logo.png" alt="Klinik ARA 24 Jam" className="w-14 h-14 object-contain" />
               </div>
 
               <div>
@@ -643,13 +643,15 @@ export default function App() {
                 <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
                   Interested in joining our medical team at Klinik ARA 24 Jam?
                 </p>
-                <button
-                  onClick={() => setShowJoinForm(true)}
+                <a
+                  href="https://forms.gle/RKDNR6Q7b28gQ5v3A"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="mt-2 text-xs font-bold text-sky-600 hover:text-sky-800 hover:underline inline-flex items-center gap-1 cursor-pointer"
                 >
                   <PlusCircle className="w-3.5 h-3.5" />
                   Begin Application Request
-                </button>
+                </a>
               </div>
             </div>
           </motion.div>
@@ -664,9 +666,7 @@ export default function App() {
             {/* Desktop Left Sidebar */}
             <aside className="hidden md:flex flex-col w-64 bg-white text-slate-700 border-r border-slate-200 shrink-0 p-5 space-y-6">
               <div className="flex items-center gap-3 pb-5 border-b border-slate-100">
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold font-display shadow-sm shadow-indigo-100">
-                  <Heart className="w-4 h-4 text-white fill-current" />
-                </div>
+                <img src="/logo.png" alt="Klinik ARA 24 Jam" className="w-8 h-8 object-contain" />
                 <span className="font-display font-bold text-slate-900 tracking-tight text-sm">
                   ARA LOCUM HUB
                 </span>
@@ -764,7 +764,7 @@ export default function App() {
             {/* Mobile Actions Topbar Header */}
             <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 z-10 sticky top-0 backdrop-blur-md bg-white/95">
               <div className="flex items-center gap-2">
-                <Heart className="w-4 h-4 text-indigo-600 fill-current" />
+                <img src="/logo.png" alt="Klinik ARA 24 Jam" className="w-6 h-6 object-contain" />
                 <span className="font-display font-semibold text-slate-800 text-[13px] tracking-widest">
                   ARA LOCUM HUB
                 </span>

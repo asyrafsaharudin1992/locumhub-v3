@@ -23,14 +23,43 @@ async function queryTableWithFallback(
   if (!client)
     return { data: null, error: new Error("Supabase client not initialized") };
 
+  const PAGE_SIZE = 1000; // Supabase/PostgREST default max rows per request
+
   let lastError: any = null;
   for (const table of tableCandidates) {
     try {
-      const { data, error } = await client.from(table).select(selectString);
-      if (!error) {
-        return { data, error: null };
+      const allRows: any[] = [];
+      let from = 0;
+      let keepGoing = true;
+      let sawError = false;
+
+      // Loop through pages so tables with more than 1000 rows (very plausible
+      // for a busy multi-branch clinic's slot history over months) don't get
+      // silently truncated to just the first 1000.
+      while (keepGoing) {
+        const { data, error } = await client
+          .from(table)
+          .select(selectString)
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (error) {
+          lastError = error;
+          sawError = true;
+          break;
+        }
+
+        allRows.push(...(data || []));
+
+        if (!data || data.length < PAGE_SIZE) {
+          keepGoing = false;
+        } else {
+          from += PAGE_SIZE;
+        }
       }
-      lastError = error;
+
+      if (!sawError) {
+        return { data: allRows, error: null };
+      }
     } catch (err) {
       lastError = err;
     }
