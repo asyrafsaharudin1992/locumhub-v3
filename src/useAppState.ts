@@ -677,7 +677,7 @@ export function useAppState() {
     file: File,
     phone: string,
     kind: "apc" | "indemnity" | "mmc",
-  ): Promise<string | null> => {
+  ): Promise<{ url: string | null; error?: string }> => {
     try {
       // Convert to base64 client-side and POST as JSON — the serverless
       // function at /api/upload-to-drive handles the actual upload to the
@@ -707,14 +707,20 @@ export function useAppState() {
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         console.error("Drive upload failed:", errBody);
-        return null;
+        return {
+          url: null,
+          error: errBody?.error || `Upload failed (server responded ${res.status}).`,
+        };
       }
 
       const data = await res.json();
-      return data.url || null;
-    } catch (err) {
+      return { url: data.url || null };
+    } catch (err: any) {
       console.error("uploadCredentialFile error:", err);
-      return null;
+      return {
+        url: null,
+        error: err?.message || "Could not reach the upload service — check your connection.",
+      };
     }
   };
 
