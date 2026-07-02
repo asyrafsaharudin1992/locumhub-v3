@@ -91,6 +91,8 @@ export default function App() {
     logout,
     changePassword,
     updateProfile,
+    uploadCredentialFile,
+    adminCreateUser,
     bookSlot,
     cancelSlotByDoctor,
     adminApproveSlot,
@@ -141,6 +143,8 @@ export default function App() {
   const [phoneInput, setPhoneInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [authError, setAuthError] = useState("");
+  const [staffKeywordInput, setStaffKeywordInput] = useState("");
+  const [staffAuthError, setStaffAuthError] = useState("");
 
   // Recruitment modal/form integration
   const [showJoinForm, setShowJoinForm] = useState(false);
@@ -224,6 +228,13 @@ export default function App() {
     name: string;
   } | null>(null);
   const [successToast, setSuccessToast] = useState("");
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserPhone, setNewUserPhone] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserRole, setNewUserRole] = useState<"Doctor" | "Admin" | "Staff">("Doctor");
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [createUserError, setCreateUserError] = useState("");
 
   // Manual Points Evaluator States
   const [selectedDrPhone, setSelectedDrPhone] = useState("");
@@ -238,21 +249,35 @@ export default function App() {
   const [expandedFbRow, setExpandedFbRow] = useState<string | null>(null);
   const [feedbackDoctorFilter, setFeedbackDoctorFilter] = useState<string>("All");
 
-  // Direct login credentials shortcuts for demo reviews
-  const handleQuickLogin = (phone: string, role: string) => {
-    setAuthError("");
-    const res = loginUser(phone, undefined, role);
+
+  const handleStaffKeywordLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setStaffAuthError("");
+    const keyword = staffKeywordInput.trim();
+    if (!keyword) {
+      setStaffAuthError("Please enter your access keyword.");
+      return;
+    }
+    // A staff "keyword" is really just that staff account's password — this
+    // lets admin issue staff members a simple keyword (via Create User) instead
+    // of a phone number + password pair for this restricted, view-only role.
+    let encodedKeyword = "";
+    try {
+      encodedKeyword = btoa(keyword);
+    } catch (err) {}
+    const staffUser = state.users.find(
+      (u) => u.role === "Staff" && u.password === encodedKeyword,
+    );
+    if (!staffUser) {
+      setStaffAuthError("Invalid access keyword.");
+      return;
+    }
+    const res = loginUser(staffUser.phone, keyword, "Staff");
     if (res.success) {
-      // Set appropriate landing page
-      if (res.user?.role === "Admin") {
-        setActiveTab("admin-dash");
-      } else if (res.user?.role === "Staff") {
-        setActiveTab("admin-cal");
-      } else {
-        setActiveTab("booking");
-      }
+      setActiveTab("admin-cal");
+      setStaffKeywordInput("");
     } else {
-      setAuthError(res.message);
+      setStaffAuthError(res.message);
     }
   };
 
@@ -270,7 +295,7 @@ export default function App() {
     const res = loginUser(phoneInput, passwordInput);
     if (res.success) {
       if (res.user?.role === "Admin") {
-        setActiveTab("admin-dash");
+        setActiveTab("admin-cal");
       } else if (res.user?.role === "Staff") {
         setActiveTab("admin-cal");
       } else {
@@ -466,11 +491,6 @@ export default function App() {
       label: "Clinical Schedules",
       icon: <CalendarDays className="w-4 h-4" />,
     },
-    {
-      id: "peds-calc",
-      label: "Dosage calculator",
-      icon: <Calculator className="w-4 h-4" />,
-    },
   ];
 
   const activeTabsList =
@@ -568,51 +588,37 @@ export default function App() {
                 >
                   Sign In Securely
                 </button>
+                <p className="text-[11px] text-slate-400 text-center font-sans">
+                  Forgot your password? Please contact your clinic admin to have it reset.
+                </p>
               </form>
 
-              {/* One-Click Quick Logins */}
-              <div className="border-t border-slate-100/80 pt-4 text-left space-y-3">
+              {/* Staff quick access — keyword only, view-only Clinical Schedule access */}
+              <div className="border-t border-slate-100/80 pt-4 text-left space-y-2.5">
                 <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase block">
-                  Quick evaluation accounts
+                  Staff quick access
                 </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <form onSubmit={handleStaffKeywordLogin} className="flex gap-2">
+                  <input
+                    type="password"
+                    value={staffKeywordInput}
+                    onChange={(e) => setStaffKeywordInput(e.target.value)}
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-slate-400"
+                    placeholder="Enter access keyword"
+                  />
                   <button
-                    onClick={() => handleQuickLogin("0123456789", "Doctor")}
-                    className="p-2.5 rounded-xl border border-sky-100 bg-sky-50/50 hover:bg-sky-50 text-left transition select-none flex flex-col"
+                    type="submit"
+                    className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 rounded-xl text-xs transition cursor-pointer shrink-0"
                   >
-                    <span className="text-[9px] font-bold text-sky-800 uppercase leading-none">
-                      Doctor Portal
-                    </span>
-                    <span className="text-[11px] font-bold font-display text-sky-950 mt-1">
-                      Dr Atikah
-                    </span>
+                    Enter
                   </button>
-
-                  <button
-                    onClick={() => handleQuickLogin("0198765432", "Admin")}
-                    className="p-2.5 rounded-xl border border-amber-100 bg-amber-50/50 hover:bg-amber-50 text-left transition select-none flex flex-col"
-                  >
-                    <span className="text-[9px] font-bold text-amber-800 uppercase leading-none">
-                      Admin Portal
-                    </span>
-                    <span className="text-[11px] font-bold font-display text-amber-950 mt-1">
-                      Operations
-                    </span>
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickLogin("0112233445", "Staff")}
-                    className="p-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-left transition select-none flex flex-col"
-                  >
-                    <span className="text-[9px] font-bold text-slate-600 uppercase leading-none">
-                      Staff Portal
-                    </span>
-                    <span className="text-[11px] font-bold font-display text-slate-900 mt-1">
-                      Kajang Clinic
-                    </span>
-                  </button>
-                </div>
+                </form>
+                {staffAuthError && (
+                  <p className="text-xs text-rose-500 font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    {staffAuthError}
+                  </p>
+                )}
               </div>
 
               {/* Recruiter join pipeline onboarding */}
@@ -775,7 +781,9 @@ export default function App() {
                       : `Dr. ${state.currentUser.name}`}
                   </h3>
                   <p className="text-xs text-slate-500 font-sans">
-                    Roster database and clinical slots synchronized safely.
+                    {state.currentUser.role === "Admin"
+                      ? "Roster database and clinical slots synchronized safely."
+                      : "Thank you for being part of Klinik ARA 24 Jam."}
                   </p>
                 </div>
 
@@ -926,6 +934,7 @@ export default function App() {
                       currentUser={state.currentUser}
                       onChangePassword={changePassword}
                       onUpdateProfile={updateProfile}
+                      onUploadFile={uploadCredentialFile}
                     />
                   )}
 
@@ -1569,15 +1578,33 @@ export default function App() {
 
                   {activeTab === "admin-dir" && activeRole === "Admin" && (
                     <div className="rounded-3xl bg-white border border-slate-100 p-6 shadow-sm space-y-4">
-                      <div>
-                        <h5 className="font-display font-medium text-slate-900 tracking-tight text-sm uppercase">
-                          {" "}
-                          Roster Directory
-                        </h5>
-                        <p className="text-xs text-slate-500">
-                          Roster of registered doctors, credential verification
-                          checklists, and coins tally
-                        </p>
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div>
+                          <h5 className="font-display font-medium text-slate-900 tracking-tight text-sm uppercase">
+                            {" "}
+                            Roster Directory
+                          </h5>
+                          <p className="text-xs text-slate-500">
+                            Roster of registered doctors, credential verification
+                            checklists, and coins tally
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCreateUserError("");
+                            setNewUserName("");
+                            setNewUserPhone("");
+                            setNewUserPassword("");
+                            setNewUserRole("Doctor");
+                            setNewUserEmail("");
+                            setShowCreateUserModal(true);
+                          }}
+                          className="bg-[#001F3F] hover:bg-[#001226] text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-1.5 shrink-0"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" />
+                          Add User
+                        </button>
                       </div>
 
                       <div className="overflow-x-auto rounded-2xl border border-slate-100">
@@ -1680,6 +1707,84 @@ export default function App() {
                               })}
                           </tbody>
                         </table>
+                      </div>
+
+                      {/* Staff Accounts — their password IS the "keyword" used on the login screen's Staff quick access */}
+                      <div className="pt-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                          <div>
+                            <h5 className="font-display font-medium text-slate-900 tracking-tight text-sm uppercase">
+                              Staff Accounts
+                            </h5>
+                            <p className="text-xs text-slate-500">
+                              Each staff member's password is their login keyword — reset here anytime.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                          <table className="w-full text-xs text-left leading-normal text-slate-500">
+                            <thead className="bg-slate-50 border-b border-slate-150 uppercase text-[10px] text-slate-400 font-black tracking-widest text-left">
+                              <tr>
+                                <th className="p-3">Name</th>
+                                <th className="p-3">Phone</th>
+                                <th className="p-3 text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {state.users
+                                .filter((u) => u.role === "Staff")
+                                .map((staff) => (
+                                  <tr
+                                    key={staff.phone}
+                                    className="hover:bg-slate-50/50 border-b border-slate-100 font-sans"
+                                  >
+                                    <td className="p-3 font-bold text-slate-800 font-display">
+                                      {staff.name}
+                                    </td>
+                                    <td className="p-3 font-mono text-[10px] text-slate-400">
+                                      {staff.phone}
+                                    </td>
+                                    <td className="p-3 text-right space-x-2">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setResetPassDoc({
+                                            phone: staff.phone,
+                                            name: staff.name,
+                                          });
+                                          setNewPasswordValue("");
+                                        }}
+                                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1 px-2 rounded transition"
+                                      >
+                                        Set Keyword
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setDeleteUserConfirm({
+                                            phone: staff.phone,
+                                            name: staff.name,
+                                          });
+                                        }}
+                                        className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-1 px-2 rounded border border-rose-100 transition"
+                                      >
+                                        Delete
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              {state.users.filter((u) => u.role === "Staff").length === 0 && (
+                                <tr>
+                                  <td colSpan={3} className="p-4 text-center text-slate-400 italic">
+                                    No staff accounts yet — use "Add User" above to create one.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1872,6 +1977,133 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Create User Modal */}
+      <AnimatePresence>
+        {showCreateUserModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl space-y-4"
+            >
+              <div>
+                <h3 className="font-display font-medium text-lg text-slate-900">
+                  Add New User
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Create an account with an initial password. The user can change it themselves later.
+                </p>
+              </div>
+
+              <div className="space-y-3 text-left">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-[#001F3F]"
+                    placeholder="e.g. Ahmad Faisal"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserPhone}
+                    onChange={(e) => setNewUserPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-[#001F3F] font-mono"
+                    placeholder="e.g. 0123456789"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
+                    Initial Password / Keyword
+                  </label>
+                  <input
+                    type="text"
+                    value={newUserPassword}
+                    onChange={(e) => setNewUserPassword(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-[#001F3F] font-mono"
+                    placeholder="Minimum 6 characters"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
+                    Role
+                  </label>
+                  <select
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value as "Doctor" | "Admin" | "Staff")}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-[#001F3F]"
+                  >
+                    <option value="Doctor">Doctor</option>
+                    <option value="Staff">Staff (view-only Clinical Schedule)</option>
+                    <option value="Admin">Admin</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
+                    Email (optional)
+                  </label>
+                  <input
+                    type="email"
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-[#001F3F]"
+                    placeholder="optional@example.com"
+                  />
+                </div>
+              </div>
+
+              {createUserError && (
+                <p className="text-xs text-rose-500 font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {createUserError}
+                </p>
+              )}
+
+              <div className="flex gap-2 text-xs font-bold pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateUserModal(false)}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl text-slate-650 py-2.5 hover:bg-slate-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const result = adminCreateUser(
+                      newUserName,
+                      newUserPhone,
+                      newUserPassword,
+                      newUserRole,
+                      newUserEmail,
+                    );
+                    if (result.success) {
+                      setShowCreateUserModal(false);
+                      setSuccessToast(result.message);
+                      setTimeout(() => setSuccessToast(""), 3000);
+                    } else {
+                      setCreateUserError(result.message);
+                    }
+                  }}
+                  className="flex-1 bg-[#001F3F] text-white hover:bg-[#001226] rounded-xl py-2.5 shadow-md"
+                >
+                  Create Account
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Reset Password Modal */}
       <AnimatePresence>
         {resetPassDoc && (
@@ -1886,7 +2118,7 @@ export default function App() {
                 Reset Password
               </h3>
               <p className="text-sm text-slate-500 mb-4">
-                Enter new password for Dr. {resetPassDoc.name} (
+                Enter new password/keyword for {resetPassDoc.name} (
                 {resetPassDoc.phone}):
               </p>
               <input
@@ -1909,16 +2141,15 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     if (newPasswordValue.trim() !== "") {
-                      const msg = changePassword(
-                        resetPassDoc.phone,
-                        newPasswordValue,
-                      );
-                      setSuccessToast(msg);
-                      setTimeout(() => setSuccessToast(""), 3000);
+                      const phone = resetPassDoc.phone;
+                      const pass = newPasswordValue;
                       setResetPassDoc(null);
                       setNewPasswordValue("");
+                      const msg = await changePassword(phone, pass);
+                      setSuccessToast(msg);
+                      setTimeout(() => setSuccessToast(""), 3000);
                     }
                   }}
                   className="flex-1 bg-[#001F3F] text-white hover:bg-[#001226] rounded-xl py-2.5 shadow-md"
