@@ -17,6 +17,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
 }) => {
   const [month, setMonth] = useState('06'); // Initialised to June
   const [year, setYear] = useState('2026');
+  const [viewMode, setViewMode] = useState<'monthly' | 'cumulative'>('monthly');
   const [selectedDoctorFilter, setSelectedDoctorFilter] = useState('');
 
   // Close-out states
@@ -34,10 +35,13 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
     return false;
   });
 
-  const totalShiftsCount = monthlySlots.length;
-  const pendingCount = monthlySlots.filter(s => s.status === 'Pending').length;
-  const approvedCount = monthlySlots.filter(s => s.status === 'Approved').length;
-  const availableCount = monthlySlots.filter(s => s.status === 'Available').length;
+  // Cumulative (all-time) vs monthly view — admin can toggle between the two
+  const displaySlots = viewMode === 'cumulative' ? slots : monthlySlots;
+
+  const totalShiftsCount = displaySlots.length;
+  const pendingCount = displaySlots.filter(s => s.status === 'Pending').length;
+  const approvedCount = displaySlots.filter(s => s.status === 'Approved').length;
+  const availableCount = displaySlots.filter(s => s.status === 'Available').length;
 
   // Filter approved completed shifts of the doctor for editing performance outputs
   const completedApprovedShifts = slots.filter(s => {
@@ -59,10 +63,10 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   const handleActiveSlotSelect = (slotId: string) => {
     const slot = slots.find(s => s.id === slotId);
     if (slot) {
-      if (slot.performanceRecorded) {
-        alert("This slot is already closed and performance values are logged.");
-        return;
-      }
+      // Previously this blocked re-opening an already-recorded slot entirely,
+      // which meant there was no way to check what was actually saved —
+      // making a successful save look like it had failed. Now it just loads
+      // the saved values so admin can view (and correct, if needed) them.
       setSelectedSlotId(slotId);
       setSalesVal(slot.sales || 0);
       setPtsVal(slot.pesakit || 0);
@@ -77,12 +81,8 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
       return;
     }
     
-    // Extra safety check before saving
-    const currentSlot = slots.find(s => s.id === selectedSlotId);
-    if (currentSlot && currentSlot.performanceRecorded) {
-      alert("This slot was already closed by someone else.");
-      return;
-    }
+    // Note: previously recorded slots can now be re-saved (e.g. to correct a
+    // typo in sales/patients/payout) rather than being permanently locked.
 
     const period = `${month}/${year}`;
     const resultMsg = await onCompleteSlot(selectedSlotId, salesVal, ptsVal, payVal, period);
@@ -104,11 +104,37 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
           <p className="text-xs text-slate-500">Filter parameters determine chart scopes and leaderboards</p>
         </div>
 
-        <div className="flex gap-2.5">
+        <div className="flex gap-2.5 items-center flex-wrap">
+          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setViewMode('monthly')}
+              className={`text-xs font-bold px-3 py-2 rounded-lg transition ${
+                viewMode === 'monthly'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-800'
+              }`}
+            >
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('cumulative')}
+              className={`text-xs font-bold px-3 py-2 rounded-lg transition ${
+                viewMode === 'cumulative'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-800'
+              }`}
+            >
+              Cumulative (All-Time)
+            </button>
+          </div>
+
           <select
             value={month}
+            disabled={viewMode === 'cumulative'}
             onChange={e => setMonth(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer"
+            className="bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map(m => (
               <option key={m} value={m}>
@@ -119,8 +145,9 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
 
           <select
             value={year}
+            disabled={viewMode === 'cumulative'}
             onChange={e => setYear(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer"
+            className="bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {['2025', '2026', '2027'].map(y => (
               <option key={y} value={y}>
@@ -153,10 +180,10 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
 
       {/* Interactive Charts Dashboard Wrapper */}
       <DashboardCharts
-        pastSlots={monthlySlots}
+        pastSlots={displaySlots}
         users={users}
-        selectedMonth={month}
-        selectedYear={year}
+        selectedMonth={viewMode === 'cumulative' ? 'All' : month}
+        selectedYear={viewMode === 'cumulative' ? 'Time' : year}
       />
 
       {/* Clinical Close-out Data Form Panel - PRESERVED HYBRID LOGIC */}
@@ -214,18 +241,12 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                         return (
                           <div
                             key={s.id}
-                            onClick={() => {
-                              if (s.performanceRecorded) {
-                                alert("This slot is already closed and performance values are logged.");
-                                return;
-                              }
-                              handleActiveSlotSelect(s.id);
-                            }}
+                            onClick={() => handleActiveSlotSelect(s.id)}
                             className={`p-3 rounded-2xl border text-xs cursor-pointer transition ${
                               isChosen
                                 ? 'bg-indigo-50 border-indigo-200 text-indigo-900 font-semibold'
                                 : 'bg-slate-50/50 hover:bg-slate-50 border-slate-100 text-slate-600'
-                            } ${s.performanceRecorded ? 'opacity-70 cursor-not-allowed' : ''}`}
+                            }`}
                           >
                             <div className="font-bold">{s.tarikh} ({s.masa})</div>
                             <div className="text-slate-500">Branch: {s.cawangan} | Base Pay: RM {s.gaji}</div>
