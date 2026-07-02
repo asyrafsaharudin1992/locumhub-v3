@@ -79,7 +79,15 @@ function doctorNamesMatch(a: string, b: string): boolean {
   const na = normalizeDoctorName(a);
   const nb = normalizeDoctorName(b);
   if (!na || !nb) return false;
-  return na.includes(nb) || nb.includes(na);
+  if (na === nb) return true;
+  // Word-boundary matching only — plain .includes() would wrongly match
+  // e.g. "ain" against "wan zainol" since those letters appear consecutively
+  // inside "zainol", even though it's a completely different name/word.
+  const wordsA = na.split(/\s+/).filter(Boolean);
+  const wordsB = nb.split(/\s+/).filter(Boolean);
+  const [shortWords, longWords] =
+    wordsA.length <= wordsB.length ? [wordsA, wordsB] : [wordsB, wordsA];
+  return shortWords.every((w) => longWords.includes(w));
 }
 
 export default function App() {
