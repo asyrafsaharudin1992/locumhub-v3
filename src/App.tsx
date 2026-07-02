@@ -1436,6 +1436,7 @@ export default function App() {
                               <tr>
                                 <th className="p-3">Ref timestamp</th>
                                 <th className="p-3">Patient</th>
+                                <th className="p-3">Branch</th>
                                 <th className="p-3">Doctor</th>
                                 <th className="p-3 text-center">Rating /5</th>
                                 <th className="p-3">Notes & opinions</th>
@@ -1452,6 +1453,7 @@ export default function App() {
                                 <tr key={i} className="hover:bg-slate-50/50 border-b border-slate-100">
                                   <td className="p-3 font-mono text-[10px]">{f.tarikh}</td>
                                   <td className="p-3 font-bold text-slate-900">{f.reviewer}</td>
+                                  <td className="p-3 text-slate-600">{f.cawangan || "—"}</td>
                                   <td className="p-3 text-sky-800 font-semibold">
                                     {f.target || <span className="text-slate-300 italic">Not specified</span>}
                                   </td>
