@@ -38,6 +38,7 @@ import {
   fetchAdminAlertsFromSupabase,
   saveAdminAlertToSupabase,
   deleteAdminAlertFromSupabase,
+  uploadUserFileToSupabase,
 } from "./supabaseService";
 
 import {
@@ -678,50 +679,11 @@ export function useAppState() {
     phone: string,
     kind: "apc" | "indemnity" | "mmc",
   ): Promise<{ url: string | null; error?: string }> => {
-    try {
-      // Convert to base64 client-side and POST as JSON — the serverless
-      // function at /api/upload-to-drive handles the actual upload to the
-      // shared Google Drive folder using a service account.
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(",")[1] || "");
-        };
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(file);
-      });
-
-      const res = await fetch("/api/upload-to-drive", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileBase64: base64,
-          fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          phone,
-          kind,
-        }),
-      });
-
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        console.error("Drive upload failed:", errBody);
-        return {
-          url: null,
-          error: errBody?.error || `Upload failed (server responded ${res.status}).`,
-        };
-      }
-
-      const data = await res.json();
-      return { url: data.url || null };
-    } catch (err: any) {
-      console.error("uploadCredentialFile error:", err);
-      return {
-        url: null,
-        error: err?.message || "Could not reach the upload service — check your connection.",
-      };
-    }
+    // Google Drive's service-account upload path hit a hard wall (service
+    // accounts have zero storage quota, and this Drive isn't a Shared
+    // Drive), so new uploads go to Supabase Storage instead. Viewing files
+    // that already exist in the shared Drive folder is unaffected.
+    return uploadUserFileToSupabase(file, phone, kind);
   };
 
   const bookSlot = async (
