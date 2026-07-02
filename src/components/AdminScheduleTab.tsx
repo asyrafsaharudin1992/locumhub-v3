@@ -185,7 +185,18 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         />
       </div>
 
-      {/* Bulk Planning input panel on right side (Col 4) */}
+      {/* Bulk Planning input panel on right side (Col 4) — Admin only; Staff is read-only */}
+      {currentUserRole === 'Staff' ? (
+        <div className="xl:col-span-4 rounded-xl border border-slate-200 bg-slate-50 p-6 shadow-sm space-y-2 text-center">
+          <Key className="w-6 h-6 text-slate-300 mx-auto" />
+          <h5 className="font-display font-bold text-slate-500 tracking-tight text-sm uppercase">
+            View-only access
+          </h5>
+          <p className="text-xs text-slate-400 leading-relaxed font-sans">
+            Operations Staff accounts can view the clinical schedule but cannot publish new slots or manage bookings.
+          </p>
+        </div>
+      ) : (
       <div className="xl:col-span-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
         <div className="flex items-center gap-2">
           <Key className="w-4 h-4 text-indigo-600" />
@@ -331,6 +342,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
           </div>
         </form>
       </div>
+      )}
 
       {/* Modern Beautiful Interactive Custom Slot Management Dialog */}
       <SlotManageModal
