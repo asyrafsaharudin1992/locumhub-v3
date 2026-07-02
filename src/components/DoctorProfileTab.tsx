@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { BadgeModal } from './BadgeModal';
-import { Trophy, Award, Mail, Key, ShieldCheck, Eye, Upload, FileCheck, CheckCircle2 } from 'lucide-react';
+import { Trophy, Award, Mail, Key, ShieldCheck, Eye, Upload, FileCheck, CheckCircle2, Loader2 } from 'lucide-react';
 import { UserProfile } from '../types';
+import { fetchDriveFolderFiles, findDoctorFile, DriveFile } from '../googleDriveService';
 
 interface DoctorProfileTabProps {
   currentUser: UserProfile;
-  onChangePassword: (phone: string, pass: string) => string;
+  onChangePassword: (phone: string, pass: string) => Promise<string>;
   onUpdateProfile: (
     phone: string,
     email: string,
@@ -16,12 +17,18 @@ interface DoctorProfileTabProps {
     indemnityFile: string,
     workplace: string
   ) => string;
+  onUploadFile: (
+    file: File,
+    phone: string,
+    kind: 'apc' | 'indemnity' | 'mmc'
+  ) => Promise<string | null>;
 }
 
 export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
   currentUser,
   onChangePassword,
-  onUpdateProfile
+  onUpdateProfile,
+  onUploadFile
 }) => {
   // Local states for edit form
   const [email, setEmail] = useState(currentUser.email || '');
@@ -29,11 +36,25 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
   const [mmc, setMmc] = useState((currentUser.mmc || '').split('|')[0].trim());
   const [indStatus, setIndStatus] = useState((currentUser.indemnity || '').includes('Ada') ? 'Ada' : 'Tiada');
   const [newPassword, setNewPassword] = useState('');
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
 
-  // Files simulation states
-  const [apcUploadedFile, setApcUploadedFile] = useState<string>('');
-  const [mmcUploadedFile, setMmcUploadedFile] = useState<string>('');
-  const [indUploadedFile, setIndUploadedFile] = useState<string>('');
+  // Real uploaded file URLs (populated once the upload to storage completes)
+  const [apcUploadedUrl, setApcUploadedUrl] = useState<string>('');
+  const [indUploadedUrl, setIndUploadedUrl] = useState<string>('');
+  const [apcFileName, setApcFileName] = useState<string>('');
+  const [indFileName, setIndFileName] = useState<string>('');
+  const [uploadingApc, setUploadingApc] = useState(false);
+  const [uploadingInd, setUploadingInd] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Match existing uploaded documents from the shared Drive folder by doctor name
+  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
+  useEffect(() => {
+    fetchDriveFolderFiles().then(setDriveFiles);
+  }, []);
+  const matchedApcUrl = findDoctorFile(driveFiles, currentUser.name, 'apc');
+  const matchedMmcUrl = findDoctorFile(driveFiles, currentUser.name, 'mmc');
+  const matchedIndemnityUrl = findDoctorFile(driveFiles, currentUser.name, 'indemnity');
 
   // Badge Modal trigger state
   const [activeBadge, setActiveBadge] = useState<{
@@ -84,33 +105,76 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
       alert("⚠️ Email and MMC declaration are compulsory fields.");
       return;
     }
+    if (uploadingApc || uploadingInd) {
+      alert("⏳ Please wait for the file upload to finish before saving.");
+      return;
+    }
 
-    const apcPath = apcUploadedFile ? `http://uploaded/apc_${apcUploadedFile}` : currentUser.apc;
+    setIsSavingProfile(true);
+    const apcToSave = apcUploadedUrl || currentUser.apc;
     const response = onUpdateProfile(
       currentUser.phone,
       email,
       mmc,
-      apcPath,
+      apcToSave,
       indStatus,
-      indUploadedFile ? `http://uploaded/ins_${indUploadedFile}` : '',
+      indUploadedUrl,
       workplace
     );
+    setIsSavingProfile(false);
     alert(response);
   };
 
-  const handlePasswordUpdate = () => {
+  const handlePasswordUpdate = async () => {
     if (newPassword.length < 6) {
       alert("⚠️ Password must be at least 6 characters.");
       return;
     }
-    const response = onChangePassword(currentUser.phone, newPassword);
+    setIsSavingPassword(true);
+    const response = await onChangePassword(currentUser.phone, newPassword);
+    setIsSavingPassword(false);
     alert(response);
-    setNewPassword('');
+    if (!response.startsWith("⚠️")) {
+      setNewPassword('');
+    }
   };
 
-  const handleMockViewFile = (fileType: 'mmc' | 'apc' | 'indemnity') => {
-    // Open standard secure document container
-    alert(`🔐 SECURE FILE RETRIEVAL SUCCESSFUL:\n----------------------------------------\nDocument: ${fileType.toUpperCase()}\nStatus: Verified credentials\nSource: Drive Cloud Vault\n\nAuthorized access approved for Dr. ${currentUser.name}`);
+  const handleFileSelect = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    kind: 'apc' | 'indemnity'
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const setUploading = kind === 'apc' ? setUploadingApc : setUploadingInd;
+    const setUrl = kind === 'apc' ? setApcUploadedUrl : setIndUploadedUrl;
+    const setFileName = kind === 'apc' ? setApcFileName : setIndFileName;
+
+    setFileName(file.name);
+    setUploading(true);
+    const url = await onUploadFile(file, currentUser.phone, kind);
+    setUploading(false);
+
+    if (url) {
+      setUrl(url);
+    } else {
+      alert(`⚠️ Failed to upload ${file.name}. Please check your connection and try again.`);
+      setFileName('');
+    }
+  };
+
+  const extractIndemnityUrl = (raw: string): string => {
+    if (!raw || !raw.includes('http')) return '';
+    const parts = raw.split('|');
+    return parts.length > 1 ? parts[1].trim() : '';
+  };
+
+  const handleViewFile = (url: string | null | undefined) => {
+    if (!url || !url.startsWith('http')) {
+      alert("⚠️ No file is available to view yet — upload one and save your profile first.");
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -238,10 +302,10 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-850 font-mono font-bold"
                   placeholder="e.g. 54321"
                 />
-                {currentUser.mmc && (
+                {matchedMmcUrl && (
                   <button
                     type="button"
-                    onClick={() => handleMockViewFile('mmc')}
+                    onClick={() => handleViewFile(matchedMmcUrl)}
                     className="bg-sky-50 text-sky-700 border border-sky-100 hover:bg-sky-100 p-2 text-xs font-bold rounded-xl flex items-center justify-center gap-1 shrink-0"
                   >
                     <Eye className="w-4 h-4" />
@@ -251,7 +315,7 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
               </div>
             </div>
 
-            {/* APC file simulation */}
+            {/* APC file upload */}
             <div className="space-y-1.5 bg-slate-50 border border-slate-200 p-4 rounded-xl">
               <label className="text-xs font-bold text-slate-500 tracking-wider uppercase block">
                 Upload APC Certificate 2026 *
@@ -260,8 +324,9 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
                 <input
                   type="file"
                   id="apc-picker"
+                  accept="application/pdf,image/*"
                   className="hidden"
-                  onChange={e => setApcUploadedFile(e.target.files?.[0]?.name || '')}
+                  onChange={e => handleFileSelect(e, 'apc')}
                 />
                 <label
                   htmlFor="apc-picker"
@@ -270,20 +335,25 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
                   <Upload className="w-3.5 h-3.5" />
                   Upload PDF
                 </label>
-                {apcUploadedFile ? (
+                {apcFileName ? (
                   <span className="text-[10px] text-emerald-605 font-bold truncate flex items-center gap-1">
                     <FileCheck className="w-3.5 h-3.5 flex-shrink-0" />
-                    {apcUploadedFile}
+                    {apcFileName}
+                  </span>
+                ) : uploadingApc ? (
+                  <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1">
+                    <Loader2 className="w-3.5 h-3.5 flex-shrink-0 animate-spin" />
+                    Uploading...
                   </span>
                 ) : (
                   <span className="text-[10px] text-slate-400 font-semibold">No file selected</span>
                 )}
               </div>
 
-              {currentUser.apc && (
+              {(matchedApcUrl || currentUser.apc) && (
                 <button
                   type="button"
-                  onClick={() => handleMockViewFile('apc')}
+                  onClick={() => handleViewFile(matchedApcUrl || apcUploadedUrl || currentUser.apc)}
                   className="text-indigo-700 font-bold hover:underline text-[10px] flex items-center gap-1 mt-1.5 cursor-pointer"
                 >
                   <Eye className="w-3 h-3" />
@@ -325,8 +395,9 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
                   <input
                     type="file"
                     id="ind-picker"
+                    accept="application/pdf,image/*"
                     className="hidden"
-                    onChange={e => setIndUploadedFile(e.target.files?.[0]?.name || '')}
+                    onChange={e => handleFileSelect(e, 'indemnity')}
                   />
                   <div className="flex gap-2 items-center">
                     <label
@@ -336,19 +407,24 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
                       <Upload className="w-3.5 h-3.5" />
                       Policy PDF
                     </label>
-                    {indUploadedFile ? (
+                    {indFileName ? (
                       <span className="text-[10px] text-emerald-605 font-bold truncate flex items-center gap-1">
                         <FileCheck className="w-3.5 h-3.5 flex-shrink-0" />
-                        {indUploadedFile}
+                        {indFileName}
+                      </span>
+                    ) : uploadingInd ? (
+                      <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-1">
+                        <Loader2 className="w-3.5 h-3.5 flex-shrink-0 animate-spin" />
+                        Uploading...
                       </span>
                     ) : (
                       <span className="text-[10px] text-slate-400 font-semibold">No file selected</span>
                     )}
                   </div>
-                  {currentUser.indemnity?.includes('http') && (
+                  {(matchedIndemnityUrl || indUploadedUrl || currentUser.indemnity?.includes('http')) && (
                     <button
                       type="button"
-                      onClick={() => handleMockViewFile('indemnity')}
+                      onClick={() => handleViewFile(matchedIndemnityUrl || indUploadedUrl || extractIndemnityUrl(currentUser.indemnity))}
                       className="text-emerald-700 font-bold hover:underline text-[10px] flex items-center gap-1 mt-1 cursor-pointer"
                     >
                       <Eye className="w-3 h-3" />
@@ -362,7 +438,8 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
 
           <button
             type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition cursor-pointer font-sans text-xs uppercase tracking-wider"
+            disabled={isSavingProfile || uploadingApc || uploadingInd}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl shadow-md transition cursor-pointer font-sans text-xs uppercase tracking-wider disabled:opacity-60"
           >
             Save Profile Credentials
           </button>
@@ -390,9 +467,11 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
           <button
             type="button"
             onClick={handlePasswordUpdate}
-            className="bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold px-5 py-3 rounded-xl text-xs transition border border-rose-100 cursor-pointer"
+            disabled={isSavingPassword}
+            className="bg-rose-50 text-rose-700 hover:bg-rose-100 font-bold px-5 py-3 rounded-xl text-xs transition border border-rose-100 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
           >
-            Update Password
+            {isSavingPassword && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {isSavingPassword ? 'Updating...' : 'Update Password'}
           </button>
         </div>
       </div>
