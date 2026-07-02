@@ -21,7 +21,7 @@ interface DoctorProfileTabProps {
     file: File,
     phone: string,
     kind: 'apc' | 'indemnity' | 'mmc'
-  ) => Promise<string | null>;
+  ) => Promise<{ url: string | null; error?: string }>;
 }
 
 export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
@@ -152,13 +152,13 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
 
     setFileName(file.name);
     setUploading(true);
-    const url = await onUploadFile(file, currentUser.phone, kind);
+    const result = await onUploadFile(file, currentUser.phone, kind);
     setUploading(false);
 
-    if (url) {
-      setUrl(url);
+    if (result.url) {
+      setUrl(result.url);
     } else {
-      alert(`⚠️ Failed to upload ${file.name}. Please check your connection and try again.`);
+      alert(`⚠️ Failed to upload ${file.name}.\n\nReason: ${result.error || 'Unknown error'}`);
       setFileName('');
     }
   };
