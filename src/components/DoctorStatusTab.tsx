@@ -100,6 +100,19 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
     { name: 'The Diligent Doc', color: 'linear-gradient(135deg, #F9CB28, #FF4D4D)' },
   ];
 
+  // Doctors can only withdraw upcoming shifts — past shifts can only be
+  // adjusted by admin (e.g. via the Clinical Schedule / performance tools).
+  const isPastSlot = (tarikhStr: string): boolean => {
+    const parts = (tarikhStr || '').split('/');
+    if (parts.length !== 3) return false;
+    const [d, m, y] = parts.map((p) => parseInt(p, 10));
+    if (!d || !m || !y) return false;
+    const slotDate = new Date(y, m - 1, d);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return slotDate < today;
+  };
+
   const handleCancelClick = (slot: LocumSlot) => {
     setPendingCancelSlot(slot);
   };
@@ -269,13 +282,19 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
                       {slot.status === 'Approved' ? 'Approved ✓' : 'Pending Approval ⌛'}
                     </span>
 
-                    <button
-                      onClick={() => handleCancelClick(slot)}
-                      className="text-xs hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold p-2.5 rounded-xl transition flex items-center gap-1"
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                      <span className="hidden xs:inline">Withdraw</span>
-                    </button>
+                    {isPastSlot(slot.tarikh) ? (
+                      <span className="text-[10px] text-slate-400 italic px-2.5 py-1">
+                        Past shift — contact admin for changes
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleCancelClick(slot)}
+                        className="text-xs hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold p-2.5 rounded-xl transition flex items-center gap-1"
+                      >
+                        <Trash className="w-3.5 h-3.5" />
+                        <span className="hidden xs:inline">Withdraw</span>
+                      </button>
+                    )}
                   </div>
                 </motion.div>
               );
