@@ -13,7 +13,7 @@ export interface DriveFile {
 const DOCS_FOLDER_ID = "11Uz5gfuzV-X5m83MsjKx90yfX8Cv_xR-";
 
 // Set this to your Drive API key (see setup instructions).
-const DRIVE_API_KEY = "";
+const DRIVE_API_KEY = "AIzaSyDq-PngkEtgEl5lY6lopExjz_Wao_DpPfM";
 
 let cachedFiles: DriveFile[] | null = null;
 let cacheTimestamp = 0;
