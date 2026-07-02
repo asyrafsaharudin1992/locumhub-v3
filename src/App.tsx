@@ -160,6 +160,23 @@ export default function App() {
   >([]);
   const [loadingRecruitment, setLoadingRecruitment] = useState(false);
 
+  // On page load/refresh, currentUser is restored from localStorage but
+  // activeTab is not — it resets to its default ("booking"). Without this,
+  // a restored Admin/Staff session would land on a blank content area (since
+  // those tabs are role-gated) instead of their actual landing page.
+  useEffect(() => {
+    if (state.currentUser) {
+      if (state.currentUser.role === "Admin") {
+        setActiveTab("admin-cal");
+      } else if (state.currentUser.role === "Staff") {
+        setActiveTab("admin-cal");
+      } else {
+        setActiveTab("booking");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (activeTab === "admin-tasks") {
       // The recruitment pipeline is sourced directly from the "NEW LOCUM" Google Form
@@ -808,7 +825,7 @@ export default function App() {
                   transition={{ duration: 0.3 }}
                 >
                   {/* --- DOCTOR PORTALS --- */}
-                  {activeTab === "booking" && (
+                  {activeTab === "booking" && activeRole === "Doctor" && (
                     <DoctorBookingTab
                       slots={state.slots}
                       currentUser={state.currentUser}
@@ -817,7 +834,7 @@ export default function App() {
                     />
                   )}
 
-                  {activeTab === "status" && (
+                  {activeTab === "status" && activeRole === "Doctor" && (
                     <DoctorStatusTab
                       slots={state.slots}
                       currentUser={state.currentUser}
@@ -825,7 +842,7 @@ export default function App() {
                     />
                   )}
 
-                  {activeTab === "notifications" && state.currentUser && (
+                  {activeTab === "notifications" && activeRole === "Doctor" && state.currentUser && (
                     <DoctorNotificationsTab
                       notifications={state.notifications}
                       currentUser={state.currentUser}
@@ -834,7 +851,7 @@ export default function App() {
                     />
                   )}
 
-                  {activeTab === "announcements" && (
+                  {activeTab === "announcements" && activeRole === "Doctor" && (
                     <div className="space-y-6">
                       <div className="rounded-3xl border border-slate-100 bg-[#001F3F] p-4 text-white space-y-1">
                         <span className="text-[9px] font-bold tracking-widest text-[#007AFF] uppercase block">
@@ -920,7 +937,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === "feedback" && (
+                  {activeTab === "feedback" && activeRole === "Doctor" && (
                     <DoctorFeedbackView
                       feedbacks={patientFeedbackEntries.filter((f) => {
                         if (!f.target || !f.target.trim()) return false; // no doctor recorded — admin-only
@@ -929,7 +946,7 @@ export default function App() {
                     />
                   )}
 
-                  {activeTab === "profile" && (
+                  {activeTab === "profile" && activeRole === "Doctor" && (
                     <DoctorProfileTab
                       currentUser={state.currentUser}
                       onChangePassword={changePassword}
