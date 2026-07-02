@@ -799,20 +799,39 @@ export async function fetchStaffFeedbackResponses(): Promise<StaffFeedbackEntry[
 const PATIENT_FEEDBACK_SHEET_ID = "1rUKIsFHHWJIq885eRyHtJWSvzahW7lszQLr4e68Fbjw";
 
 // Sangat Setuju / Setuju / Tidak Setuju / Sangat Tidak Setuju -> 5 / 4 / 2 / 1
+// Broadened to tolerate punctuation, extra spacing, and English equivalents,
+// since responses have shown some inconsistency in exact phrasing.
 function likertToScore(raw: string): number | null {
-  const v = (raw || "").trim().toLowerCase();
+  const v = (raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!]+$/g, "")
+    .replace(/\s+/g, " ");
   if (!v) return null;
-  if (v.includes("sangat tidak setuju")) return 1;
-  if (v.includes("tidak setuju")) return 2;
-  if (v.includes("sangat setuju")) return 5;
-  if (v.includes("setuju")) return 4;
+  if (v.includes("sangat tidak setuju") || v.includes("strongly disagree")) return 1;
+  if (v.includes("tidak setuju") || (v.includes("disagree") && !v.includes("strongly"))) return 2;
+  if (v.includes("sangat setuju") || v.includes("strongly agree")) return 5;
+  if (v.includes("setuju") || v === "agree") return 4;
+  return null;
+}
+
+async function fetchFirstAvailableTab(spreadsheetId: string, names: string[]): Promise<PublicSheetData | null> {
+  for (const name of names) {
+    const sheet = await fetchPublicSheetTab(spreadsheetId, name);
+    if (sheet && sheet.rows.length > 0) return sheet;
+  }
   return null;
 }
 
 export async function fetchPatientFeedbackFromSheets(): Promise<FeedbackRecord[]> {
   const [formSheet, manualSheet] = await Promise.all([
     fetchPublicSheetTab(PATIENT_FEEDBACK_SHEET_ID, "Form responses 1"),
-    fetchPublicSheetTab(PATIENT_FEEDBACK_SHEET_ID, "MANUAL FEEDBACK"),
+    fetchFirstAvailableTab(PATIENT_FEEDBACK_SHEET_ID, [
+      "MANUAL FEEDBACK",
+      "Manual Feedback",
+      "Manual feedback",
+      "manual feedback",
+    ]),
   ]);
 
 // -- Form responses 1: Timestamp, Nama pesakit, No telefon, Cawangan, 4x Likert Qs, Maklum balas lain-lain, Nama doktor locum bertugas
@@ -822,36 +841,29 @@ export async function fetchPatientFeedbackFromSheets(): Promise<FeedbackRecord[]
     const idx = {
       timestamp: findColIndex(h, "timestamp"),
       nama: findColIndex(h, "nama pesakit"),
-      komen: findColIndex(h, "maklum balas lain-lain", "maklum balas", "ulasan", "komen", "lain-lain"),
+      cawangan: findColIndex(h, "cawangan"),
+      komen: findColIndex(h, "maklum balas lain-lain", "maklum balas", "ulasan lain", "lain-lain"),
       doctor: findColIndex(h, "nama doktor locum bertugas", "nama doktor"),
     };
+    // Confirmed fixed layout: A Timestamp, B Nama pesakit, C No telefon, D Cawangan,
+    // E-H the 4 Likert questions, I Maklum balas lain-lain, J Nama doktor locum bertugas.
+    const Q1 = 4, Q2 = 5, Q3 = 6, Q4 = 7;
+    const KOMEN_FALLBACK_POSITION = 8;
     formEntries = formSheet.rows
       .filter(r => !isBlankRow(r))
       .map(r => {
-        // Content-based Likert detection: scan every cell in the row for a
-        // Sangat Setuju / Setuju / Tidak Setuju / Sangat Tidak Setuju answer,
-        // rather than relying on exact header wording matching (fragile —
-        // the actual header text doesn't always match what's expected).
-        const scores = r
-          .map((cell) => likertToScore(String(cell ?? "")))
+        const scores = [Q1, Q2, Q3, Q4]
+          .map((i) => likertToScore(getCell(r, i)))
           .filter((s): s is number => s !== null);
         const rating = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
         const nama = getCell(r, idx.nama);
-        let komen = getCell(r, idx.komen);
-        // Fallback: if no comment column matched by header, use the longest
-        // free-text cell in the row that isn't a Likert answer or the doctor name.
-        if (!komen) {
-          const doctorVal = getCell(r, idx.doctor);
-          const candidates = r
-            .map((c) => String(c ?? "").trim())
-            .filter((v) => v && likertToScore(v) === null && v !== doctorVal && !/^\d+$/.test(v));
-          komen = candidates.sort((a, b) => b.length - a.length)[0] || "";
-        }
+        const komen = getCell(r, idx.komen) || getCell(r, KOMEN_FALLBACK_POSITION);
         return {
           tarikh: getCell(r, idx.timestamp),
           nama,
           reviewer: nama,
           target: getCell(r, idx.doctor),
+          cawangan: getCell(r, idx.cawangan),
           rating,
           komen,
         };
@@ -880,6 +892,7 @@ export async function fetchPatientFeedbackFromSheets(): Promise<FeedbackRecord[]
           nama,
           reviewer: nama,
           target: getCell(r, idx.doctor),
+          cawangan: getCell(r, idx.cawangan),
           rating: Number(getCell(r, idx.rating)) || 0,
           komen: getCell(r, idx.komen),
         };
