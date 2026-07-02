@@ -80,3 +80,30 @@ export interface AdminAlert {
   message: string;
   timestamp: string;
 }
+
+export interface LocumSurveyEntry {
+  timestamp: string;
+  duration: string;
+  clinics: string;
+  workflowSmooth: string;
+  workflowElaborate: string;
+  feltSupported: string;
+  staffFeedback: string;
+  safetyConcerns: string;
+  medsSufficient: string;
+  medsFeedback: string;
+  awareOutsourced: string;
+  outsourcedSuggestion: string;
+  appreciate: string;
+  improve: string;
+}
+
+export interface StaffFeedbackEntry {
+  timestamp: string;
+  staffName: string;
+  cawangan: string;
+  doctorName: string;
+  dutyDate: string;
+  category: string;
+  details: string;
+}
