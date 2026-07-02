@@ -815,38 +815,45 @@ export async function fetchPatientFeedbackFromSheets(): Promise<FeedbackRecord[]
     fetchPublicSheetTab(PATIENT_FEEDBACK_SHEET_ID, "MANUAL FEEDBACK"),
   ]);
 
-  // -- Form responses 1: Timestamp, Nama pesakit, No telefon, Cawangan, 4x Likert Qs, Maklum balas lain-lain, Nama doktor locum bertugas
+// -- Form responses 1: Timestamp, Nama pesakit, No telefon, Cawangan, 4x Likert Qs, Maklum balas lain-lain, Nama doktor locum bertugas
   let formEntries: FeedbackRecord[] = [];
   if (formSheet) {
     const h = formSheet.headers;
     const idx = {
       timestamp: findColIndex(h, "timestamp"),
       nama: findColIndex(h, "nama pesakit"),
-      q1: findColIndex(h, "penerangan yang secukupnya"),
-      q2: findColIndex(h, "berpuas hati dengan pemeriksaan"),
-      q3: findColIndex(h, "berpuas hati dengan layanan"),
-      q4: findColIndex(h, "penerangan yang jelas berkenaan ubat"),
-      komen: findColIndex(h, "maklum balas lain-lain", "maklum balas"),
+      komen: findColIndex(h, "maklum balas lain-lain", "maklum balas", "ulasan", "komen", "lain-lain"),
       doctor: findColIndex(h, "nama doktor locum bertugas", "nama doktor"),
     };
     formEntries = formSheet.rows
       .filter(r => !isBlankRow(r))
       .map(r => {
-        const scores = [
-          likertToScore(getCell(r, idx.q1)),
-          likertToScore(getCell(r, idx.q2)),
-          likertToScore(getCell(r, idx.q3)),
-          likertToScore(getCell(r, idx.q4)),
-        ].filter((s): s is number => s !== null);
+        // Content-based Likert detection: scan every cell in the row for a
+        // Sangat Setuju / Setuju / Tidak Setuju / Sangat Tidak Setuju answer,
+        // rather than relying on exact header wording matching (fragile —
+        // the actual header text doesn't always match what's expected).
+        const scores = r
+          .map((cell) => likertToScore(String(cell ?? "")))
+          .filter((s): s is number => s !== null);
         const rating = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
         const nama = getCell(r, idx.nama);
+        let komen = getCell(r, idx.komen);
+        // Fallback: if no comment column matched by header, use the longest
+        // free-text cell in the row that isn't a Likert answer or the doctor name.
+        if (!komen) {
+          const doctorVal = getCell(r, idx.doctor);
+          const candidates = r
+            .map((c) => String(c ?? "").trim())
+            .filter((v) => v && likertToScore(v) === null && v !== doctorVal && !/^\d+$/.test(v));
+          komen = candidates.sort((a, b) => b.length - a.length)[0] || "";
+        }
         return {
           tarikh: getCell(r, idx.timestamp),
           nama,
           reviewer: nama,
           target: getCell(r, idx.doctor),
           rating,
-          komen: getCell(r, idx.komen),
+          komen,
         };
       })
       .reverse();
