@@ -515,16 +515,25 @@ export function useAppState() {
     setState((prev) => ({ ...prev, currentUser: null }));
   };
 
-  const changePassword = (phone: string, newPass: string): string => {
+  const changePassword = async (
+    phone: string,
+    newPass: string,
+  ): Promise<string> => {
     const encodedPass = btoa(newPass.trim());
     const targetPhone = phone.trim();
 
     const existingUser = state.users.find((u) => u.phone.trim() === targetPhone);
-    if (existingUser) {
-      const updatedUser = { ...existingUser, password: encodedPass };
-      cloudSaveUser(updatedUser).catch((err) =>
-        console.error("Cloud changePassword failed:", err),
-      );
+    if (!existingUser) {
+      return "⚠️ Could not find that account — password was not changed.";
+    }
+
+    const updatedUser = { ...existingUser, password: encodedPass };
+
+    try {
+      await saveUserToSupabase(updatedUser);
+    } catch (err) {
+      console.error("Cloud changePassword failed:", err);
+      return "⚠️ Password change failed to save — please check your connection and try again.";
     }
 
     setState((prev) => {
@@ -567,22 +576,27 @@ export function useAppState() {
     indemnityFile: string,
     workplace: string,
   ): string => {
+    const buildIndemnityString = (previousIndemnity: string): string => {
+      if (indStatus !== "Ada") return "Tiada";
+      if (indemnityFile) return `Ada | ${indemnityFile}`;
+      // No new file uploaded this time — keep whatever URL was already on file
+      const existingUrl = previousIndemnity?.includes("http")
+        ? previousIndemnity.split("|")[1]?.trim()
+        : "";
+      return existingUrl ? `Ada | ${existingUrl}` : "Ada";
+    };
+
     setState((prev) => {
       const updatedUsers = prev.users.map((u) => {
         if (u.phone === phone) {
-          const indemnityString =
-            indStatus === "Ada"
-              ? `${indStatus} | ${indemnityFile || "indemnity_file.pdf"}`
-              : "Tiada";
-          const updated = {
+          return {
             ...u,
             email,
-            mmc: mmc.includes("|") ? mmc : `${mmc} | uploaded_mmc.pdf`,
-            apc: apc || u.apc || "uploaded_apc.pdf",
-            indemnity: indemnityString,
+            mmc,
+            apc: apc || u.apc || "",
+            indemnity: buildIndemnityString(u.indemnity),
             workplace,
           };
-          return updated;
         }
         return u;
       });
@@ -599,16 +613,12 @@ export function useAppState() {
 
     const user = state.users.find((u) => u.phone === phone);
     if (user) {
-      const indemnityString =
-        indStatus === "Ada"
-          ? `${indStatus} | ${indemnityFile || "indemnity_file.pdf"}`
-          : "Tiada";
       const updatedUser = {
         ...user,
         email,
-        mmc: mmc.includes("|") ? mmc : `${mmc} | uploaded_mmc.pdf`,
-        apc: apc || user.apc || "uploaded_apc.pdf",
-        indemnity: indemnityString,
+        mmc,
+        apc: apc || user.apc || "",
+        indemnity: buildIndemnityString(user.indemnity),
         workplace,
       };
       cloudSaveUser(updatedUser).catch((err) =>
@@ -618,6 +628,51 @@ export function useAppState() {
 
     logActivity(`Profile updated for user: ${phone}`);
     return "Profile Successfully Updated!";
+  };
+
+  const uploadCredentialFile = async (
+    file: File,
+    phone: string,
+    kind: "apc" | "indemnity" | "mmc",
+  ): Promise<string | null> => {
+    try {
+      // Convert to base64 client-side and POST as JSON — the serverless
+      // function at /api/upload-to-drive handles the actual upload to the
+      // shared Google Drive folder using a service account.
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1] || "");
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch("/api/upload-to-drive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileBase64: base64,
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          phone,
+          kind,
+        }),
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        console.error("Drive upload failed:", errBody);
+        return null;
+      }
+
+      const data = await res.json();
+      return data.url || null;
+    } catch (err) {
+      console.error("uploadCredentialFile error:", err);
+      return null;
+    }
   };
 
   const bookSlot = async (
@@ -1890,6 +1945,7 @@ export function useAppState() {
     logout,
     changePassword,
     updateProfile,
+    uploadCredentialFile,
     bookSlot,
     cancelSlotByDoctor,
     adminApproveSlot,
