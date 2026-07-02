@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { BadgeModal } from './BadgeModal';
 import { Trophy, Award, Mail, Key, ShieldCheck, Eye, Upload, FileCheck, CheckCircle2, Loader2 } from 'lucide-react';
 import { UserProfile } from '../types';
-import { fetchDriveFolderFiles, findDoctorFile, DriveFile } from '../googleDriveService';
+import { fetchDoctorDocumentLinks } from '../googleDriveService';
 
 interface DoctorProfileTabProps {
   currentUser: UserProfile;
@@ -47,14 +47,19 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
   const [uploadingInd, setUploadingInd] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  // Match existing uploaded documents from the shared Drive folder by doctor name
-  const [driveFiles, setDriveFiles] = useState<DriveFile[]>([]);
+  // Fetch this doctor's own matched Drive document links via a server-side
+  // lookup — the browser only ever receives URLs for the logged-in doctor,
+  // never the full folder listing of every doctor's filenames/links.
+  const [matchedApcUrl, setMatchedApcUrl] = useState<string | null>(null);
+  const [matchedMmcUrl, setMatchedMmcUrl] = useState<string | null>(null);
+  const [matchedIndemnityUrl, setMatchedIndemnityUrl] = useState<string | null>(null);
   useEffect(() => {
-    fetchDriveFolderFiles().then(setDriveFiles);
-  }, []);
-  const matchedApcUrl = findDoctorFile(driveFiles, currentUser.name, 'apc');
-  const matchedMmcUrl = findDoctorFile(driveFiles, currentUser.name, 'mmc');
-  const matchedIndemnityUrl = findDoctorFile(driveFiles, currentUser.name, 'indemnity');
+    fetchDoctorDocumentLinks(currentUser.name).then((links) => {
+      setMatchedApcUrl(links.apc);
+      setMatchedMmcUrl(links.mmc);
+      setMatchedIndemnityUrl(links.indemnity);
+    });
+  }, [currentUser.name]);
 
   // Badge Modal trigger state
   const [activeBadge, setActiveBadge] = useState<{
