@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2 } from 'lucide-react';
+import { ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2, Trophy, Award } from 'lucide-react';
 import { LocumSlot, UserProfile } from '../types';
 
 interface DoctorStatusTabProps {
@@ -49,6 +49,34 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
     return true; // All
   });
 
+  // Compact badge summary for the mobile-only Profile & Medals card above the
+  // shift list — the full "Profile & Medals" tab isn't reachable in the mobile
+  // bottom nav (it only shows the first 5 tabs), so a summary lives here instead.
+  const badgeMap: { [key: string]: number } = {};
+  if (currentUser.badges) {
+    currentUser.badges.split(',').forEach(item => {
+      const trimmed = item.trim();
+      if (!trimmed) return;
+      const lastColon = trimmed.lastIndexOf(':');
+      let namePart = trimmed;
+      let count = 1;
+      if (lastColon !== -1) {
+        namePart = trimmed.substring(0, lastColon).trim();
+        count = parseInt(trimmed.substring(lastColon + 1).trim()) || 1;
+      }
+      const cleanName = namePart.split('(')[0].trim();
+      badgeMap[cleanName] = Math.max(badgeMap[cleanName] || 0, count);
+    });
+  }
+  const MOBILE_BADGES_CONFIG = [
+    { name: 'Team Favorite', color: 'linear-gradient(135deg, #00DFD8, #007CF0)' },
+    { name: 'Heart Winner', color: 'linear-gradient(135deg, #A2FF00, #349300)' },
+    { name: 'Last Minute Savior', color: 'linear-gradient(135deg, #FF4D4D, #F9CB28)' },
+    { name: 'Iron Doctor', color: 'linear-gradient(135deg, #FF0080, #7928CA)' },
+    { name: 'The Unstoppable', color: 'linear-gradient(135deg, #5EE7DF, #B490CA)' },
+    { name: 'The Diligent Doc', color: 'linear-gradient(135deg, #F9CB28, #FF4D4D)' },
+  ];
+
   const handleCancelClick = (slot: LocumSlot) => {
     setPendingCancelSlot(slot);
   };
@@ -69,6 +97,65 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Mobile-only Profile & Medals summary — the full Profile & Medals tab
+          isn't reachable from the mobile bottom nav, so a compact version
+          lives here above the shift list. */}
+      <div className="md:hidden rounded-2xl bg-gradient-to-br from-slate-900 via-[#011428] to-black border-2 border-[#D4AF37]/30 p-5 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 -mr-6 -mt-6 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl" />
+        <div className="flex justify-between items-start">
+          <div className="space-y-0.5">
+            <span className="text-[9px] tracking-widest text-amber-400 font-bold uppercase block">
+              {currentUser.name}
+            </span>
+            <span className="text-[10px] text-slate-400 font-semibold block">Available balance</span>
+            <div className="flex items-baseline gap-1.5 pt-0.5">
+              <h1 className="font-display text-3xl font-extrabold tracking-tight text-white select-none">
+                {currentUser.points}
+              </h1>
+              <span className="text-amber-400 font-bold font-display text-xs tracking-wider">ARACOINS</span>
+            </div>
+          </div>
+          <div className="p-2.5 bg-amber-500/10 rounded-xl border border-amber-500/20 text-[#D4AF37]">
+            <Trophy className="w-6 h-6 fill-current" />
+          </div>
+        </div>
+
+        <div className="border-t border-slate-800/80 mt-4 pt-3">
+          <span className="text-[9px] tracking-wider text-slate-400 font-bold uppercase block mb-2.5">
+            Medal Case
+          </span>
+          <div className="grid grid-cols-6 gap-2">
+            {MOBILE_BADGES_CONFIG.map(config => {
+              const count = badgeMap[config.name] || 0;
+              const unlocked = count > 0;
+              return (
+                <div
+                  key={config.name}
+                  title={config.name}
+                  className="flex flex-col items-center gap-1"
+                >
+                  <div
+                    className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-[#D4AF37]/20"
+                    style={{
+                      background: unlocked ? config.color : '#1e293b',
+                      opacity: unlocked ? 1 : 0.25,
+                      filter: unlocked ? 'none' : 'grayscale(100%)'
+                    }}
+                  >
+                    <Award className="w-4.5 h-4.5 text-white" />
+                    {unlocked && (
+                      <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-black rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">
+                        {count}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Control header filter pills */}
       <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
         {(['All', 'Approved', 'Pending'] as const).map(fType => (
