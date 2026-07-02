@@ -253,9 +253,14 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Shift list cards to choose */}
                     <div className="space-y-2">
-                      {/* Summary totals across closed shifts for this doctor */}
+                      {/* Summary totals across shifts with real recorded data for this doctor.
+                          Checking actual sales/pesakit values (not just the performanceRecorded
+                          flag) since older/imported records often have real data but were never
+                          explicitly marked "closed" through this specific form. */}
                       {(() => {
-                        const closedShifts = completedApprovedShifts.filter(s => s.performanceRecorded);
+                        const closedShifts = completedApprovedShifts.filter(
+                          s => s.performanceRecorded || s.sales !== undefined || s.pesakit !== undefined
+                        );
                         const totalSales = closedShifts.reduce((sum, s) => sum + (s.sales || 0), 0);
                         const totalPatients = closedShifts.reduce((sum, s) => sum + (s.pesakit || 0), 0);
                         return closedShifts.length > 0 ? (
@@ -278,6 +283,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                       <div className="max-h-72 overflow-y-auto pr-2 space-y-2">
                       {completedApprovedShifts.map(s => {
                         const isChosen = selectedSlotId === s.id;
+                        const hasRecordedData = s.performanceRecorded || s.sales !== undefined || s.pesakit !== undefined;
                         return (
                           <div
                             key={s.id}
@@ -290,7 +296,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                           >
                             <div className="font-bold">{s.tarikh} ({s.masa})</div>
                             <div className="text-slate-500">Branch: {s.cawangan} | Base Pay: RM {s.gaji}</div>
-                            {s.performanceRecorded ? (
+                            {hasRecordedData ? (
                               <>
                                 <div className="text-slate-500 mt-1">
                                   Sales: RM {(s.sales || 0).toLocaleString()} | Patients: {s.pesakit || 0}
