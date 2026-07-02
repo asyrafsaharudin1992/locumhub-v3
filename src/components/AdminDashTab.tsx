@@ -252,10 +252,30 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Shift list cards to choose */}
-                    <div className="space-y-2 max-h-72 overflow-y-auto pr-2">
+                    <div className="space-y-2">
+                      {/* Summary totals across closed shifts for this doctor */}
+                      {(() => {
+                        const closedShifts = completedApprovedShifts.filter(s => s.performanceRecorded);
+                        const totalSales = closedShifts.reduce((sum, s) => sum + (s.sales || 0), 0);
+                        const totalPatients = closedShifts.reduce((sum, s) => sum + (s.pesakit || 0), 0);
+                        return closedShifts.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-2 mb-2">
+                            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
+                              <span className="text-[9px] tracking-wider text-indigo-600 font-bold block uppercase">Total Sales (Closed)</span>
+                              <span className="font-display text-lg font-extrabold text-indigo-900">RM {totalSales.toLocaleString()}</span>
+                            </div>
+                            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
+                              <span className="text-[9px] tracking-wider text-emerald-600 font-bold block uppercase">Total Patients (Closed)</span>
+                              <span className="font-display text-lg font-extrabold text-emerald-800">{totalPatients.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+
                       <span className="text-[10px] tracking-wider text-slate-400 font-bold block uppercase mb-1">
                         Select Pending Completed Shift/Slot
                       </span>
+                      <div className="max-h-72 overflow-y-auto pr-2 space-y-2">
                       {completedApprovedShifts.map(s => {
                         const isChosen = selectedSlotId === s.id;
                         return (
@@ -271,13 +291,19 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                             <div className="font-bold">{s.tarikh} ({s.masa})</div>
                             <div className="text-slate-500">Branch: {s.cawangan} | Base Pay: RM {s.gaji}</div>
                             {s.performanceRecorded ? (
-                              <div className="inline-block mt-2 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold uppercase tracking-wide">
-                                ✓ Done
-                              </div>
+                              <>
+                                <div className="text-slate-500 mt-1">
+                                  Sales: RM {(s.sales || 0).toLocaleString()} | Patients: {s.pesakit || 0}
+                                </div>
+                                <div className="inline-block mt-2 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-bold uppercase tracking-wide">
+                                  ✓ Done
+                                </div>
+                              </>
                             ) : null}
                           </div>
                         );
                       })}
+                      </div>
                     </div>
 
                     {/* Performance values editor input panel */}
