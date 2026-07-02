@@ -44,10 +44,30 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   const availableCount = displaySlots.filter(s => s.status === 'Available').length;
 
   // Filter approved completed shifts of the doctor for editing performance outputs
+  // Word-boundary name matching: loose enough that "Ain" matches "Dr Ain" or
+  // "Nur Ain" (nickname/prefix variations), but strict enough that "Ain"
+  // does NOT match "Wan Zainol" just because the letters "ain" happen to
+  // appear consecutively inside "Zainol" — that's not the same word.
+  const doctorNameWordMatch = (fullName: string, filterName: string): boolean => {
+    const normalize = (s: string) =>
+      s.toUpperCase().trim().replace(/^DR\.?\s+/i, "");
+    const a = normalize(fullName || "");
+    const b = normalize(filterName || "");
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const wordsA = a.split(/\s+/).filter(Boolean);
+    const wordsB = b.split(/\s+/).filter(Boolean);
+    const [shortWords, longWords] =
+      wordsA.length <= wordsB.length ? [wordsA, wordsB] : [wordsB, wordsA];
+    // Every word in the shorter name must exactly equal some whole word in
+    // the longer name — no partial/substring word matches allowed.
+    return shortWords.every(w => longWords.includes(w));
+  };
+
   const completedApprovedShifts = slots.filter(s => {
     if (s.status !== 'Approved') return false;
     if (selectedDoctorFilter) {
-      return s.dr?.toUpperCase().trim().includes(selectedDoctorFilter.toUpperCase().trim());
+      return doctorNameWordMatch(s.dr || '', selectedDoctorFilter);
     }
     return false;
   });
