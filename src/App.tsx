@@ -147,12 +147,11 @@ export default function App() {
       )
         .then((data) => {
           if (data) {
-            const sorted = [...data.newApplications].sort(
-              (a, b) =>
-                new Date(b.timestamp).getTime() -
-                new Date(a.timestamp).getTime(),
-            );
-            setRecruitmentApplications(sorted);
+            // Later rows in the sheet = newer submissions, so just reverse
+            // row order to put the latest on top (parsing the timestamp
+            // string with new Date() was unreliable and scrambled the order).
+            const latestFirst = [...data.newApplications].reverse();
+            setRecruitmentApplications(latestFirst);
           }
         })
         .catch((err) =>
