@@ -70,7 +70,8 @@ export const PediatricCalculator: React.FC = () => {
               min="1"
               max="150"
               value={weight || ''}
-              onChange={(e) => setWeight(Math.max(1, parseFloat(e.target.value) || 0))}
+              onChange={(e) => setWeight(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
+              onBlur={(e) => { if (!e.target.value || parseFloat(e.target.value) < 1) setWeight(1); }}
               className="w-20 font-mono text-center font-bold text-slate-850 bg-slate-50 border border-slate-200 rounded-xl p-2 focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
@@ -85,7 +86,8 @@ export const PediatricCalculator: React.FC = () => {
             <input
               type="number"
               value={customMg || ''}
-              onChange={(e) => setCustomMg(Math.max(1, parseInt(e.target.value) || 0))}
+              onChange={(e) => setCustomMg(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+              onBlur={(e) => { if (!e.target.value || parseInt(e.target.value) < 1) setCustomMg(1); }}
               className="w-full text-center font-mono font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 text-slate-750"
             />
           </div>
@@ -96,7 +98,8 @@ export const PediatricCalculator: React.FC = () => {
             <input
               type="number"
               value={customMl || ''}
-              onChange={(e) => setCustomMl(Math.max(1, parseInt(e.target.value) || 0))}
+              onChange={(e) => setCustomMl(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+              onBlur={(e) => { if (!e.target.value || parseInt(e.target.value) < 1) setCustomMl(1); }}
               className="w-full text-center font-mono font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 text-slate-750"
             />
           </div>
@@ -107,7 +110,8 @@ export const PediatricCalculator: React.FC = () => {
             <input
               type="number"
               value={targetDose || ''}
-              onChange={(e) => setTargetDose(Math.max(1, parseFloat(e.target.value) || 0))}
+              onChange={(e) => setTargetDose(e.target.value === '' ? 0 : parseFloat(e.target.value) || 0)}
+              onBlur={(e) => { if (!e.target.value || parseFloat(e.target.value) < 1) setTargetDose(1); }}
               className="w-full text-center font-mono font-semibold bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 text-slate-750"
             />
           </div>
