@@ -13,7 +13,7 @@ export interface DriveFile {
 const DOCS_FOLDER_ID = "11Uz5gfuzV-X5m83MsjKx90yfX8Cv_xR-";
 
 // Set this to your Drive API key (see setup instructions).
-const DRIVE_API_KEY = "AIzaSyDq-PngkEtgEl5lY6lopExjz_Wao_DpPfM";
+const DRIVE_API_KEY = "";
 
 let cachedFiles: DriveFile[] | null = null;
 let cacheTimestamp = 0;
@@ -29,17 +29,31 @@ export async function fetchDriveFolderFiles(): Promise<DriveFile[]> {
     return cachedFiles;
   }
   try {
+    const allFiles: DriveFile[] = [];
+    let pageToken: string | undefined = undefined;
     const q = encodeURIComponent(`'${DOCS_FOLDER_ID}' in parents and trashed = false`);
-    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1000&key=${DRIVE_API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.warn("Drive folder listing failed:", res.status, await res.text().catch(() => ""));
-      return [];
-    }
-    const data = await res.json();
-    cachedFiles = data.files || [];
+
+    // Drive API caps each request at 1000 results — loop through nextPageToken
+    // to make sure ALL files are captured, not just the first batch. Folders
+    // that have accumulated years of documents can easily exceed 1000 files,
+    // and whichever files land beyond that cutoff would otherwise never match.
+    do {
+      const pageParam = pageToken ? `&pageToken=${pageToken}` : "";
+      const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name)&pageSize=1000&key=${DRIVE_API_KEY}${pageParam}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.warn("Drive folder listing failed:", res.status, await res.text().catch(() => ""));
+        break;
+      }
+      const data = await res.json();
+      allFiles.push(...(data.files || []));
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+
+    cachedFiles = allFiles;
     cacheTimestamp = now;
-    return cachedFiles || [];
+    console.info(`Drive folder listing: fetched ${allFiles.length} file(s) total.`);
+    return allFiles;
   } catch (err) {
     console.error("fetchDriveFolderFiles error:", err);
     return [];
