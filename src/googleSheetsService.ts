@@ -1,4 +1,4 @@
-import { LocumSlot, UserProfile, Announcement, FeedbackRecord, NewApplication } from './types';
+import { LocumSlot, UserProfile, Announcement, FeedbackRecord, NewApplication, LocumSurveyEntry, StaffFeedbackEntry } from './types';
 
 // Let's define the Google Sheets Headers matching Apps Script indices exactly
 export const SLOTS_HEADERS = [
@@ -640,4 +640,148 @@ export async function loadAllDataFromPublicGoogleSheet(
     console.error("Error loading public sheet:", error);
     return null;
   }
+}
+
+/**
+ * Generic reusable fetcher for a single tab of ANY public Google Sheet by ID + tab name.
+ */
+async function fetchPublicSheetTab(spreadsheetId: string, sheetName: string): Promise<any[][] | null> {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const text = await res.text();
+    const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);/);
+    if (!match) return null;
+    const json = JSON.parse(match[1]);
+    const table = json.table;
+    if (!table || !table.rows) return null;
+
+    return table.rows.map((r: any) => {
+      if (!r || !r.c) return [];
+      return r.c.map((cell: any) => {
+        if (!cell) return "";
+        if (cell.v !== undefined && cell.v !== null) {
+          const valStr = String(cell.v);
+          if (valStr.startsWith("Date(") && cell.f) return cell.f;
+          return cell.v;
+        }
+        return cell.f !== undefined && cell.f !== null ? cell.f : "";
+      });
+    });
+  } catch (err) {
+    console.warn(`Failed to fetch public sheet tab ${sheetName} (${spreadsheetId}):`, err);
+    return null;
+  }
+}
+
+function stripHeaderRow(rows: any[][]): any[][] {
+  if (!rows || rows.length === 0) return [];
+  const first = rows[0];
+  const looksLikeHeader = first && first[0] && String(first[0]).trim().toLowerCase() === "timestamp";
+  return looksLikeHeader ? rows.slice(1) : rows;
+}
+
+function isBlankRow(row: any[]): boolean {
+  return !row || row.length === 0 || !row.some(c => c !== undefined && c !== null && String(c).trim() !== "");
+}
+
+// --- 1. DOCTOR -> CLINIC (Locum operational survey; open-ended, no rating) ---
+const LOCUM_SURVEY_SHEET_ID = "14tqRzsZWtXL1ciBW_Zas4VKsijrWEaqAZAe-AfFiI3o";
+
+export async function fetchLocumSurveyResponses(): Promise<LocumSurveyEntry[]> {
+  const rows = stripHeaderRow((await fetchPublicSheetTab(LOCUM_SURVEY_SHEET_ID, "Form responses 1")) || []);
+  return rows
+    .filter(r => !isBlankRow(r))
+    .map(r => ({
+      timestamp: String(r[0] ?? "").trim(),
+      duration: String(r[1] ?? "").trim(),
+      clinics: String(r[2] ?? "").trim(),
+      workflowSmooth: String(r[3] ?? "").trim(),
+      workflowElaborate: String(r[4] ?? "").trim(),
+      feltSupported: String(r[5] ?? "").trim(),
+      staffFeedback: String(r[6] ?? "").trim(),
+      safetyConcerns: String(r[7] ?? "").trim(),
+      medsSufficient: String(r[8] ?? "").trim(),
+      medsFeedback: String(r[9] ?? "").trim(),
+      awareOutsourced: String(r[10] ?? "").trim(),
+      outsourcedSuggestion: String(r[11] ?? "").trim(),
+      appreciate: String(r[12] ?? "").trim(),
+      improve: String(r[13] ?? "").trim(),
+    }))
+    .reverse(); // later rows = newer submissions
+}
+
+// --- 2. STAFF -> DOCTOR (categorical, no star rating) ---
+const STAFF_FEEDBACK_SHEET_ID = "1xdWVGZE8GGxtG9tHHQdfXp4IXhaaKK-p0cnGL4wKtOs";
+
+export async function fetchStaffFeedbackResponses(): Promise<StaffFeedbackEntry[]> {
+  const rows = stripHeaderRow((await fetchPublicSheetTab(STAFF_FEEDBACK_SHEET_ID, "Form responses 1")) || []);
+  return rows
+    .filter(r => !isBlankRow(r))
+    .map(r => ({
+      timestamp: String(r[0] ?? "").trim(),
+      staffName: String(r[1] ?? "").trim(),
+      cawangan: String(r[2] ?? "").trim(),
+      doctorName: String(r[3] ?? "").trim(),
+      dutyDate: String(r[4] ?? "").trim(),
+      category: String(r[5] ?? "").trim(),
+      details: String(r[6] ?? "").trim(),
+    }))
+    .reverse();
+}
+
+// --- 3. PATIENTS -> DOCTOR (Form responses 1 = 4-question Likert; MANUAL FEEDBACK = direct /5 rating) ---
+const PATIENT_FEEDBACK_SHEET_ID = "1rUKIsFHHWJIq885eRyHtJWSvzahW7lszQLr4e68Fbjw";
+
+// Sangat Setuju / Setuju / Tidak Setuju / Sangat Tidak Setuju -> 5 / 4 / 2 / 1
+function likertToScore(raw: string): number | null {
+  const v = (raw || "").trim().toLowerCase();
+  if (!v) return null;
+  if (v.includes("sangat tidak setuju")) return 1;
+  if (v.includes("tidak setuju")) return 2;
+  if (v.includes("sangat setuju")) return 5;
+  if (v.includes("setuju")) return 4;
+  return null;
+}
+
+export async function fetchPatientFeedbackFromSheets(): Promise<FeedbackRecord[]> {
+  const [formRows, manualRows] = await Promise.all([
+    fetchPublicSheetTab(PATIENT_FEEDBACK_SHEET_ID, "Form responses 1"),
+    fetchPublicSheetTab(PATIENT_FEEDBACK_SHEET_ID, "MANUAL FEEDBACK"),
+  ]);
+
+  // -- Form responses 1: Timestamp, Nama pesakit, No telefon, Cawangan, Q1-Q4 (Likert), Ulasan lain, ..., Nama doktor (col J / index 9)
+  const formEntries: FeedbackRecord[] = stripHeaderRow(formRows || [])
+    .filter(r => !isBlankRow(r))
+    .map(r => {
+      const scores = [likertToScore(r[4]), likertToScore(r[5]), likertToScore(r[6]), likertToScore(r[7])]
+        .filter((s): s is number => s !== null);
+      const rating = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      const doctorName = String(r[9] ?? "").trim(); // Column J
+      return {
+        tarikh: String(r[0] ?? "").trim(),
+        nama: String(r[1] ?? "").trim(),
+        reviewer: String(r[1] ?? "").trim(),
+        target: doctorName,
+        rating,
+        komen: String(r[8] ?? "").trim(),
+      };
+    })
+    .reverse();
+
+  // -- MANUAL FEEDBACK: Timestamp, Nama Pesakit, E-mel, Cawangan ARA, Rating 1, Ulasan/Komen, Nama Doktor (col G / index 6)
+  const manualEntries: FeedbackRecord[] = stripHeaderRow(manualRows || [])
+    .filter(r => !isBlankRow(r))
+    .map(r => ({
+      tarikh: String(r[0] ?? "").trim(),
+      nama: String(r[1] ?? "").trim(),
+      reviewer: String(r[1] ?? "").trim(),
+      target: String(r[6] ?? "").trim(), // Column G
+      rating: Number(r[4]) || 0,
+      komen: String(r[5] ?? "").trim(),
+    }))
+    .reverse();
+
+  return [...manualEntries, ...formEntries];
 }
