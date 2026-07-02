@@ -801,6 +801,14 @@ export default function App() {
                           <span>📁 MDCalc Medical calculators</span>
                           <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
                         </a>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("peds-calc")}
+                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between cursor-pointer"
+                        >
+                          <span>🧮 Paeds Calculator</span>
+                          <Calculator className="w-3.5 h-3.5 text-slate-300" />
+                        </button>
                       </div>
 
                       <div className="rounded-3xl bg-white border border-slate-150 p-6 space-y-4">
