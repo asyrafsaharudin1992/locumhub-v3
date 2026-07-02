@@ -881,3 +881,51 @@ export async function pushAllLocalStateToSupabase(state: {
     return false;
   }
 }
+
+// FILE STORAGE — doctor credential documents (APC, indemnity policy, MMC).
+// Google Drive's service-account upload path hit a hard wall (service
+// accounts have zero storage quota of their own, and this org's Drive isn't
+// on a Shared Drive), so new uploads go to Supabase Storage instead. Reading
+// existing files already in the shared Drive folder is unaffected — that's
+// a separate, read-only integration (see googleDriveService.ts).
+const DOCUMENTS_BUCKET = "doctor-documents";
+
+/**
+ * Uploads a file to Supabase Storage under a per-doctor path and returns its
+ * public URL, or null on failure. Requires a public bucket named
+ * "doctor-documents" to exist in the Supabase project (Storage tab).
+ */
+export async function uploadUserFileToSupabase(
+  file: File,
+  phone: string,
+  kind: "apc" | "indemnity" | "mmc",
+): Promise<{ url: string | null; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { url: null, error: "Supabase is not configured on this device." };
+  }
+
+  try {
+    const safePhone = phone.trim().replace(/[^0-9]/g, "") || "unknown";
+    const ext = file.name.split(".").pop() || "bin";
+    const path = `${safePhone}/${kind}_${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await client.storage
+      .from(DOCUMENTS_BUCKET)
+      .upload(path, file, { upsert: true, contentType: file.type || undefined });
+
+    if (uploadError) {
+      console.error("Supabase uploadUserFile failed:", uploadError);
+      return { url: null, error: uploadError.message || "Upload to storage failed." };
+    }
+
+    const { data } = client.storage.from(DOCUMENTS_BUCKET).getPublicUrl(path);
+    if (!data?.publicUrl) {
+      return { url: null, error: "Uploaded, but no public URL was returned." };
+    }
+    return { url: data.publicUrl };
+  } catch (err: any) {
+    console.error("Supabase uploadUserFile error:", err);
+    return { url: null, error: err?.message || "Unexpected upload error." };
+  }
+}
