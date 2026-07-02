@@ -68,6 +68,20 @@ import {
   Server,
 } from "lucide-react";
 
+// Doctor names show up inconsistently across sources ("Dr Pravinaa", "DR PRAVINAA",
+// "Pravinaa", trailing/leading whitespace, etc). Normalize + flexible substring match
+// so filters and per-doctor views work regardless of "Dr" prefix or casing.
+function normalizeDoctorName(s: string): string {
+  return s.toLowerCase().replace(/^dr\.?\s+/i, "").trim();
+}
+
+function doctorNamesMatch(a: string, b: string): boolean {
+  const na = normalizeDoctorName(a);
+  const nb = normalizeDoctorName(b);
+  if (!na || !nb) return false;
+  return na.includes(nb) || nb.includes(na);
+}
+
 export default function App() {
   const {
     state,
@@ -222,6 +236,7 @@ export default function App() {
     "patient" | "staff" | "locum"
   >("patient");
   const [expandedFbRow, setExpandedFbRow] = useState<string | null>(null);
+  const [feedbackDoctorFilter, setFeedbackDoctorFilter] = useState<string>("All");
 
   // Direct login credentials shortcuts for demo reviews
   const handleQuickLogin = (phone: string, role: string) => {
@@ -464,6 +479,24 @@ export default function App() {
       : activeRole === "Staff"
         ? STAFF_TABS
         : DOCTOR_TABS;
+
+  // Unique doctor names for the admin feedback filter dropdown — dedupe names that
+  // only differ by "Dr" prefix/casing (e.g. "Dr Pravinaa" and "PRAVINAA" collapse to one).
+  const feedbackDoctorOptions = (() => {
+    const raw = [
+      ...patientFeedbackEntries.map((f) => f.target),
+      ...staffFeedbackEntries.map((f) => f.doctorName),
+    ].filter((n) => n && n.trim());
+    const seen: { normalized: string; display: string }[] = [];
+    raw.forEach((name) => {
+      const norm = normalizeDoctorName(name);
+      if (!norm) return;
+      if (!seen.some((s) => doctorNamesMatch(s.display, name))) {
+        seen.push({ normalized: norm, display: name.trim() });
+      }
+    });
+    return seen.sort((a, b) => a.display.localeCompare(b.display));
+  })();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased flex flex-col">
@@ -883,15 +916,7 @@ export default function App() {
                     <DoctorFeedbackView
                       feedbacks={patientFeedbackEntries.filter((f) => {
                         if (!f.target || !f.target.trim()) return false; // no doctor recorded — admin-only
-                        const norm = (s: string) =>
-                          s.toLowerCase().replace(/^dr\.?\s+/i, "").trim();
-                        const targetNorm = norm(f.target);
-                        const myNameNorm = norm(state.currentUser?.name || "");
-                        if (!targetNorm || !myNameNorm) return false;
-                        return (
-                          myNameNorm.includes(targetNorm) ||
-                          targetNorm.includes(myNameNorm)
-                        );
+                        return doctorNamesMatch(f.target, state.currentUser?.name || "");
                       })}
                     />
                   )}
@@ -1364,26 +1389,42 @@ export default function App() {
                         </div>
 
                         {/* Dropdown database index selector */}
-                        <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl self-end">
-                          {(["patient", "staff", "locum"] as const).map(
-                            (fType) => (
-                              <button
-                                key={fType}
-                                onClick={() => setActiveInspectorFb(fType)}
-                                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
-                                  activeInspectorFb === fType
-                                    ? "bg-[#001F3F] text-white shadow-sm"
-                                    : "text-slate-600 hover:text-slate-800"
-                                }`}
-                              >
-                                {fType === "patient"
-                                  ? "Patients → Doctor"
-                                  : fType === "staff"
-                                    ? "Staff → Doctor"
-                                    : "Doctor → Clinic"}
-                              </button>
-                            ),
+                        <div className="flex flex-wrap gap-2 self-end items-center">
+                          {activeInspectorFb !== "locum" && feedbackDoctorOptions.length > 0 && (
+                            <select
+                              value={feedbackDoctorFilter}
+                              onChange={(e) => setFeedbackDoctorFilter(e.target.value)}
+                              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="All">All Doctors</option>
+                              {feedbackDoctorOptions.map((opt) => (
+                                <option key={opt.normalized} value={opt.normalized}>
+                                  {opt.display}
+                                </option>
+                              ))}
+                            </select>
                           )}
+                          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
+                            {(["patient", "staff", "locum"] as const).map(
+                              (fType) => (
+                                <button
+                                  key={fType}
+                                  onClick={() => setActiveInspectorFb(fType)}
+                                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
+                                    activeInspectorFb === fType
+                                      ? "bg-[#001F3F] text-white shadow-sm"
+                                      : "text-slate-600 hover:text-slate-800"
+                                  }`}
+                                >
+                                  {fType === "patient"
+                                    ? "Patients → Doctor"
+                                    : fType === "staff"
+                                      ? "Staff → Doctor"
+                                      : "Doctor → Clinic"}
+                                </button>
+                              ),
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1401,7 +1442,13 @@ export default function App() {
                               </tr>
                             </thead>
                             <tbody>
-                              {patientFeedbackEntries.map((f, i) => (
+                              {patientFeedbackEntries
+                                .filter(
+                                  (f) =>
+                                    feedbackDoctorFilter === "All" ||
+                                    doctorNamesMatch(f.target, feedbackDoctorFilter),
+                                )
+                                .map((f, i) => (
                                 <tr key={i} className="hover:bg-slate-50/50 border-b border-slate-100">
                                   <td className="p-3 font-mono text-[10px]">{f.tarikh}</td>
                                   <td className="p-3 font-bold text-slate-900">{f.reviewer}</td>
@@ -1442,7 +1489,13 @@ export default function App() {
                               </tr>
                             </thead>
                             <tbody>
-                              {staffFeedbackEntries.map((f, i) => {
+                              {staffFeedbackEntries
+                                .filter(
+                                  (f) =>
+                                    feedbackDoctorFilter === "All" ||
+                                    doctorNamesMatch(f.doctorName, feedbackDoctorFilter),
+                                )
+                                .map((f, i) => {
                                 const catLower = f.category.toLowerCase();
                                 const catStyle = catLower.includes("aduan serius")
                                   ? "bg-rose-50 text-rose-700 border-rose-100"
