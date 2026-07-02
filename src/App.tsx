@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAppState } from "./useAppState";
-import { NewApplication } from "./types";
+import { NewApplication, LocumSurveyEntry, StaffFeedbackEntry, FeedbackRecord } from "./types";
 import { isSupabaseActive } from "./supabaseService";
-import { loadAllDataFromPublicGoogleSheet } from "./googleSheetsService";
+import {
+  loadAllDataFromPublicGoogleSheet,
+  fetchLocumSurveyResponses,
+  fetchStaffFeedbackResponses,
+  fetchPatientFeedbackFromSheets,
+} from "./googleSheetsService";
 import { DoctorBookingTab } from "./components/DoctorBookingTab";
 import { DoctorStatusTab } from "./components/DoctorStatusTab";
 import { DoctorProfileTab } from "./components/DoctorProfileTab";
@@ -158,6 +163,36 @@ export default function App() {
           console.error("Failed to fetch recruitment applications:", err),
         )
         .finally(() => setLoadingRecruitment(false));
+    }
+  }, [activeTab]);
+
+  // Feedback data — sourced directly from the 3 Google Forms/Sheets, not Supabase
+  const [patientFeedbackEntries, setPatientFeedbackEntries] = useState<
+    FeedbackRecord[]
+  >([]);
+  const [staffFeedbackEntries, setStaffFeedbackEntries] = useState<
+    StaffFeedbackEntry[]
+  >([]);
+  const [locumSurveyEntries, setLocumSurveyEntries] = useState<
+    LocumSurveyEntry[]
+  >([]);
+  const [loadingFeedback, setLoadingFeedback] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === "admin-fb" || activeTab === "feedback") {
+      setLoadingFeedback(true);
+      Promise.all([
+        fetchPatientFeedbackFromSheets(),
+        fetchStaffFeedbackResponses(),
+        fetchLocumSurveyResponses(),
+      ])
+        .then(([patients, staff, locum]) => {
+          setPatientFeedbackEntries(patients);
+          setStaffFeedbackEntries(staff);
+          setLocumSurveyEntries(locum);
+        })
+        .catch((err) => console.error("Failed to fetch feedback data:", err))
+        .finally(() => setLoadingFeedback(false));
     }
   }, [activeTab]);
 
@@ -845,9 +880,18 @@ export default function App() {
 
                   {activeTab === "feedback" && (
                     <DoctorFeedbackView
-                      feedbacks={state.feedbacksPatient.filter(
-                        (f) => f.target === state.currentUser?.name,
-                      )}
+                      feedbacks={patientFeedbackEntries.filter((f) => {
+                        if (!f.target || !f.target.trim()) return false; // no doctor recorded — admin-only
+                        const norm = (s: string) =>
+                          s.toLowerCase().replace(/^dr\.?\s+/i, "").trim();
+                        const targetNorm = norm(f.target);
+                        const myNameNorm = norm(state.currentUser?.name || "");
+                        if (!targetNorm || !myNameNorm) return false;
+                        return (
+                          myNameNorm.includes(targetNorm) ||
+                          targetNorm.includes(myNameNorm)
+                        );
+                      })}
                     />
                   )}
 
@@ -1312,7 +1356,9 @@ export default function App() {
                             Roster reviews & reviews database
                           </h5>
                           <p className="text-xs text-slate-500">
-                            Inspect clinic evaluations compiled across sectors
+                            {loadingFeedback
+                              ? "Loading feedback from Google Sheets..."
+                              : "Inspect clinic evaluations compiled across sectors"}
                           </p>
                         </div>
 
@@ -1330,103 +1376,122 @@ export default function App() {
                                 }`}
                               >
                                 {fType === "patient"
-                                  ? "Patient reviews"
+                                  ? "Patients → Doctor"
                                   : fType === "staff"
-                                    ? "Staff logs"
-                                    : "Locum reviews"}
+                                    ? "Staff → Doctor"
+                                    : "Doctor → Clinic"}
                               </button>
                             ),
                           )}
                         </div>
                       </div>
 
-                      {/* Display table list of feedback inspectors */}
-                      <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                        <table className="w-full text-xs text-left text-slate-500 leading-normal">
-                          <thead className="text-[10px] uppercase bg-slate-50 text-slate-400 font-black tracking-wider border-b border-slate-150">
-                            <tr>
-                              <th className="p-3">Ref timestamp</th>
-                              <th className="p-3">Author sender</th>
-                              <th className="p-3">Review subject</th>
-                              <th className="p-3 text-center">
-                                Stars classification
-                              </th>
-                              <th className="p-3">Notes & opinions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {activeInspectorFb === "patient" &&
-                              state.feedbacksPatient.map((f, i) => (
-                                <tr
-                                  key={i}
-                                  className="hover:bg-slate-50/50 border-b border-slate-100"
-                                >
-                                  <td className="p-3 font-mono text-[10px]">
-                                    {f.tarikh}
-                                  </td>
-                                  <td className="p-3 font-bold text-slate-900">
-                                    {f.reviewer}
-                                  </td>
+                      {/* Patients -> Doctor: star-rated table */}
+                      {activeInspectorFb === "patient" && (
+                        <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                          <table className="w-full text-xs text-left text-slate-500 leading-normal">
+                            <thead className="text-[10px] uppercase bg-slate-50 text-slate-400 font-black tracking-wider border-b border-slate-150">
+                              <tr>
+                                <th className="p-3">Ref timestamp</th>
+                                <th className="p-3">Patient</th>
+                                <th className="p-3">Doctor</th>
+                                <th className="p-3 text-center">Rating /5</th>
+                                <th className="p-3">Notes & opinions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {patientFeedbackEntries.map((f, i) => (
+                                <tr key={i} className="hover:bg-slate-50/50 border-b border-slate-100">
+                                  <td className="p-3 font-mono text-[10px]">{f.tarikh}</td>
+                                  <td className="p-3 font-bold text-slate-900">{f.reviewer}</td>
                                   <td className="p-3 text-sky-800 font-semibold">
-                                    {f.target}
+                                    {f.target || <span className="text-slate-300 italic">Not specified</span>}
                                   </td>
                                   <td className="p-3 font-bold font-mono text-center text-amber-500">
                                     ⭐ {f.rating.toFixed(1)}
                                   </td>
-                                  <td className="p-3 italic text-slate-650 max-w-xs truncate">
-                                    "{f.komen}"
-                                  </td>
+                                  <td className="p-3 italic text-slate-650 max-w-xs truncate">"{f.komen}"</td>
                                 </tr>
                               ))}
-                            {activeInspectorFb === "staff" &&
-                              state.feedbacksStaff.map((f, i) => (
-                                <tr
-                                  key={i}
-                                  className="hover:bg-slate-50/50 border-b border-slate-100"
-                                >
-                                  <td className="p-3 font-mono text-[10px]">
-                                    {f.tarikh}
-                                  </td>
-                                  <td className="p-3 font-bold text-slate-900">
-                                    {f.reviewer}
-                                  </td>
-                                  <td className="p-3 text-[#001f3f] font-semibold">
-                                    {f.target}
-                                  </td>
-                                  <td className="p-3 font-bold font-mono text-center text-amber-500">
-                                    ⭐ {f.rating}
-                                  </td>
-                                  <td className="p-3 italic text-slate-650 max-w-xs truncate">
-                                    "{f.komen}"
-                                  </td>
-                                </tr>
-                              ))}
-                            {activeInspectorFb === "locum" &&
-                              state.feedbacksLocum.map((f, i) => (
-                                <tr
-                                  key={i}
-                                  className="hover:bg-slate-50/50 border-b border-slate-100"
-                                >
-                                  <td className="p-3 font-mono text-[10px]">
-                                    {f.tarikh}
-                                  </td>
-                                  <td className="p-3 font-bold text-slate-900">
-                                    {f.reviewer}
-                                  </td>
-                                  <td className="p-3 text-emerald-800 font-semibold">
-                                    {f.target}
-                                  </td>
-                                  <td className="p-3 font-bold font-mono text-center text-amber-500">
-                                    ⭐ {f.rating}
-                                  </td>
-                                  <td className="p-3 italic text-slate-650 max-w-xs truncate">
-                                    "{f.komen}"
-                                  </td>
-                                </tr>
-                              ))}
-                          </tbody>
-                        </table>
-                      </div>
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Staff -> Doctor: categorical, no star rating */}
+                      {activeInspectorFb === "staff" && (
+                        <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                          <table className="w-full text-xs text-left text-slate-500 leading-normal">
+                            <thead className="text-[10px] uppercase bg-slate-50 text-slate-400 font-black tracking-wider border-b border-slate-150">
+                              <tr>
+                                <th className="p-3">Ref timestamp</th>
+                                <th className="p-3">Staff</th>
+                                <th className="p-3">Doctor</th>
+                                <th className="p-3">Branch</th>
+                                <th className="p-3">Category</th>
+                                <th className="p-3">Details</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {staffFeedbackEntries.map((f, i) => {
+                                const catLower = f.category.toLowerCase();
+                                const catStyle = catLower.includes("aduan serius")
+                                  ? "bg-rose-50 text-rose-700 border-rose-100"
+                                  : catLower.includes("isu kecil")
+                                    ? "bg-amber-50 text-amber-700 border-amber-100"
+                                    : catLower.includes("positif")
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                                      : "bg-slate-50 text-slate-600 border-slate-150";
+                                return (
+                                  <tr key={i} className="hover:bg-slate-50/50 border-b border-slate-100">
+                                    <td className="p-3 font-mono text-[10px]">{f.timestamp}</td>
+                                    <td className="p-3 font-bold text-slate-900">{f.staffName}</td>
+                                    <td className="p-3 text-[#001f3f] font-semibold">{f.doctorName}</td>
+                                    <td className="p-3">{f.cawangan}</td>
+                                    <td className="p-3">
+                                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${catStyle}`}>
+                                        {f.category}
+                                      </span>
+                                    </td>
+                                    <td className="p-3 italic text-slate-650 max-w-xs truncate">"{f.details}"</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Doctor -> Clinic: open-ended operational survey, card layout */}
+                      {activeInspectorFb === "locum" && (
+                        <div className="space-y-3">
+                          {locumSurveyEntries.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic p-4">No survey responses yet.</p>
+                          ) : (
+                            locumSurveyEntries.map((s, i) => (
+                              <div key={i} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 space-y-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-[10px] font-mono text-slate-400">{s.timestamp}</span>
+                                  <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                    {s.clinics || "Clinic not specified"} &middot; {s.duration || "?"}
+                                  </span>
+                                </div>
+                                <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-600">
+                                  {s.workflowSmooth && <p><strong>Workflow smooth?</strong> {s.workflowSmooth}</p>}
+                                  {s.feltSupported && <p><strong>Felt supported?</strong> {s.feltSupported}</p>}
+                                  {s.safetyConcerns && <p><strong>Safety concerns?</strong> {s.safetyConcerns}</p>}
+                                  {s.medsSufficient && <p><strong>Stock sufficient?</strong> {s.medsSufficient}</p>}
+                                </div>
+                                {s.workflowElaborate && <p className="text-xs text-slate-600"><strong>Elaboration:</strong> {s.workflowElaborate}</p>}
+                                {s.staffFeedback && <p className="text-xs text-slate-600"><strong>Staff attitude:</strong> {s.staffFeedback}</p>}
+                                {s.medsFeedback && <p className="text-xs text-slate-600"><strong>Medication feedback:</strong> {s.medsFeedback}</p>}
+                                {s.appreciate && <p className="text-xs text-emerald-700"><strong>Appreciates:</strong> {s.appreciate}</p>}
+                                {s.improve && <p className="text-xs text-rose-700"><strong>Suggested improvement:</strong> {s.improve}</p>}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
