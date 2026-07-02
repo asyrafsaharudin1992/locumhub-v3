@@ -45,7 +45,7 @@ export const DoctorFeedbackView: React.FC<DoctorFeedbackViewProps> = ({ feedback
             CONFIDENTIAL EVALUATIONS
           </span>
           <h5 className="font-display text-lg font-bold">Your Performance Index</h5>
-          <p className="text-xs text-slate-300">Google Search and automated patient feedback</p>
+          <p className="text-xs text-slate-300">Every review reflects the care you give — keep it up!</p>
         </div>
 
         <div className="text-right">
