@@ -642,10 +642,18 @@ export async function loadAllDataFromPublicGoogleSheet(
   }
 }
 
+interface PublicSheetData {
+  headers: string[];
+  rows: any[][];
+}
+
 /**
  * Generic reusable fetcher for a single tab of ANY public Google Sheet by ID + tab name.
+ * Returns both the header row (for name-based column lookup, which is far more robust
+ * than hardcoded positions since gviz can silently drop entirely-blank trailing columns
+ * per-row, and sheets/forms get columns inserted/reordered over time) and the data rows.
  */
-async function fetchPublicSheetTab(spreadsheetId: string, sheetName: string): Promise<any[][] | null> {
+async function fetchPublicSheetTab(spreadsheetId: string, sheetName: string): Promise<PublicSheetData | null> {
   try {
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
     const res = await fetch(url);
@@ -657,7 +665,7 @@ async function fetchPublicSheetTab(spreadsheetId: string, sheetName: string): Pr
     const table = json.table;
     if (!table || !table.rows) return null;
 
-    return table.rows.map((r: any) => {
+    const toRow = (r: any): any[] => {
       if (!r || !r.c) return [];
       return r.c.map((cell: any) => {
         if (!cell) return "";
@@ -668,18 +676,45 @@ async function fetchPublicSheetTab(spreadsheetId: string, sheetName: string): Pr
         }
         return cell.f !== undefined && cell.f !== null ? cell.f : "";
       });
-    });
+    };
+
+    const gvizHeaders: string[] = (table.cols || []).map((c: any) =>
+      String(c.label || "").trim(),
+    );
+    const dataRows = table.rows.map(toRow);
+
+    // gviz sometimes fails to detect headers (labels come back blank or as bare
+    // column letters) and instead puts the real header text as the first data row.
+    const gvizHeadersLookReal = gvizHeaders.some((h) => h.length > 1);
+    if (gvizHeadersLookReal) {
+      return { headers: gvizHeaders, rows: dataRows };
+    }
+    if (dataRows.length > 0) {
+      return { headers: dataRows[0].map((c) => String(c ?? "")), rows: dataRows.slice(1) };
+    }
+    return { headers: gvizHeaders, rows: dataRows };
   } catch (err) {
     console.warn(`Failed to fetch public sheet tab ${sheetName} (${spreadsheetId}):`, err);
     return null;
   }
 }
 
-function stripHeaderRow(rows: any[][]): any[][] {
-  if (!rows || rows.length === 0) return [];
-  const first = rows[0];
-  const looksLikeHeader = first && first[0] && String(first[0]).trim().toLowerCase() === "timestamp";
-  return looksLikeHeader ? rows.slice(1) : rows;
+// Find a column index by matching header text (case-insensitive substring match).
+// Tries each candidate phrase in order; returns -1 if none match.
+function findColIndex(headers: string[], ...candidates: string[]): number {
+  const normHeaders = headers.map((h) => h.toLowerCase().trim());
+  for (const cand of candidates) {
+    const candLower = cand.toLowerCase();
+    const idx = normHeaders.findIndex((h) => h.includes(candLower));
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
+
+function getCell(row: any[], idx: number): string {
+  if (idx < 0 || idx >= row.length) return "";
+  const v = row[idx];
+  return v === undefined || v === null ? "" : String(v).trim();
 }
 
 function isBlankRow(row: any[]): boolean {
@@ -690,24 +725,42 @@ function isBlankRow(row: any[]): boolean {
 const LOCUM_SURVEY_SHEET_ID = "14tqRzsZWtXL1ciBW_Zas4VKsijrWEaqAZAe-AfFiI3o";
 
 export async function fetchLocumSurveyResponses(): Promise<LocumSurveyEntry[]> {
-  const rows = stripHeaderRow((await fetchPublicSheetTab(LOCUM_SURVEY_SHEET_ID, "Form responses 1")) || []);
-  return rows
+  const sheet = await fetchPublicSheetTab(LOCUM_SURVEY_SHEET_ID, "Form responses 1");
+  if (!sheet) return [];
+  const h = sheet.headers;
+  const idx = {
+    timestamp: findColIndex(h, "timestamp"),
+    duration: findColIndex(h, "how long"),
+    clinics: findColIndex(h, "which clinic"),
+    workflowSmooth: findColIndex(h, "workflow smooth", "daily workflow"),
+    workflowElaborate: findColIndex(h, "elaborate"),
+    feltSupported: findColIndex(h, "feel supported", "supported"),
+    staffFeedback: findColIndex(h, "staff attitude", "staff"),
+    safetyConcerns: findColIndex(h, "safety"),
+    medsSufficient: findColIndex(h, "stock sufficient", "stock"),
+    medsFeedback: findColIndex(h, "medication"),
+    awareOutsourced: findColIndex(h, "aware", "outsourced package"),
+    outsourcedSuggestion: findColIndex(h, "suggestion"),
+    appreciate: findColIndex(h, "appreciate"),
+    improve: findColIndex(h, "improve"),
+  };
+  return sheet.rows
     .filter(r => !isBlankRow(r))
     .map(r => ({
-      timestamp: String(r[0] ?? "").trim(),
-      duration: String(r[1] ?? "").trim(),
-      clinics: String(r[2] ?? "").trim(),
-      workflowSmooth: String(r[3] ?? "").trim(),
-      workflowElaborate: String(r[4] ?? "").trim(),
-      feltSupported: String(r[5] ?? "").trim(),
-      staffFeedback: String(r[6] ?? "").trim(),
-      safetyConcerns: String(r[7] ?? "").trim(),
-      medsSufficient: String(r[8] ?? "").trim(),
-      medsFeedback: String(r[9] ?? "").trim(),
-      awareOutsourced: String(r[10] ?? "").trim(),
-      outsourcedSuggestion: String(r[11] ?? "").trim(),
-      appreciate: String(r[12] ?? "").trim(),
-      improve: String(r[13] ?? "").trim(),
+      timestamp: getCell(r, idx.timestamp),
+      duration: getCell(r, idx.duration),
+      clinics: getCell(r, idx.clinics),
+      workflowSmooth: getCell(r, idx.workflowSmooth),
+      workflowElaborate: getCell(r, idx.workflowElaborate),
+      feltSupported: getCell(r, idx.feltSupported),
+      staffFeedback: getCell(r, idx.staffFeedback),
+      safetyConcerns: getCell(r, idx.safetyConcerns),
+      medsSufficient: getCell(r, idx.medsSufficient),
+      medsFeedback: getCell(r, idx.medsFeedback),
+      awareOutsourced: getCell(r, idx.awareOutsourced),
+      outsourcedSuggestion: getCell(r, idx.outsourcedSuggestion),
+      appreciate: getCell(r, idx.appreciate),
+      improve: getCell(r, idx.improve),
     }))
     .reverse(); // later rows = newer submissions
 }
@@ -716,17 +769,28 @@ export async function fetchLocumSurveyResponses(): Promise<LocumSurveyEntry[]> {
 const STAFF_FEEDBACK_SHEET_ID = "1xdWVGZE8GGxtG9tHHQdfXp4IXhaaKK-p0cnGL4wKtOs";
 
 export async function fetchStaffFeedbackResponses(): Promise<StaffFeedbackEntry[]> {
-  const rows = stripHeaderRow((await fetchPublicSheetTab(STAFF_FEEDBACK_SHEET_ID, "Form responses 1")) || []);
-  return rows
+  const sheet = await fetchPublicSheetTab(STAFF_FEEDBACK_SHEET_ID, "Form responses 1");
+  if (!sheet) return [];
+  const h = sheet.headers;
+  const idx = {
+    timestamp: findColIndex(h, "timestamp"),
+    staffName: findColIndex(h, "nama anda", "nama staf"),
+    cawangan: findColIndex(h, "cawangan"),
+    doctorName: findColIndex(h, "nama doktor"),
+    dutyDate: findColIndex(h, "tarikh bertugas", "tarikh"),
+    category: findColIndex(h, "kategori"),
+    details: findColIndex(h, "maklumat lanjut", "maklumat"),
+  };
+  return sheet.rows
     .filter(r => !isBlankRow(r))
     .map(r => ({
-      timestamp: String(r[0] ?? "").trim(),
-      staffName: String(r[1] ?? "").trim(),
-      cawangan: String(r[2] ?? "").trim(),
-      doctorName: String(r[3] ?? "").trim(),
-      dutyDate: String(r[4] ?? "").trim(),
-      category: String(r[5] ?? "").trim(),
-      details: String(r[6] ?? "").trim(),
+      timestamp: getCell(r, idx.timestamp),
+      staffName: getCell(r, idx.staffName),
+      cawangan: getCell(r, idx.cawangan),
+      doctorName: getCell(r, idx.doctorName),
+      dutyDate: getCell(r, idx.dutyDate),
+      category: getCell(r, idx.category),
+      details: getCell(r, idx.details),
     }))
     .reverse();
 }
@@ -746,42 +810,75 @@ function likertToScore(raw: string): number | null {
 }
 
 export async function fetchPatientFeedbackFromSheets(): Promise<FeedbackRecord[]> {
-  const [formRows, manualRows] = await Promise.all([
+  const [formSheet, manualSheet] = await Promise.all([
     fetchPublicSheetTab(PATIENT_FEEDBACK_SHEET_ID, "Form responses 1"),
     fetchPublicSheetTab(PATIENT_FEEDBACK_SHEET_ID, "MANUAL FEEDBACK"),
   ]);
 
-  // -- Form responses 1: Timestamp, Nama pesakit, No telefon, Cawangan, Q1-Q4 (Likert), Ulasan lain, ..., Nama doktor (col J / index 9)
-  const formEntries: FeedbackRecord[] = stripHeaderRow(formRows || [])
-    .filter(r => !isBlankRow(r))
-    .map(r => {
-      const scores = [likertToScore(r[4]), likertToScore(r[5]), likertToScore(r[6]), likertToScore(r[7])]
-        .filter((s): s is number => s !== null);
-      const rating = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-      const doctorName = String(r[9] ?? "").trim(); // Column J
-      return {
-        tarikh: String(r[0] ?? "").trim(),
-        nama: String(r[1] ?? "").trim(),
-        reviewer: String(r[1] ?? "").trim(),
-        target: doctorName,
-        rating,
-        komen: String(r[8] ?? "").trim(),
-      };
-    })
-    .reverse();
+  // -- Form responses 1: Timestamp, Nama pesakit, No telefon, Cawangan, 4x Likert Qs, Maklum balas lain-lain, Nama doktor locum bertugas
+  let formEntries: FeedbackRecord[] = [];
+  if (formSheet) {
+    const h = formSheet.headers;
+    const idx = {
+      timestamp: findColIndex(h, "timestamp"),
+      nama: findColIndex(h, "nama pesakit"),
+      q1: findColIndex(h, "penerangan yang secukupnya"),
+      q2: findColIndex(h, "berpuas hati dengan pemeriksaan"),
+      q3: findColIndex(h, "berpuas hati dengan layanan"),
+      q4: findColIndex(h, "penerangan yang jelas berkenaan ubat"),
+      komen: findColIndex(h, "maklum balas lain-lain", "maklum balas"),
+      doctor: findColIndex(h, "nama doktor locum bertugas", "nama doktor"),
+    };
+    formEntries = formSheet.rows
+      .filter(r => !isBlankRow(r))
+      .map(r => {
+        const scores = [
+          likertToScore(getCell(r, idx.q1)),
+          likertToScore(getCell(r, idx.q2)),
+          likertToScore(getCell(r, idx.q3)),
+          likertToScore(getCell(r, idx.q4)),
+        ].filter((s): s is number => s !== null);
+        const rating = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+        const nama = getCell(r, idx.nama);
+        return {
+          tarikh: getCell(r, idx.timestamp),
+          nama,
+          reviewer: nama,
+          target: getCell(r, idx.doctor),
+          rating,
+          komen: getCell(r, idx.komen),
+        };
+      })
+      .reverse();
+  }
 
-  // -- MANUAL FEEDBACK: Timestamp, Nama Pesakit, E-mel, Cawangan ARA, Rating 1, Ulasan/Komen, Nama Doktor (col G / index 6)
-  const manualEntries: FeedbackRecord[] = stripHeaderRow(manualRows || [])
-    .filter(r => !isBlankRow(r))
-    .map(r => ({
-      tarikh: String(r[0] ?? "").trim(),
-      nama: String(r[1] ?? "").trim(),
-      reviewer: String(r[1] ?? "").trim(),
-      target: String(r[6] ?? "").trim(), // Column G
-      rating: Number(r[4]) || 0,
-      komen: String(r[5] ?? "").trim(),
-    }))
-    .reverse();
+  // -- MANUAL FEEDBACK: Timestamp, Nama Pesakit, E-mel, Cawangan ARA, Rating 1, Ulasan/Komen, Nama Doktor
+  let manualEntries: FeedbackRecord[] = [];
+  if (manualSheet) {
+    const h = manualSheet.headers;
+    const idx = {
+      timestamp: findColIndex(h, "timestamp"),
+      nama: findColIndex(h, "nama pesakit"),
+      cawangan: findColIndex(h, "cawangan"),
+      rating: findColIndex(h, "rating"),
+      komen: findColIndex(h, "ulasan", "komen"),
+      doctor: findColIndex(h, "nama doktor"),
+    };
+    manualEntries = manualSheet.rows
+      .filter(r => !isBlankRow(r))
+      .map(r => {
+        const nama = getCell(r, idx.nama);
+        return {
+          tarikh: getCell(r, idx.timestamp),
+          nama,
+          reviewer: nama,
+          target: getCell(r, idx.doctor),
+          rating: Number(getCell(r, idx.rating)) || 0,
+          komen: getCell(r, idx.komen),
+        };
+      })
+      .reverse();
+  }
 
   return [...manualEntries, ...formEntries];
 }
