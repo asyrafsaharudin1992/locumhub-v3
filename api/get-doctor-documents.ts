@@ -55,7 +55,7 @@ function findDoctorFile(
   return `https://drive.google.com/file/d/${scored[0].file.id}/view`;
 }
 
-async function fetchAllFolderFiles(apiKey: string): Promise<DriveFile[]> {
+async function fetchAllFolderFiles(apiKey: string): Promise<{ files: DriveFile[]; error?: string }> {
   const allFiles: DriveFile[] = [];
   let pageToken: string | undefined = undefined;
   const q = encodeURIComponent(`'${DOCS_FOLDER_ID}' in parents and trashed = false`);
@@ -64,13 +64,16 @@ async function fetchAllFolderFiles(apiKey: string): Promise<DriveFile[]> {
     const pageParam = pageToken ? `&pageToken=${pageToken}` : "";
     const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=nextPageToken,files(id,name)&pageSize=1000&key=${apiKey}${pageParam}`;
     const res = await fetch(url);
-    if (!res.ok) break;
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      return { files: allFiles, error: `Drive API responded ${res.status}: ${errBody}` };
+    }
     const data = await res.json();
     allFiles.push(...(data.files || []));
     pageToken = data.nextPageToken;
   } while (pageToken);
 
-  return allFiles;
+  return { files: allFiles };
 }
 
 export default async function handler(req: any, res: any) {
@@ -96,7 +99,12 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const allFiles = await fetchAllFolderFiles(apiKey);
+    const { files: allFiles, error: driveError } = await fetchAllFolderFiles(apiKey);
+
+    if (driveError) {
+      res.status(502).json({ error: driveError });
+      return;
+    }
 
     // Only the matched URLs for THIS doctor ever leave the server.
     res.status(200).json({
