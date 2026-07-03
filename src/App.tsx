@@ -779,9 +779,22 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold bg-slate-100 p-1.5 rounded-lg border text-slate-600 uppercase leading-none">
-                  {state.currentUser.role}
-                </span>
+                {state.currentUser.role === "Doctor" ? (
+                  <button
+                    onClick={() => setActiveTab("profile")}
+                    className={`text-[10px] font-bold p-1.5 rounded-lg border uppercase leading-none transition ${
+                      activeTab === "profile"
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    Profile
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-bold bg-slate-100 p-1.5 rounded-lg border text-slate-600 uppercase leading-none">
+                    {state.currentUser.role}
+                  </span>
+                )}
                 <button
                   onClick={logout}
                   className="p-1.5 rounded-lg hover:bg-slate-50 text-rose-650"
