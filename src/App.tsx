@@ -563,10 +563,10 @@ export default function App() {
 
               <div>
                 <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
-                  ARA CLINIC LOCUM
+                  ARA LOCUM HUB
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  24 Hour Clinic Medical Roster & Operations Hub
+                  Every Shift Matters. Every Patient Counts.
                 </p>
               </div>
 
@@ -614,7 +614,7 @@ export default function App() {
                   Sign In Securely
                 </button>
                 <p className="text-[11px] text-slate-400 text-center font-sans">
-                  Forgot your password? Please contact your clinic admin to have it reset.
+                  Forgot your password? Please contact our admin to have it reset.
                 </p>
               </form>
 
