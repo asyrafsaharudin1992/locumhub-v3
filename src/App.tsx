@@ -745,13 +745,15 @@ export default function App() {
               {/* User profile brief card */}
               <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100/80 flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center font-bold text-xs text-indigo-700 font-display shrink-0">
-                  {state.currentUser.role === "Admin" ? "HQ" : "DR"}
+                  {state.currentUser.role === "Admin" ? "HQ" : state.currentUser.role === "Staff" ? "CA" : "DR"}
                 </div>
                 <div className="truncate flex-1">
                   <p className="text-[11px] font-bold text-slate-800 truncate">
                     {state.currentUser.role === "Admin"
                       ? "Operations Admin"
-                      : `Dr. ${state.currentUser.name}`}
+                      : state.currentUser.role === "Staff"
+                        ? "CA ARA"
+                        : `Dr. ${state.currentUser.name}`}
                   </p>
                   <p className="text-[9px] text-[#4f46e5]/80 font-semibold tracking-wider uppercase">
                     {state.currentUser.role}
