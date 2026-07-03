@@ -530,7 +530,11 @@ export default function App() {
   // Only this specific admin account can perform actions (Add User, Reset
   // Password, Delete) in Locum Directory — other admins can view everything
   // on the sidebar, but Locum Directory management is restricted.
-  const isSuperAdmin = state.currentUser?.email === "operation@hsohealthcare.com";
+  // Matched by phone (reliable) with email as a secondary check, since email
+  // casing/whitespace can vary.
+  const isSuperAdmin =
+    state.currentUser?.phone === "0182194256" ||
+    (state.currentUser?.email || "").trim().toLowerCase() === "operation@hsohealthcare.com";
 
   const feedbackDoctorOptions = (() => {
     const raw = [
