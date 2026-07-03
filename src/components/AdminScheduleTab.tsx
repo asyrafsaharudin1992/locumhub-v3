@@ -112,11 +112,34 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
     if (currentUserRole === 'Staff') {
       // Staff can't manage slots, but if a doctor is already assigned, let
       // them send a quick WhatsApp reminder instead of just blocking them.
-      if (currentStatus === 'approved' && slot.dr && slot.phone) {
+      if (currentStatus === 'approved' && slot.dr) {
+        // Admin-assigned slots (REPLACE action) often don't capture a phone
+        // number directly on the slot record — fall back to looking the
+        // doctor up in the Users/Roster table by name.
+        let phone = slot.phone;
+        if (!phone) {
+          const normalize = (s: string) =>
+            (s || '').toUpperCase().trim().replace(/^DR\.?\s+/i, '');
+          const slotDrNorm = normalize(slot.dr);
+          const matchedUser = users.find((u) => {
+            const uNameNorm = normalize(u.name);
+            return uNameNorm === slotDrNorm || uNameNorm.includes(slotDrNorm) || slotDrNorm.includes(uNameNorm);
+          });
+          phone = matchedUser?.phone || '';
+        }
+
+        if (!phone) {
+          setNotification({
+            type: 'error',
+            text: `⚠️ No phone number found for Dr ${slot.dr} — cannot send WhatsApp reminder.`
+          });
+          return;
+        }
+
         const drName = slot.dr.toUpperCase().trim().replace(/^DR\.?\s+/i, '');
         const message =
           `Hi Dr. ${drName}, ini peringatan mesra dari Klinik ARA 24 Jam untuk shift anda pada ${slot.tarikh} (${slot.masa}) di Cawangan ${slot.cawangan}. Jumpa doktor esok! Terima kasih! 🙏`;
-        const digitsOnly = slot.phone.replace(/\D/g, '');
+        const digitsOnly = phone.replace(/\D/g, '');
         const waPhone = digitsOnly.startsWith('0') ? `6${digitsOnly}` : digitsOnly;
         const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
         window.open(waUrl, '_blank', 'noopener,noreferrer');
