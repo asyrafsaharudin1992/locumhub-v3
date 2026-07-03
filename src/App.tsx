@@ -527,6 +527,11 @@ export default function App() {
 
   // Unique doctor names for the admin feedback filter dropdown — dedupe names that
   // only differ by "Dr" prefix/casing (e.g. "Dr Pravinaa" and "PRAVINAA" collapse to one).
+  // Only this specific admin account can perform actions (Add User, Reset
+  // Password, Delete) in Locum Directory — other admins can view everything
+  // on the sidebar, but Locum Directory management is restricted.
+  const isSuperAdmin = state.currentUser?.email === "operation@hsohealthcare.com";
+
   const feedbackDoctorOptions = (() => {
     const raw = [
       ...patientFeedbackEntries.map((f) => f.target),
@@ -1631,22 +1636,24 @@ export default function App() {
                             checklists, and coins tally
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCreateUserError("");
-                            setNewUserName("");
-                            setNewUserPhone("");
-                            setNewUserPassword("");
-                            setNewUserRole("Doctor");
-                            setNewUserEmail("");
-                            setShowCreateUserModal(true);
-                          }}
-                          className="bg-[#001F3F] hover:bg-[#001226] text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-1.5 shrink-0"
-                        >
-                          <PlusCircle className="w-3.5 h-3.5" />
-                          Add User
-                        </button>
+                        {isSuperAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCreateUserError("");
+                              setNewUserName("");
+                              setNewUserPhone("");
+                              setNewUserPassword("");
+                              setNewUserRole("Doctor");
+                              setNewUserEmail("");
+                              setShowCreateUserModal(true);
+                            }}
+                            className="bg-[#001F3F] hover:bg-[#001226] text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-1.5 shrink-0"
+                          >
+                            <PlusCircle className="w-3.5 h-3.5" />
+                            Add User
+                          </button>
+                        )}
                       </div>
 
                       <div className="overflow-x-auto rounded-2xl border border-slate-100">
@@ -1716,33 +1723,39 @@ export default function App() {
                                       🪙 {doc.points}
                                     </td>
                                     <td className="p-3 text-right space-x-2">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setResetPassDoc({
-                                            phone: doc.phone,
-                                            name: doc.name,
-                                          });
-                                          setNewPasswordValue("");
-                                        }}
-                                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1 px-2 rounded transition"
-                                      >
-                                        Reset Pass
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setDeleteUserConfirm({
-                                            phone: doc.phone,
-                                            name: doc.name,
-                                          });
-                                        }}
-                                        className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-1 px-2 rounded border border-rose-100 transition"
-                                      >
-                                        Delete
-                                      </button>
+                                      {isSuperAdmin ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setResetPassDoc({
+                                                phone: doc.phone,
+                                                name: doc.name,
+                                              });
+                                              setNewPasswordValue("");
+                                            }}
+                                            className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1 px-2 rounded transition"
+                                          >
+                                            Reset Pass
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDeleteUserConfirm({
+                                                phone: doc.phone,
+                                                name: doc.name,
+                                              });
+                                            }}
+                                            className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-1 px-2 rounded border border-rose-100 transition"
+                                          >
+                                            Delete
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] text-slate-300 italic">View only</span>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -1787,33 +1800,39 @@ export default function App() {
                                       {staff.phone}
                                     </td>
                                     <td className="p-3 text-right space-x-2">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setResetPassDoc({
-                                            phone: staff.phone,
-                                            name: staff.name,
-                                          });
-                                          setNewPasswordValue("");
-                                        }}
-                                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1 px-2 rounded transition"
-                                      >
-                                        Set Keyword
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setDeleteUserConfirm({
-                                            phone: staff.phone,
-                                            name: staff.name,
-                                          });
-                                        }}
-                                        className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-1 px-2 rounded border border-rose-100 transition"
-                                      >
-                                        Delete
-                                      </button>
+                                      {isSuperAdmin ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setResetPassDoc({
+                                                phone: staff.phone,
+                                                name: staff.name,
+                                              });
+                                              setNewPasswordValue("");
+                                            }}
+                                            className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1 px-2 rounded transition"
+                                          >
+                                            Set Keyword
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDeleteUserConfirm({
+                                                phone: staff.phone,
+                                                name: staff.name,
+                                              });
+                                            }}
+                                            className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-1 px-2 rounded border border-rose-100 transition"
+                                          >
+                                            Delete
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] text-slate-300 italic">View only</span>
+                                      )}
                                     </td>
                                   </tr>
                                 ))}
@@ -1870,34 +1889,40 @@ export default function App() {
                                       {admin.phone}
                                     </td>
                                     <td className="p-3 text-right space-x-2">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setResetPassDoc({
-                                            phone: admin.phone,
-                                            name: admin.name,
-                                          });
-                                          setNewPasswordValue("");
-                                        }}
-                                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1 px-2 rounded transition"
-                                      >
-                                        Reset Password
-                                      </button>
-                                      {admin.phone !== state.currentUser?.phone && (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setDeleteUserConfirm({
-                                              phone: admin.phone,
-                                              name: admin.name,
-                                            });
-                                          }}
-                                          className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-1 px-2 rounded border border-rose-100 transition"
-                                        >
-                                          Delete
-                                        </button>
+                                      {isSuperAdmin ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setResetPassDoc({
+                                                phone: admin.phone,
+                                                name: admin.name,
+                                              });
+                                              setNewPasswordValue("");
+                                            }}
+                                            className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1 px-2 rounded transition"
+                                          >
+                                            Reset Password
+                                          </button>
+                                          {admin.phone !== state.currentUser?.phone && (
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteUserConfirm({
+                                                  phone: admin.phone,
+                                                  name: admin.name,
+                                                });
+                                              }}
+                                              className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-1 px-2 rounded border border-rose-100 transition"
+                                            >
+                                              Delete
+                                            </button>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className="text-[10px] text-slate-300 italic">View only</span>
                                       )}
                                     </td>
                                   </tr>
