@@ -15,8 +15,9 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   users,
   onCompleteSlot
 }) => {
-  const [month, setMonth] = useState('06'); // Initialised to June
-  const [year, setYear] = useState('2026');
+  const now = new Date();
+  const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
+  const [year, setYear] = useState(String(now.getFullYear()));
   const [viewMode, setViewMode] = useState<'monthly' | 'cumulative'>('monthly');
   const [selectedDoctorFilter, setSelectedDoctorFilter] = useState('');
 
