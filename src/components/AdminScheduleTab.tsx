@@ -110,6 +110,18 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
     }
 
     if (currentUserRole === 'Staff') {
+      // Staff can't manage slots, but if a doctor is already assigned, let
+      // them send a quick WhatsApp reminder instead of just blocking them.
+      if (currentStatus === 'approved' && slot.dr && slot.phone) {
+        const drName = slot.dr.toUpperCase().trim().replace(/^DR\.?\s+/i, '');
+        const message =
+          `Hi Dr. ${drName}, ini peringatan mesra dari Klinik ARA 24 Jam untuk shift anda pada ${slot.tarikh} (${slot.masa}) di Cawangan ${slot.cawangan}. Jumpa doktor esok! Terima kasih! 🙏`;
+        const digitsOnly = slot.phone.replace(/\D/g, '');
+        const waPhone = digitsOnly.startsWith('0') ? `6${digitsOnly}` : digitsOnly;
+        const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
+        window.open(waUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
       setNotification({
         type: 'error',
         text: "🔒 Akses Terhad: Akaun Operations Staff tidak dibenarkan mengurus gantian atau memadam jadual."
@@ -193,7 +205,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
             View-only access
           </h5>
           <p className="text-xs text-slate-400 leading-relaxed font-sans">
-            Operations Staff accounts can view the clinical schedule but cannot publish new slots or manage bookings.
+            Operations Staff accounts can view the clinical schedule but cannot publish new slots or manage bookings. Click on an assigned doctor's shift to send a WhatsApp reminder.
           </p>
         </div>
       ) : (
