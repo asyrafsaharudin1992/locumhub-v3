@@ -563,10 +563,10 @@ export default function App() {
 
               <div>
                 <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
-                  ARA LOCUM HUB
+                  ARA CLINIC LOCUM
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  Every Shift Matters. Every Patient Counts.
+                  24 Hour Clinic Medical Roster & Operations Hub
                 </p>
               </div>
 
@@ -614,7 +614,7 @@ export default function App() {
                   Sign In Securely
                 </button>
                 <p className="text-[11px] text-slate-400 text-center font-sans">
-                  Forgot your password? Please contact our admin to have it reset.
+                  Forgot your password? Please contact your clinic admin to have it reset.
                 </p>
               </form>
 
@@ -816,7 +816,9 @@ export default function App() {
                     Welcome,{" "}
                     {state.currentUser.role === "Admin"
                       ? "HQ Operations Office"
-                      : `Dr. ${state.currentUser.name}`}
+                      : state.currentUser.role === "Staff"
+                        ? "CA ARA"
+                        : `Dr. ${state.currentUser.name}`}
                   </h3>
                   <p className="text-xs text-slate-500 font-sans">
                     {state.currentUser.role === "Admin"
@@ -1817,6 +1819,91 @@ export default function App() {
                                 <tr>
                                   <td colSpan={3} className="p-4 text-center text-slate-400 italic">
                                     No staff accounts yet — use "Add User" above to create one.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Admin Accounts — reset password here too, no need to touch Supabase directly */}
+                      <div className="pt-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                          <div>
+                            <h5 className="font-display font-medium text-slate-900 tracking-tight text-sm uppercase">
+                              Admin Accounts
+                            </h5>
+                            <p className="text-xs text-slate-500">
+                              Reset another admin's password here anytime.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                          <table className="w-full text-xs text-left leading-normal text-slate-500">
+                            <thead className="bg-slate-50 border-b border-slate-150 uppercase text-[10px] text-slate-400 font-black tracking-widest text-left">
+                              <tr>
+                                <th className="p-3">Name</th>
+                                <th className="p-3">Phone</th>
+                                <th className="p-3 text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {state.users
+                                .filter((u) => u.role === "Admin")
+                                .map((admin) => (
+                                  <tr
+                                    key={admin.phone}
+                                    className="hover:bg-slate-50/50 border-b border-slate-100 font-sans"
+                                  >
+                                    <td className="p-3 font-bold text-slate-800 font-display">
+                                      {admin.name}
+                                      {admin.phone === state.currentUser?.phone && (
+                                        <span className="ml-1.5 text-[9px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full font-bold uppercase">
+                                          You
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="p-3 font-mono text-[10px] text-slate-400">
+                                      {admin.phone}
+                                    </td>
+                                    <td className="p-3 text-right space-x-2">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setResetPassDoc({
+                                            phone: admin.phone,
+                                            name: admin.name,
+                                          });
+                                          setNewPasswordValue("");
+                                        }}
+                                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-1 px-2 rounded transition"
+                                      >
+                                        Reset Password
+                                      </button>
+                                      {admin.phone !== state.currentUser?.phone && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setDeleteUserConfirm({
+                                              phone: admin.phone,
+                                              name: admin.name,
+                                            });
+                                          }}
+                                          className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold py-1 px-2 rounded border border-rose-100 transition"
+                                        >
+                                          Delete
+                                        </button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              {state.users.filter((u) => u.role === "Admin").length === 0 && (
+                                <tr>
+                                  <td colSpan={3} className="p-4 text-center text-slate-400 italic">
+                                    No admin accounts found.
                                   </td>
                                 </tr>
                               )}
