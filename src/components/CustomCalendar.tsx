@@ -18,8 +18,8 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
   selectedBranch = 'All',
   openSlotColorMode = 'red'
 }) => {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 14)); // Initialised to June 14, 2026
-  const [selectedDay, setSelectedDay] = useState<number>(14);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
 
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
@@ -205,15 +205,15 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-500">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-emerald-500 inline-block" />
-                Seri Kembangan (Booked)
+                Seri Kembangan
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-sky-500 inline-block" />
-                Kajang (Booked)
+                Kajang
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-purple-500 inline-block" />
-                CME / Briefing (Booked)
+                CME / Briefing
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-amber-500 inline-block" />
