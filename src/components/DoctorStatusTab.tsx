@@ -15,6 +15,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
   onCancelSlot
 }) => {
   const [filterType, setFilterType] = useState<'All' | 'Approved' | 'Pending'>('All');
+  const [monthFilter, setMonthFilter] = useState<string>('All');
   const [pendingCancelSlot, setPendingCancelSlot] = useState<LocumSlot | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
@@ -67,9 +68,29 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
   );
 
   const filteredSlots = sortedMySlots.filter(s => {
-    if (filterType === 'Approved') return s.status === 'Approved';
-    if (filterType === 'Pending') return s.status === 'Pending';
-    return true; // All
+    if (filterType === 'Approved' && s.status !== 'Approved') return false;
+    if (filterType === 'Pending' && s.status !== 'Pending') return false;
+    if (monthFilter !== 'All') {
+      const parts = (s.tarikh || '').split('/');
+      const slotMonthYear = parts.length === 3 ? `${parts[1].padStart(2, '0')}/${parts[2]}` : '';
+      if (slotMonthYear !== monthFilter) return false;
+    }
+    return true;
+  });
+
+  // Unique month/year combos present in this doctor's slots, newest first —
+  // powers the "filter by month" dropdown so past shifts can be found easily.
+  const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const monthYearList: string[] = mySlots
+    .map(s => {
+      const parts = (s.tarikh || '').split('/');
+      return parts.length === 3 ? `${parts[1].padStart(2, '0')}/${parts[2]}` : '';
+    })
+    .filter((v): v is string => Boolean(v));
+  const availableMonths = Array.from(new Set(monthYearList)).sort((a: string, b: string) => {
+    const [ma, ya] = a.split('/');
+    const [mb, yb] = b.split('/');
+    return yb === ya ? mb.localeCompare(ma) : yb.localeCompare(ya);
   });
 
   // Compact badge summary for the mobile-only Profile & Medals card above the
@@ -193,20 +214,40 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       </div>
 
       {/* Control header filter pills */}
-      <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
-        {(['All', 'Approved', 'Pending'] as const).map(fType => (
-          <button
-            key={fType}
-            onClick={() => setFilterType(fType)}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
-              filterType === fType
-                ? 'bg-[#001F3F] text-white shadow-sm'
-                : 'text-slate-600 hover:text-slate-800'
-            }`}
+      <div className="flex flex-wrap gap-2 items-center">
+        <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
+          {(['All', 'Approved', 'Pending'] as const).map(fType => (
+            <button
+              key={fType}
+              onClick={() => setFilterType(fType)}
+              className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
+                filterType === fType
+                  ? 'bg-[#001F3F] text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-800'
+              }`}
+            >
+              {fType === 'All' ? `All Shifts (${mySlots.length})` : fType === 'Approved' ? 'Approved' : 'Pending'}
+            </button>
+          ))}
+        </div>
+
+        {availableMonths.length > 0 && (
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="text-xs font-bold px-3 py-2 rounded-xl bg-slate-100 text-slate-700 border border-slate-200 outline-none cursor-pointer"
           >
-            {fType === 'All' ? `All Shifts (${mySlots.length})` : fType === 'Approved' ? 'Approved' : 'Pending'}
-          </button>
-        ))}
+            <option value="All">All Months</option>
+            {availableMonths.map((my) => {
+              const [m, y] = my.split('/');
+              return (
+                <option key={my} value={my}>
+                  {MONTH_NAMES[parseInt(m, 10) - 1]} {y}
+                </option>
+              );
+            })}
+          </select>
+        )}
       </div>
 
       {/* Disclaimers card */}
