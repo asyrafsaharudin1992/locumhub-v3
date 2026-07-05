@@ -42,6 +42,7 @@ import {
   uploadUserFileToSupabase,
   saveBadgeAwardToSupabase,
   fetchBadgeAwardsFromSupabase,
+  BadgeAwardRow,
 } from "./supabaseService";
 
 import {
@@ -1235,6 +1236,95 @@ export function useAppState() {
   // and populates the new badge_awards table from it. Safe to run more than
   // once — upserts by (doctor, badge, month), so re-running just re-confirms
   // the same counts rather than duplicating rows.
+  // Reverse direction of migrateHistoricalBadgesToSupabase — reads the
+  // badge_awards table (the source of truth after a reset/cleanup) and
+  // REBUILDS each doctor's users.badges string + users.points to match it
+  // exactly, rather than just adding on top. Useful after a manual reset or
+  // any time the two tables have drifted out of sync with each other.
+  const POINTS_PER_BADGE: { [badge: string]: number } = {
+    "Iron Doctor": 10,
+    "Heart Winner": 15,
+    "The Unstoppable": 10,
+    "The Diligent Doc": 10,
+    "Last Minute Saviour": 20,
+    "Team Favorite": 20, // admin-set historically — 20 is a best-effort default
+  };
+
+  const reconcilePointsFromBadgeAwards = async (): Promise<string> => {
+    let awardRows: BadgeAwardRow[] = [];
+    try {
+      awardRows = await fetchBadgeAwardsFromSupabase();
+    } catch (err: any) {
+      return `⚠️ Failed to read badge_awards: ${err?.message || "Unknown error"}`;
+    }
+
+    if (awardRows.length === 0) {
+      return "ℹ️ badge_awards table is empty — nothing to reconcile.";
+    }
+
+    // Group rows by doctor phone
+    const byPhone = new Map<string, BadgeAwardRow[]>();
+    awardRows.forEach((row) => {
+      const phone = row.doctor_phone;
+      if (!byPhone.has(phone)) byPhone.set(phone, []);
+      byPhone.get(phone)!.push(row);
+    });
+
+    const updatedDocList: UserProfile[] = [];
+    const summaryLines: string[] = [];
+
+    byPhone.forEach((rows, phone) => {
+      const existingUser = state.users.find((u) => u.phone === phone);
+      if (!existingUser) return; // badge_awards row references a doctor no longer in users
+
+      const badgesParts: string[] = [];
+      let totalPoints = 0;
+      rows.forEach((row) => {
+        badgesParts.push(`${row.badge_name} (${row.month_tag}):${row.award_count}`);
+        const perBadgePoints = POINTS_PER_BADGE[row.badge_name] ?? 10;
+        totalPoints += perBadgePoints * row.award_count;
+      });
+
+      const newBadgesString = badgesParts.join(", ");
+      if (existingUser.badges === newBadgesString && existingUser.points === totalPoints) {
+        return; // already in sync, skip
+      }
+
+      updatedDocList.push({
+        ...existingUser,
+        badges: newBadgesString,
+        points: totalPoints,
+      });
+      summaryLines.push(
+        `${existingUser.name}: badges & points rebuilt from badge_awards (points = ${totalPoints})`,
+      );
+    });
+
+    if (updatedDocList.length === 0) {
+      return "✅ Everything already matches badge_awards — nothing to update.";
+    }
+
+    setState((prev) => {
+      const updatedUsers = prev.users.map((u) => {
+        const match = updatedDocList.find((d) => d.phone === u.phone);
+        return match || u;
+      });
+      const currentUpdated =
+        updatedUsers.find((u) => u.phone === prev.currentUser?.phone) ||
+        prev.currentUser;
+      return { ...prev, users: updatedUsers, currentUser: currentUpdated };
+    });
+
+    await cloudSaveUsersBulk(updatedDocList).catch((err) =>
+      console.error("Cloud reconcilePointsFromBadgeAwards failed:", err),
+    );
+
+    logActivity(
+      `Reconciled users.points/badges from badge_awards for ${updatedDocList.length} doctor(s).`,
+    );
+    return `✅ Reconciled ${updatedDocList.length} doctor(s):\n\n${summaryLines.join("\n")}`;
+  };
+
   const migrateHistoricalBadgesToSupabase = async (): Promise<string> => {
     let migratedCount = 0;
     let doctorCount = 0;
@@ -2248,6 +2338,7 @@ export function useAppState() {
     processMonthlyUnstoppable,
     processIronDoctorScan,
     migrateHistoricalBadgesToSupabase,
+    reconcilePointsFromBadgeAwards,
     getManualHeartCandidates,
     submitRecruitment,
     logActivity,
