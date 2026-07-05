@@ -54,6 +54,7 @@ import {
   Mail,
   Briefcase,
   PlusCircle,
+  Loader2,
   HelpCircle,
   Menu,
   Info,
@@ -254,6 +255,7 @@ export default function App() {
   } | null>(null);
   const [successToast, setSuccessToast] = useState("");
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [newUserName, setNewUserName] = useState("");
   const [newUserPhone, setNewUserPhone] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
@@ -2234,14 +2236,18 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    const result = adminCreateUser(
+                  disabled={isCreatingUser}
+                  onClick={async () => {
+                    setIsCreatingUser(true);
+                    setCreateUserError("");
+                    const result = await adminCreateUser(
                       newUserName,
                       newUserPhone,
                       newUserPassword,
                       newUserRole,
                       newUserEmail,
                     );
+                    setIsCreatingUser(false);
                     if (result.success) {
                       setShowCreateUserModal(false);
                       setSuccessToast(result.message);
@@ -2250,9 +2256,10 @@ export default function App() {
                       setCreateUserError(result.message);
                     }
                   }}
-                  className="flex-1 bg-[#001F3F] text-white hover:bg-[#001226] rounded-xl py-2.5 shadow-md"
+                  className="flex-1 bg-[#001F3F] text-white hover:bg-[#001226] rounded-xl py-2.5 shadow-md disabled:opacity-60 flex items-center justify-center gap-1.5"
                 >
-                  Create Account
+                  {isCreatingUser && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {isCreatingUser ? "Creating..." : "Create Account"}
                 </button>
               </div>
             </motion.div>
@@ -2351,13 +2358,19 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    deleteUser(deleteUserConfirm.phone);
-                    setSuccessToast(
-                      `Dr. ${deleteUserConfirm.name} has been permanently deleted.`,
-                    );
-                    setTimeout(() => setSuccessToast(""), 3000);
+                  onClick={async () => {
+                    const targetName = deleteUserConfirm.name;
+                    const targetPhone = deleteUserConfirm.phone;
                     setDeleteUserConfirm(null);
+                    const result = await deleteUser(targetPhone);
+                    if (result === "success") {
+                      setSuccessToast(
+                        `Dr. ${targetName} has been permanently deleted.`,
+                      );
+                      setTimeout(() => setSuccessToast(""), 3000);
+                    } else {
+                      alert(result);
+                    }
                   }}
                   className="flex-1 bg-rose-600 text-white hover:bg-rose-700 rounded-xl py-2.5 shadow-md"
                 >
