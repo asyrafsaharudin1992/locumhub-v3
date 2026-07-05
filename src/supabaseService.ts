@@ -985,6 +985,7 @@ export interface BadgeAwardRow {
   badge_name: string;
   month_tag: string;
   award_count: number;
+  slot_ids?: string;
 }
 
 /**
@@ -998,6 +999,7 @@ export async function saveBadgeAwardToSupabase(
   badgeName: string,
   monthTag: string,
   awardCount: number,
+  slotIds?: string[],
 ): Promise<{ success: boolean; error?: string }> {
   const client = getSupabaseClient();
   if (!client) return { success: false, error: "Supabase client not initialized" };
@@ -1009,6 +1011,7 @@ export async function saveBadgeAwardToSupabase(
       badge_name: badgeName,
       month_tag: monthTag,
       award_count: awardCount,
+      slot_ids: slotIds ? slotIds.join(",") : "",
       updated_at: new Date().toISOString(),
     },
     { onConflict: "doctor_phone,badge_name,month_tag" },
