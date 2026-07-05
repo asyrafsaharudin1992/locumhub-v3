@@ -1575,7 +1575,7 @@ export function useAppState() {
       console.error("recalculateBadges: failed to fetch fresh logs/alerts", err);
     }
 
-    const { updatedUsers, summaryLines } = recalculateBadgesForMonth(
+    const { updatedUsers, summaryLines, badgeAwardDetails } = recalculateBadgesForMonth(
       state.users,
       state.slots,
       freshActivityLogs,
@@ -1601,6 +1601,17 @@ export function useAppState() {
     await cloudSaveUsersBulk(updatedUsers).catch((err) =>
       console.error("Cloud recalculateBadges saveUsers failed:", err),
     );
+
+    badgeAwardDetails.forEach((detail) => {
+      saveBadgeAwardToSupabase(
+        detail.phone,
+        detail.name,
+        detail.badgeName,
+        detail.monthTag,
+        detail.totalCount,
+        detail.slotIds,
+      ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
+    });
 
     logActivity(`Recalculated AraCoins badges for ${month}/${year}`);
     return `✅ Badges recalculated!\n\n${summaryLines.join("\n")}`;
