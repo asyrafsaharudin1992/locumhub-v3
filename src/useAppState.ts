@@ -1299,8 +1299,8 @@ export function useAppState() {
       .split(" [")[0]
       .replace(/\s*\(\d{2}\/\d{4}\)\s*$/, "")
       .trim();
-    const rowTag = awardName.match(/\[R\d+\]/)
-      ? awardName.match(/\[R\d+\]/)![0]
+    const rowTag = awardName.match(/\[[^\]]+\]/)
+      ? awardName.match(/\[[^\]]+\]/)![0]
       : "";
 
     setState((prev) => {
@@ -1857,8 +1857,15 @@ export function useAppState() {
   const getManualHeartCandidates = () => {
     return state.feedbacksPatient
       .filter((f) => f.rating === 5)
-      .map((f, i) => {
-        const rowId = `R${100 + i}`;
+      .map((f) => {
+        // Stable ID derived from the review's own content (same formula used
+        // when saving feedback to Supabase) — NOT the review's position in
+        // the list, which shifts whenever a review is added/removed/reordered
+        // and would silently break the anti-double-award lock.
+        const stableId = `${f.tarikh.replace(/\//g, "-")}_${f.reviewer.trim()}_${f.target.trim()}`
+          .replace(/[^a-zA-Z0-9-_]/g, "")
+          .slice(0, 40);
+        const rowId = `HW-${stableId}`;
         const parts = f.tarikh.split("/");
         const monthSegment =
           parts.length === 3 ? `(${parts[1]}/${parts[2]})` : "(06/2026)";
