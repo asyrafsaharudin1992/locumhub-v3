@@ -20,7 +20,7 @@
 //                          soon as the shift's end time has passed — does
 //                          NOT require the admin to have closed out
 //                          sales/patient numbers for it.
-// 5. Last Minute Saviour— doctor's booking timestamp was less than 24 hours
+// 5. Last Minute Saviour— doctor's booking timestamp was less than 25 hours
 //                          before the shift's own start time, that month.
 //
 // NOTE: "Team Favourite" is intentionally NOT automated — admin picks and
@@ -273,7 +273,7 @@ export function recalculateBadgesForMonth(
     const bookedAt = parseBookedAt(s.bookedAt);
     if (range && bookedAt) {
       const diffHours = (range.start.getTime() - bookedAt.getTime()) / (1000 * 60 * 60);
-      if (diffHours >= 0 && diffHours < 24) {
+      if (diffHours >= 0 && diffHours < 25) {
         const key = normalizeDoctorName(s.dr);
         if (!lastMinuteSlotIds.has(key)) lastMinuteSlotIds.set(key, new Set());
         lastMinuteSlotIds.get(key)!.add(s.id);
