@@ -540,11 +540,12 @@ export async function saveUserToSupabase(user: UserProfile) {
   }
 }
 
-export async function deleteUserFromSupabase(phone: string) {
+export async function deleteUserFromSupabase(phone: string): Promise<{ success: boolean; error?: string }> {
   const client = getSupabaseClient();
-  if (!client) return;
+  if (!client) return { success: false, error: "Supabase client not initialized" };
 
   const trimmedPhone = phone.trim();
+  let anyMatched = false;
 
   for (const tableName of ["users", "Users"]) {
     const { data, error } = await client.from(tableName).select("*");
@@ -554,6 +555,7 @@ export async function deleteUserFromSupabase(phone: string) {
       );
 
       for (const matchedRow of matchedRows) {
+        anyMatched = true;
         const phoneCol =
           Object.keys(matchedRow).find((k) => k.toLowerCase() === "phone") ||
           "phone";
@@ -565,14 +567,27 @@ export async function deleteUserFromSupabase(phone: string) {
           .eq(phoneCol, exactPhone);
         if (deleteError) {
           console.error(`Supabase delete error in ${tableName}:`, deleteError);
+          return { success: false, error: deleteError.message };
         }
-      }
 
-      if (matchedRows.length > 0) {
-        return;
+        // Supabase/RLS can silently "succeed" while deleting 0 rows if a
+        // DELETE policy is missing — re-check the row is actually gone
+        // rather than trusting the absence of an error.
+        const { data: recheckData } = await client
+          .from(tableName)
+          .select(phoneCol)
+          .eq(phoneCol, exactPhone);
+        if (recheckData && recheckData.length > 0) {
+          return {
+            success: false,
+            error: `Row still exists after delete — likely a missing DELETE policy (RLS) on the "${tableName}" table in Supabase.`,
+          };
+        }
       }
     }
   }
+
+  return { success: true, error: anyMatched ? undefined : "No matching user found to delete." };
 }
 
 export async function saveSlotToSupabase(slot: LocumSlot) {
