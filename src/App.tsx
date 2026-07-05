@@ -115,6 +115,7 @@ export default function App() {
     processMonthlyUnstoppable,
     processIronDoctorScan,
     migrateHistoricalBadgesToSupabase,
+    reconcilePointsFromBadgeAwards,
     getManualHeartCandidates,
     submitRecruitment,
     logActivity,
@@ -435,6 +436,20 @@ export default function App() {
     setIsMigratingBadges(true);
     const resp = await migrateHistoricalBadgesToSupabase();
     setIsMigratingBadges(false);
+    alert(resp);
+  };
+
+  const [isReconcilingPoints, setIsReconcilingPoints] = useState(false);
+  const handleReconcilePoints = async () => {
+    if (
+      !window.confirm(
+        "Rebuild every doctor's badges & points to match what's currently in badge_awards? This OVERWRITES their current badges/points with the badge_awards totals — use this after a reset/cleanup to bring the two back in sync."
+      )
+    )
+      return;
+    setIsReconcilingPoints(true);
+    const resp = await reconcilePointsFromBadgeAwards();
+    setIsReconcilingPoints(false);
     alert(resp);
   };
 
@@ -1430,6 +1445,28 @@ export default function App() {
                                 className="bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer shrink-0 disabled:opacity-60"
                               >
                                 {isMigratingBadges ? "Migrating..." : "Migrate Now"}
+                              </button>
+                            </div>
+
+                            {/* Reverse direction: rebuild users.badges/points from badge_awards */}
+                            <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 flex items-start justify-between gap-3">
+                              <div className="space-y-1">
+                                <h6 className="text-xs font-bold text-amber-950 font-display">
+                                  Reconcile points from badge_awards
+                                </h6>
+                                <p className="text-[11px] text-slate-500 font-sans leading-relaxed max-w-xs">
+                                  Rebuilds each doctor's badges &amp; points to
+                                  match badge_awards exactly — use this after a
+                                  reset/cleanup to bring the two tables back
+                                  in sync. This OVERWRITES current badges/points.
+                                </p>
+                              </div>
+                              <button
+                                onClick={handleReconcilePoints}
+                                disabled={isReconcilingPoints}
+                                className="bg-amber-600 text-white hover:bg-amber-700 text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer shrink-0 disabled:opacity-60"
+                              >
+                                {isReconcilingPoints ? "Reconciling..." : "Reconcile Now"}
                               </button>
                             </div>
 
