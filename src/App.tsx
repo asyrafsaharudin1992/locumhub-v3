@@ -395,7 +395,7 @@ export default function App() {
     setSelectedDrPhone("");
   };
 
-  const handleMonthlyUnstoppableScan = () => {
+  const handleMonthlyUnstoppableScan = async () => {
     const m = window.prompt(
       "Unstoppable evaluates:\nEnter Month code (01-12):",
       "06",
@@ -409,18 +409,18 @@ export default function App() {
         `Initiate evaluation check for ${m}/${y}?\n\nQualifying standard: minimum 2 approved clinic hours shifts and exactly 0 logged cancellations.`,
       )
     ) {
-      const resp = processMonthlyUnstoppable(m, y);
+      const resp = await processMonthlyUnstoppable(m, y);
       alert(resp);
     }
   };
 
-  const handleIronDoctorScan = () => {
+  const handleIronDoctorScan = async () => {
     if (
       window.confirm(
         "Scan all completed shifts for Iron Doctor eligibility (12+ hour shifts that have already ended)?",
       )
     ) {
-      const resp = processIronDoctorScan();
+      const resp = await processIronDoctorScan();
       alert(resp);
     }
   };
