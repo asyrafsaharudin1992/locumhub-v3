@@ -212,9 +212,12 @@ export function recalculateBadgesForMonth(
   });
 
   // ---- Iron Doctor: >12h shift, or 2+ shifts same calendar day, shift must
-  // have already ended (not gated behind performance close-out) ----
+  // have already ended (not gated behind performance close-out). Tracks
+  // WHICH slot IDs qualified per doctor, so re-running this scan later
+  // (e.g. next month, or a re-run for the same month) never double-counts
+  // a slot that was already credited.
   const now = new Date();
-  const ironDoctors = new Set<string>();
+  const ironDoctorSlotIds = new Map<string, Set<string>>();
   shiftsByDoctor.forEach((shifts, key) => {
     const byDate = new Map<string, LocumSlot[]>();
     shifts.forEach((s) => {
@@ -238,7 +241,10 @@ export function recalculateBadgesForMonth(
         const range = parseShiftRange(s.masa, s.tarikh);
         return range && range.end.getTime() <= now.getTime();
       });
-      if (qualifies && anyEnded) ironDoctors.add(key);
+      if (qualifies && anyEnded) {
+        if (!ironDoctorSlotIds.has(key)) ironDoctorSlotIds.set(key, new Set());
+        sameDaySlots.forEach((s) => ironDoctorSlotIds.get(key)!.add(s.id));
+      }
     });
   });
 
@@ -251,7 +257,8 @@ export function recalculateBadgesForMonth(
   });
 
   // ---- Last Minute Saviour: booked <24h before shift start ----
-  const lastMinuteDoctors = new Set<string>();
+  // Also tracked per slot ID for the same re-run-safety reason as Iron Doctor.
+  const lastMinuteSlotIds = new Map<string, Set<string>>();
   monthSlots.forEach((s) => {
     if (!s.bookedAt) return;
     const range = parseShiftRange(s.masa, s.tarikh);
@@ -259,7 +266,9 @@ export function recalculateBadgesForMonth(
     if (range && bookedAt) {
       const diffHours = (range.start.getTime() - bookedAt.getTime()) / (1000 * 60 * 60);
       if (diffHours >= 0 && diffHours < 24) {
-        lastMinuteDoctors.add(normalizeDoctorName(s.dr));
+        const key = normalizeDoctorName(s.dr);
+        if (!lastMinuteSlotIds.has(key)) lastMinuteSlotIds.set(key, new Set());
+        lastMinuteSlotIds.get(key)!.add(s.id);
       }
     }
   });
@@ -278,30 +287,60 @@ export function recalculateBadgesForMonth(
   });
 
   // ---- Apply badges + AraCoins to each user ----
+  // Every check here is written so running this scan again for the same
+  // month (or accidentally twice) never inflates counts:
+  //  - Per-slot badges (Iron Doctor, Last Minute Saviour) check the doctor's
+  //    `locks` field for that exact slot ID before crediting it.
+  //  - Per-month badges (Heart Winner, Unstoppable, Diligent Doc) check
+  //    whether that "(Month Year)" tag is already present before adding it.
+  const monthTagSuffix = `(${monthLabel})`;
   const updatedUsers = users.map((u) => {
     const key = normalizeDoctorName(u.name);
     const earnedBadges: string[] = [];
     let coinsAwarded = 0;
+    let locksStr = u.locks || "";
+    const newLockIds: string[] = [];
 
-    if (heartWinnerDoctors.has(key)) {
+    const alreadyHasMonthBadge = (badgeName: string) =>
+      (u.badges || "").includes(`${badgeName} ${monthTagSuffix}`);
+
+    if (heartWinnerDoctors.has(key) && !alreadyHasMonthBadge("Heart Winner")) {
       earnedBadges.push("Heart Winner");
       coinsAwarded += 10;
     }
-    if (unstoppableDoctors.has(key)) {
+    if (unstoppableDoctors.has(key) && !alreadyHasMonthBadge("The Unstoppable")) {
       earnedBadges.push("The Unstoppable");
       coinsAwarded += 10;
     }
-    if (ironDoctors.has(key)) {
-      earnedBadges.push("Iron Doctor");
-      coinsAwarded += 10;
-    }
-    if (lastMinuteDoctors.has(key)) {
-      earnedBadges.push("Last Minute Savior");
-      coinsAwarded += 20;
-    }
-    if (diligentDocDoctors.has(key)) {
+    if (diligentDocDoctors.has(key) && !alreadyHasMonthBadge("The Diligent Doc")) {
       earnedBadges.push("The Diligent Doc");
       coinsAwarded += 10;
+    }
+
+    // Iron Doctor — count only slot-days not already locked
+    const ironSlotIds = ironDoctorSlotIds.get(key);
+    if (ironSlotIds) {
+      const newIronSlots = Array.from(ironSlotIds).filter(
+        (id) => !locksStr.includes(`[IRON-${id}]`),
+      );
+      if (newIronSlots.length > 0) {
+        earnedBadges.push("Iron Doctor");
+        coinsAwarded += 10 * newIronSlots.length;
+        newIronSlots.forEach((id) => newLockIds.push(`[IRON-${id}]`));
+      }
+    }
+
+    // Last Minute Saviour — count only slots not already locked
+    const lmsSlotIds = lastMinuteSlotIds.get(key);
+    if (lmsSlotIds) {
+      const newLmsSlots = Array.from(lmsSlotIds).filter(
+        (id) => !locksStr.includes(`[LMS-${id}]`),
+      );
+      if (newLmsSlots.length > 0) {
+        earnedBadges.push("Last Minute Saviour");
+        coinsAwarded += 20 * newLmsSlots.length;
+        newLmsSlots.forEach((id) => newLockIds.push(`[LMS-${id}]`));
+      }
     }
 
     if (earnedBadges.length === 0) return u;
@@ -317,10 +356,33 @@ export function recalculateBadgesForMonth(
       badgeMap[name] = count;
     });
 
-    earnedBadges.forEach((badge) => {
-      const tag = `${badge} (${monthLabel})`;
+    // Per-month badges get +1; Iron Doctor/Last Minute Saviour get +1 per
+    // newly-qualifying slot found above.
+    const perMonthBadges = earnedBadges.filter(
+      (b) => b !== "Iron Doctor" && b !== "Last Minute Saviour",
+    );
+    perMonthBadges.forEach((badge) => {
+      const tag = `${badge} ${monthTagSuffix}`;
       badgeMap[tag] = (badgeMap[tag] || 0) + 1;
     });
+    if (ironSlotIds) {
+      const newIronCount = Array.from(ironSlotIds).filter((id) =>
+        newLockIds.includes(`[IRON-${id}]`),
+      ).length;
+      if (newIronCount > 0) {
+        const tag = `Iron Doctor ${monthTagSuffix}`;
+        badgeMap[tag] = (badgeMap[tag] || 0) + newIronCount;
+      }
+    }
+    if (lmsSlotIds) {
+      const newLmsCount = Array.from(lmsSlotIds).filter((id) =>
+        newLockIds.includes(`[LMS-${id}]`),
+      ).length;
+      if (newLmsCount > 0) {
+        const tag = `Last Minute Saviour ${monthTagSuffix}`;
+        badgeMap[tag] = (badgeMap[tag] || 0) + newLmsCount;
+      }
+    }
 
     const updatedBadgeString = Object.keys(badgeMap)
       .map((k) => `${k}:${badgeMap[k]}`)
@@ -332,6 +394,7 @@ export function recalculateBadgesForMonth(
       ...u,
       points: (u.points || 0) + coinsAwarded,
       badges: updatedBadgeString,
+      locks: locksStr + newLockIds.join(""),
     };
   });
 
