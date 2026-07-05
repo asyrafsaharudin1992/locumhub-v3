@@ -9,6 +9,7 @@ import {
   AdminAlert,
 } from "./types";
 import { getSupabaseConfig, getSupabaseClient } from "./supabaseClient";
+import { recalculateBadgesForMonth } from "./badgeEngine";
 import {
   isSupabaseActive,
   fetchUsersFromSupabase,
@@ -39,6 +40,8 @@ import {
   saveAdminAlertToSupabase,
   deleteAdminAlertFromSupabase,
   uploadUserFileToSupabase,
+  saveBadgeAwardToSupabase,
+  fetchBadgeAwardsFromSupabase,
 } from "./supabaseService";
 
 import {
@@ -72,6 +75,63 @@ export interface AppState {
   activityLogs: { timestamp: string; action: string }[];
   notifications: AppNotification[];
   adminAlerts: AdminAlert[];
+}
+
+// Badge bookkeeping — single source of truth used by every award path
+// (manual injection, automated scanners, shift close-out) so historical
+// month tags never get clobbered by a later scan/award.
+//
+// Storage format: "BadgeName (MM/YYYY):count, OtherBadge (MM/YYYY):count"
+// Each badge+month combination is its own independent counter.
+
+function addBadgeAward(
+  existingBadges: string,
+  badgeName: string,
+  monthTag: string, // e.g. "06/2026"
+): string {
+  const fullKey = `${badgeName} (${monthTag})`;
+  const badgeMap: { [key: string]: number } = {};
+
+  if (existingBadges) {
+    existingBadges.split(",").forEach((item) => {
+      const trimmed = item.trim();
+      if (!trimmed) return;
+      const lastColon = trimmed.lastIndexOf(":");
+      if (lastColon === -1) return;
+      const key = trimmed.substring(0, lastColon).trim();
+      const count = parseInt(trimmed.substring(lastColon + 1).trim()) || 0;
+      if (key) badgeMap[key] = count;
+    });
+  }
+
+  badgeMap[fullKey] = (badgeMap[fullKey] || 0) + 1;
+
+  return Object.keys(badgeMap)
+    .map((k) => `${k}:${badgeMap[k]}`)
+    .join(", ");
+}
+
+function hasBadgeForMonth(
+  existingBadges: string,
+  badgeName: string,
+  monthTag: string,
+): boolean {
+  return (existingBadges || "").includes(`${badgeName} (${monthTag})`);
+}
+
+function getBadgeCountForMonth(
+  existingBadges: string,
+  badgeName: string,
+  monthTag: string,
+): number {
+  const fullKey = `${badgeName} (${monthTag})`;
+  if (!existingBadges) return 0;
+  const match = existingBadges
+    .split(",")
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${fullKey}:`));
+  if (!match) return 0;
+  return parseInt(match.substring(match.lastIndexOf(":") + 1).trim()) || 0;
 }
 
 export function useAppState() {
@@ -843,6 +903,13 @@ export function useAppState() {
     // Heads-up alert for admins so they know to find a replacement
     triggerCancellationAlert(slot, statusAsal);
 
+    // admin_alerts gets deleted once an admin dismisses it, so it's not a
+    // durable record — log here too so badge recalculation (The Unstoppable)
+    // can still detect this cancellation in future months.
+    logActivity(
+      `DOCTOR: SELF-CANCEL - Slot ID ${slotId} (Dr: ${slot.dr}) on ${slot.tarikh}`,
+    );
+
     if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
       await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
         ...state,
@@ -1164,13 +1231,74 @@ export function useAppState() {
     logActivity(`ADMIN: Deleted announcement ID ${id}`);
   };
 
+  // One-time migration: reads every doctor's existing "badges" text column
+  // and populates the new badge_awards table from it. Safe to run more than
+  // once — upserts by (doctor, badge, month), so re-running just re-confirms
+  // the same counts rather than duplicating rows.
+  const migrateHistoricalBadgesToSupabase = async (): Promise<string> => {
+    let migratedCount = 0;
+    let doctorCount = 0;
+
+    for (const u of state.users) {
+      if (!u.badges) continue;
+      const entries = u.badges
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      if (entries.length === 0) continue;
+      doctorCount++;
+
+      for (const entry of entries) {
+        const lastColon = entry.lastIndexOf(":");
+        if (lastColon === -1) continue;
+        const keyPart = entry.substring(0, lastColon).trim();
+        const count = parseInt(entry.substring(lastColon + 1).trim()) || 0;
+        if (count <= 0) continue;
+
+        const monthMatch = keyPart.match(/\((\d{2}\/\d{4})\)\s*$/);
+        if (!monthMatch) continue; // skip badges with no month tag (can't file them anywhere meaningful)
+        const monthTag = monthMatch[1];
+        const badgeName = keyPart.replace(/\s*\(\d{2}\/\d{4}\)\s*$/, "").trim();
+
+        const result = await saveBadgeAwardToSupabase(
+          u.phone,
+          u.name,
+          badgeName,
+          monthTag,
+          count,
+        );
+        if (result.success) migratedCount++;
+      }
+    }
+
+    logActivity(
+      `Migrated historical badges to badge_awards table: ${migratedCount} rows across ${doctorCount} doctors.`,
+    );
+    return `✅ Migration complete! ${migratedCount} badge/month entries synced across ${doctorCount} doctors.`;
+  };
+
   const adminGivePoints = (
     phone: string,
     pointsToAdd: number,
     awardName: string,
+    monthTag?: string, // "MM/YYYY" — defaults to current month if not given
   ): string => {
     let result = "Error: User not found.";
-    const cleanBadgeName = awardName.split(" [")[0].trim();
+    // awardName may already carry "(MM/YYYY)" (e.g. from the Heart Winner
+    // review scanner) — extract it if present, otherwise fall back to the
+    // explicit monthTag param, then to the current month.
+    const embeddedMonth = awardName.match(/\((\d{2}\/\d{4})\)/);
+    const now = new Date();
+    const resolvedMonthTag =
+      (embeddedMonth ? embeddedMonth[1] : undefined) ||
+      monthTag ||
+      `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+
+    const cleanBadgeName = awardName
+      .split(" [")[0]
+      .replace(/\s*\(\d{2}\/\d{4}\)\s*$/, "")
+      .trim();
     const rowTag = awardName.match(/\[R\d+\]/)
       ? awardName.match(/\[R\d+\]/)![0]
       : "";
@@ -1186,33 +1314,16 @@ export function useAppState() {
             return u;
           }
 
-          const currentPoints = u.points || 0;
-          const badgeString = u.badges || "";
-          const badgeMap: { [key: string]: number } = {};
-
-          if (badgeString) {
-            badgeString.split(",").forEach((item) => {
-              const parts = item.split(":");
-              if (parts.length === 2) {
-                const key = parts[0].trim().split(" (")[0].trim();
-                badgeMap[key] = (badgeMap[key] || 0) + parseInt(parts[1]);
-              }
-            });
-          }
-
-          badgeMap[cleanBadgeName] = (badgeMap[cleanBadgeName] || 0) + 1;
-          const updatedBadges = Object.keys(badgeMap)
-            .map((k) => `${k}:${badgeMap[k]}`)
-            .join(", ");
+          const updatedBadges = addBadgeAward(u.badges, cleanBadgeName, resolvedMonthTag);
           const updatedLocks = rowTag
             ? currentLocks + `[${rowTag}]`
             : currentLocks;
 
-          result = `✅ Success! Awarded ${pointsToAdd} Aracoins. ${cleanBadgeName} count for Dr. ${u.name} is now ${badgeMap[cleanBadgeName]}`;
+          result = `✅ Success! Awarded ${pointsToAdd} Aracoins. ${cleanBadgeName} (${resolvedMonthTag}) recorded for Dr. ${u.name}.`;
 
           return {
             ...u,
-            points: currentPoints + pointsToAdd,
+            points: (u.points || 0) + pointsToAdd,
             badges: updatedBadges,
             locks: updatedLocks,
           };
@@ -1234,42 +1345,32 @@ export function useAppState() {
     if (user) {
       const currentLocks = user.locks || "";
       if (!(rowTag && currentLocks.indexOf(rowTag) !== -1)) {
-        const currentPoints = user.points || 0;
-        const badgeString = user.badges || "";
-        const badgeMap: { [key: string]: number } = {};
-
-        if (badgeString) {
-          badgeString.split(",").forEach((item) => {
-            const parts = item.split(":");
-            if (parts.length === 2) {
-              const key = parts[0].trim().split(" (")[0].trim();
-              badgeMap[key] = (badgeMap[key] || 0) + parseInt(parts[1]);
-            }
-          });
-        }
-
-        badgeMap[cleanBadgeName] = (badgeMap[cleanBadgeName] || 0) + 1;
-        const updatedBadges = Object.keys(badgeMap)
-          .map((k) => `${k}:${badgeMap[k]}`)
-          .join(", ");
+        const updatedBadges = addBadgeAward(user.badges, cleanBadgeName, resolvedMonthTag);
         const updatedLocks = rowTag
           ? currentLocks + `[${rowTag}]`
           : currentLocks;
 
         const updatedUser = {
           ...user,
-          points: currentPoints + pointsToAdd,
+          points: (user.points || 0) + pointsToAdd,
           badges: updatedBadges,
           locks: updatedLocks,
         };
         cloudSaveUser(updatedUser).catch((err) =>
           console.error("Cloud adminGivePoints failed:", err),
         );
+        saveBadgeAwardToSupabase(
+          phone,
+          user.name,
+          cleanBadgeName,
+          resolvedMonthTag,
+          getBadgeCountForMonth(updatedBadges, cleanBadgeName, resolvedMonthTag),
+        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
       }
     }
 
     logActivity(
-      `ADMIN AWARD: Given ${cleanBadgeName} (${pointsToAdd} pts) to user ${phone}`,
+      `ADMIN AWARD: Given ${cleanBadgeName} (${resolvedMonthTag}) (${pointsToAdd} pts) to user ${phone}`,
     );
     return result;
   };
@@ -1285,6 +1386,7 @@ export function useAppState() {
 
     let updatedSlotsRef: LocumSlot[] = [];
     let updatedUsersRef: UserProfile[] = [];
+    let badgesAwardedRef: string[] = [];
 
     setState((prev) => {
       const slot = prev.slots.find((s) => s.id === slotId);
@@ -1313,6 +1415,7 @@ export function useAppState() {
       }
 
       const badgesToUpdate: string[] = [];
+      badgesAwardedRef = badgesToUpdate;
       const slotTimeRaw = slot.masa.toLowerCase();
       const branchRaw = slot.cawangan.toUpperCase();
       const slotDateRaw = slot.tarikh;
@@ -1335,7 +1438,7 @@ export function useAppState() {
         badgesToUpdate.push("The Diligent Doc");
       }
 
-      // Logic for Last Minute Savior
+      // Logic for Last Minute Saviour — booked within 25 hours of shift start
       if (bookedAtRaw && slotDateRaw) {
         try {
           const parseDate = (dStr: string) => {
@@ -1348,8 +1451,8 @@ export function useAppState() {
           const bDate = parseDate(bookedAtRaw);
           const diffInHours =
             (sDate.getTime() - bDate.getTime()) / (1000 * 60 * 60);
-          if (diffInHours > 0 && diffInHours < 48) {
-            badgesToUpdate.push("Last Minute Savior");
+          if (diffInHours > 0 && diffInHours < 25) {
+            badgesToUpdate.push("Last Minute Saviour");
           }
         } catch (e: any) {
           console.warn("Date parse error", e.message);
@@ -1375,35 +1478,19 @@ export function useAppState() {
 
           if (locksStr.indexOf(slotLockId) !== -1) return u;
 
-          const currentPoints = u.points || 0;
-          const badgeString = u.badges || "";
-          const badgeMap: { [key: string]: number } = {};
-
-          if (badgeString) {
-            badgeString.split(",").forEach((item) => {
-              const parts = item.split(":");
-              if (parts.length === 2)
-                badgeMap[parts[0].trim()] = parseInt(parts[1]);
-            });
-          }
-
-          const monthlyId = `(${period})`;
+          let updatedBadges = u.badges || "";
           badgesToUpdate.forEach((badge) => {
-            const cleanKey = `${badge} ${monthlyId}`;
-            badgeMap[cleanKey] = (badgeMap[cleanKey] || 0) + 1;
+            updatedBadges = addBadgeAward(updatedBadges, badge, period);
           });
 
           const totalPointsAwarded = badgesToUpdate.length * 10;
-          const updatedBadges = Object.keys(badgeMap)
-            .map((k) => `${k}:${badgeMap[k]}`)
-            .join(", ");
           const updatedLocks = locksStr + slotLockId;
 
           resultText = `✅ Shift Completed! Doctor ${u.name} awarded ${totalPointsAwarded} Aracoins for: ${badgesToUpdate.join(", ")}`;
 
           return {
             ...u,
-            points: currentPoints + totalPointsAwarded,
+            points: (u.points || 0) + totalPointsAwarded,
             badges: updatedBadges,
             locks: updatedLocks,
           };
@@ -1451,16 +1538,197 @@ export function useAppState() {
       await saveUserToSupabase(userToSave).catch((err) =>
         console.error("Cloud completeSlot saveUser failed:", err),
       );
+      badgesAwardedRef.forEach((badge) => {
+        saveBadgeAwardToSupabase(
+          userToSave.phone,
+          userToSave.name,
+          badge,
+          period,
+          getBadgeCountForMonth(userToSave.badges, badge, period),
+        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
+      });
     }
 
     return resultText;
+  };
+
+  // Recalculates all 6 AraCoins badges for a given month (Team Favorite,
+  // Heart Winner, The Unstoppable, Iron Doctor, The Diligent Doc, Last
+  // Minute Savior) and applies them to every qualifying doctor. Can be run
+  // for any past month too, not just the current one — see badgeEngine.ts
+  // for the full rules and a note on data limitations for older months.
+  const recalculateBadges = async (
+    month: string,
+    year: string,
+    manualFeedback: FeedbackRecord[],
+  ): Promise<string> => {
+    let freshActivityLogs = state.activityLogs;
+    let freshAdminAlerts: AdminAlert[] = [];
+    try {
+      const [logsResult, alertsResult] = await Promise.all([
+        fetchActivityLogsFromSupabase(),
+        fetchAdminAlertsFromSupabase(),
+      ]);
+      if (logsResult) freshActivityLogs = logsResult;
+      if (alertsResult) freshAdminAlerts = alertsResult;
+    } catch (err) {
+      console.error("recalculateBadges: failed to fetch fresh logs/alerts", err);
+    }
+
+    const { updatedUsers, summaryLines } = recalculateBadgesForMonth(
+      state.users,
+      state.slots,
+      freshActivityLogs,
+      freshAdminAlerts,
+      manualFeedback,
+      month,
+      year,
+    );
+
+    if (summaryLines.length === 0) {
+      return "No doctors qualified for any badge this month.";
+    }
+
+    setState((prev) => ({
+      ...prev,
+      users: updatedUsers,
+      currentUser:
+        updatedUsers.find((u) => u.phone === prev.currentUser?.phone) ||
+        prev.currentUser,
+    }));
+    localStorage.setItem("ara_users", JSON.stringify(updatedUsers));
+
+    await cloudSaveUsersBulk(updatedUsers).catch((err) =>
+      console.error("Cloud recalculateBadges saveUsers failed:", err),
+    );
+
+    logActivity(`Recalculated AraCoins badges for ${month}/${year}`);
+    return `✅ Badges recalculated!\n\n${summaryLines.join("\n")}`;
+  };
+
+  // Iron Doctor — auto-detects shifts of 12+ hours (or specific back-to-back
+  // time patterns) once the shift's end time has passed, without needing the
+  // Clinical Performance Close-Out form to be filled in first.
+  const processIronDoctorScan = (): string => {
+    const now = new Date();
+    const parseSlotEnd = (tarikh: string, masa: string): Date | null => {
+      const dParts = tarikh.split("/");
+      if (dParts.length !== 3) return null;
+      const [d, m, y] = dParts.map((p) => parseInt(p, 10));
+      // masa is typically like "8am-8pm" or "8pm-8am" (overnight) — take the
+      // end time; if end time is numerically <= start (overnight), roll to
+      // next day for an accurate "has this shift ended yet" check.
+      const timeMatch = masa.match(/(\d{1,2})\s*(am|pm)?\s*-\s*(\d{1,2})\s*(am|pm)?/i);
+      if (!timeMatch) return new Date(y, m - 1, d, 23, 59);
+      let endHour = parseInt(timeMatch[3], 10);
+      const endMeridiem = (timeMatch[4] || timeMatch[2] || "").toLowerCase();
+      if (endMeridiem === "pm" && endHour !== 12) endHour += 12;
+      if (endMeridiem === "am" && endHour === 12) endHour = 0;
+      let startHour = parseInt(timeMatch[1], 10);
+      const startMeridiem = (timeMatch[2] || "").toLowerCase();
+      if (startMeridiem === "pm" && startHour !== 12) startHour += 12;
+      if (startMeridiem === "am" && startHour === 12) startHour = 0;
+      const overnight = endHour <= startHour;
+      const endDate = new Date(y, m - 1, d, endHour);
+      if (overnight) endDate.setDate(endDate.getDate() + 1);
+      return endDate;
+    };
+
+    const qualifyingSlots = state.slots.filter((s) => {
+      if (s.status !== "Approved" || !s.dr) return false;
+      const endTime = parseSlotEnd(s.tarikh, s.masa);
+      if (!endTime || endTime > now) return false; // shift hasn't ended yet
+
+      const numbersOnly = s.masa.toLowerCase().replace(/[^0-9]/g, "");
+      const isLongShift =
+        /8.*8|9.*9|10.*10|11.*11|12.*12/.test(numbersOnly) ||
+        s.masa.toLowerCase().includes("12h") ||
+        s.masa.toLowerCase().includes("12jam") ||
+        s.masa.toLowerCase().includes("12-hour") ||
+        s.masa.toLowerCase().includes("12 hour");
+      return isLongShift;
+    });
+
+    if (qualifyingSlots.length === 0) {
+      return "❌ No completed 12-hour+ shifts found to award.";
+    }
+
+    const awardedList: string[] = [];
+    const updatedDocList: UserProfile[] = [];
+    const badgeSyncQueue: { phone: string; name: string; monthTag: string }[] = [];
+
+    setState((prev) => {
+      const updatedUsers = prev.users.map((u) => {
+        const uNameNorm = u.name.toUpperCase().trim().replace(/^(DR|dr)\.?\s+/i, "");
+        const mySlots = qualifyingSlots.filter((s) => {
+          const drNorm = (s.dr || "").toUpperCase().trim().replace(/^(DR|dr)\.?\s+/i, "");
+          return drNorm === uNameNorm;
+        });
+        if (mySlots.length === 0) return u;
+
+        let points = u.points || 0;
+        let badges = u.badges || "";
+        let locks = u.locks || "";
+        let didAward = false;
+        const monthsTouched = new Set<string>();
+
+        mySlots.forEach((s) => {
+          const lockId = `[IRON-${s.id}]`;
+          if (locks.includes(lockId)) return; // already awarded for this slot
+          const parts = s.tarikh.split("/");
+          const monthTag = parts.length === 3 ? `${parts[1].padStart(2, "0")}/${parts[2]}` : "";
+          badges = addBadgeAward(badges, "Iron Doctor", monthTag);
+          points += 10;
+          locks += lockId;
+          didAward = true;
+          monthsTouched.add(monthTag);
+        });
+
+        monthsTouched.forEach((monthTag) => {
+          badgeSyncQueue.push({ phone: u.phone, name: u.name, monthTag });
+        });
+
+        if (didAward) {
+          awardedList.push(u.name);
+          const updated = { ...u, points, badges, locks };
+          updatedDocList.push(updated);
+          return updated;
+        }
+        return u;
+      });
+
+      const currentUpdated =
+        updatedUsers.find((u) => u.phone === prev.currentUser?.phone) ||
+        prev.currentUser;
+
+      return { ...prev, users: updatedUsers, currentUser: currentUpdated };
+    });
+
+    if (updatedDocList.length > 0) {
+      cloudSaveUsersBulk(updatedDocList).catch((err) =>
+        console.error("Cloud processIronDoctorScan failed:", err),
+      );
+      badgeSyncQueue.forEach(({ phone, name, monthTag }) => {
+        const finalUser = updatedDocList.find((u) => u.phone === phone);
+        if (!finalUser) return;
+        saveBadgeAwardToSupabase(
+          phone,
+          name,
+          "Iron Doctor",
+          monthTag,
+          getBadgeCountForMonth(finalUser.badges, "Iron Doctor", monthTag),
+        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
+      });
+      logActivity(`Iron Doctor scan ran. Awarded: ${awardedList.join(", ")}`);
+      return `✅ SUCCESS! Awarded "Iron Doctor" to: ${awardedList.join(", ")}`;
+    }
+    return "ℹ️ All qualifying shifts have already been awarded — nothing new to give.";
   };
 
   const processMonthlyUnstoppable = (
     selectedMonth: string,
     selectedYear: string,
   ): string => {
-    const dateBadgeId = `(${selectedMonth}/${selectedYear})`;
     const monthlySlots = state.slots.filter((s) => {
       const parts = s.tarikh.split("/");
       if (parts.length === 3) {
@@ -1507,36 +1775,17 @@ export function useAppState() {
         const uName = u.name.toUpperCase().trim();
         const summary = docSummary[uName];
         if (summary && summary.approved >= 2 && summary.cancelled === 0) {
-          if (u.badges.indexOf(`The Unstoppable ${dateBadgeId}`) !== -1) {
+          if (hasBadgeForMonth(u.badges, "The Unstoppable", `${selectedMonth}/${selectedYear}`)) {
             skippedList.push(u.name);
             return u;
           }
-
-          const currentPoints = u.points || 0;
-          const badgeString = u.badges || "";
-          const badgeMap: { [key: string]: number } = {};
-
-          if (badgeString) {
-            badgeString.split(",").forEach((item) => {
-              const parts = item.split(":");
-              if (parts.length === 2) {
-                const clean = parts[0].split(" (")[0].trim();
-                badgeMap[clean] = (badgeMap[clean] || 0) + parseInt(parts[1]);
-              }
-            });
-          }
-
-          badgeMap["The Unstoppable"] = (badgeMap["The Unstoppable"] || 0) + 1;
-          const updatedBadges = Object.keys(badgeMap)
-            .map((k) => `${k} ${dateBadgeId}:${badgeMap[k]}`)
-            .join(", ");
 
           awardedList.push(u.name);
 
           return {
             ...u,
-            points: currentPoints + 10,
-            badges: updatedBadges,
+            points: (u.points || 0) + 10,
+            badges: addBadgeAward(u.badges, "The Unstoppable", `${selectedMonth}/${selectedYear}`),
           };
         }
         return u;
@@ -1558,30 +1807,11 @@ export function useAppState() {
       const uName = u.name.toUpperCase().trim();
       const summary = docSummary[uName];
       if (summary && summary.approved >= 2 && summary.cancelled === 0) {
-        if (u.badges.indexOf(`The Unstoppable ${dateBadgeId}`) === -1) {
-          const currentPoints = u.points || 0;
-          const badgeString = u.badges || "";
-          const badgeMap: { [key: string]: number } = {};
-
-          if (badgeString) {
-            badgeString.split(",").forEach((item) => {
-              const parts = item.split(":");
-              if (parts.length === 2) {
-                const clean = parts[0].split(" (")[0].trim();
-                badgeMap[clean] = (badgeMap[clean] || 0) + parseInt(parts[1]);
-              }
-            });
-          }
-
-          badgeMap["The Unstoppable"] = (badgeMap["The Unstoppable"] || 0) + 1;
-          const updatedBadges = Object.keys(badgeMap)
-            .map((k) => `${k} ${dateBadgeId}:${badgeMap[k]}`)
-            .join(", ");
-
+        if (!hasBadgeForMonth(u.badges, "The Unstoppable", `${selectedMonth}/${selectedYear}`)) {
           updatedDocList.push({
             ...u,
-            points: currentPoints + 10,
-            badges: updatedBadges,
+            points: (u.points || 0) + 10,
+            badges: addBadgeAward(u.badges, "The Unstoppable", `${selectedMonth}/${selectedYear}`),
           });
         }
       }
@@ -1590,6 +1820,15 @@ export function useAppState() {
       cloudSaveUsersBulk(updatedDocList).catch((err) =>
         console.error("Cloud processMonthlyUnstoppable failed:", err),
       );
+      updatedDocList.forEach((u) => {
+        saveBadgeAwardToSupabase(
+          u.phone,
+          u.name,
+          "The Unstoppable",
+          `${selectedMonth}/${selectedYear}`,
+          getBadgeCountForMonth(u.badges, "The Unstoppable", `${selectedMonth}/${selectedYear}`),
+        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
+      });
     }
 
     if (awardedList.length > 0) {
@@ -1987,7 +2226,10 @@ export function useAppState() {
     deleteAnnouncement,
     adminGivePoints,
     completeSlotAndAwardPoints,
+    recalculateBadges,
     processMonthlyUnstoppable,
+    processIronDoctorScan,
+    migrateHistoricalBadgesToSupabase,
     getManualHeartCandidates,
     submitRecruitment,
     logActivity,
