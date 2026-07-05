@@ -111,7 +111,10 @@ export default function App() {
     deleteAnnouncement,
     adminGivePoints,
     completeSlotAndAwardPoints,
+    recalculateBadges,
     processMonthlyUnstoppable,
+    processIronDoctorScan,
+    migrateHistoricalBadgesToSupabase,
     getManualHeartCandidates,
     submitRecruitment,
     logActivity,
@@ -268,6 +271,10 @@ export default function App() {
   const [pointsAmount, setPointsToAdd] = useState<number>(15);
   const [selectedBadgePreset, setSelectedBadgePreset] =
     useState("Heart Winner");
+  const [selectedAwardMonth, setSelectedAwardMonth] = useState(() => {
+    const now = new Date();
+    return `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  });
 
   // Feedback Inspector database selector tab
   const [activeInspectorFb, setActiveInspectorFb] = useState<
@@ -381,6 +388,7 @@ export default function App() {
       selectedDrPhone,
       pointsAmount,
       selectedBadgePreset,
+      selectedAwardMonth,
     );
     alert(res);
     setSelectedDrPhone("");
@@ -403,6 +411,31 @@ export default function App() {
       const resp = processMonthlyUnstoppable(m, y);
       alert(resp);
     }
+  };
+
+  const handleIronDoctorScan = () => {
+    if (
+      window.confirm(
+        "Scan all completed shifts for Iron Doctor eligibility (12+ hour shifts that have already ended)?",
+      )
+    ) {
+      const resp = processIronDoctorScan();
+      alert(resp);
+    }
+  };
+
+  const [isMigratingBadges, setIsMigratingBadges] = useState(false);
+  const handleMigrateBadges = async () => {
+    if (
+      !window.confirm(
+        "Copy every doctor's existing badge history into the new badge_awards table? Safe to run more than once."
+      )
+    )
+      return;
+    setIsMigratingBadges(true);
+    const resp = await migrateHistoricalBadgesToSupabase();
+    setIsMigratingBadges(false);
+    alert(resp);
   };
 
   const handleGoogleReviewScannerAward = (
@@ -1056,6 +1089,9 @@ export default function App() {
                       slots={state.slots}
                       users={state.users}
                       onCompleteSlot={completeSlotAndAwardPoints}
+                      onRecalculateBadges={(month, year) =>
+                        recalculateBadges(month, year, patientFeedbackEntries)
+                      }
                     />
                   )}
 
@@ -1298,8 +1334,8 @@ export default function App() {
                                   <option value="Heart Winner">
                                     Heart Winner
                                   </option>
-                                  <option value="Last Minute Savior">
-                                    Last Minute Savior
+                                  <option value="Last Minute Saviour">
+                                    Last Minute Saviour
                                   </option>
                                   <option value="Iron Doctor">
                                     Iron Doctor
@@ -1334,6 +1370,26 @@ export default function App() {
                               </div>
                             </div>
 
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                Award Month
+                              </label>
+                              <input
+                                type="month"
+                                required
+                                value={selectedAwardMonth.split("/").reverse().join("-")}
+                                onChange={(e) => {
+                                  const [y, m] = e.target.value.split("-");
+                                  if (y && m) setSelectedAwardMonth(`${m}/${y}`);
+                                }}
+                                className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 outline-none font-mono cursor-pointer"
+                              />
+                              <p className="text-[9px] text-slate-400">
+                                Which month this award counts towards for
+                                monthly dashboard breakdowns.
+                              </p>
+                            </div>
+
                             <button
                               type="submit"
                               className="w-full bg-[#001F3F] text-white hover:bg-[#001226] font-bold py-3 px-4 rounded-xl text-xs mt-4 transition shadow-sm"
@@ -1355,6 +1411,49 @@ export default function App() {
                           </p>
 
                           <div className="space-y-3 pt-2">
+                            {/* One-time migration to the new badge_awards table */}
+                            <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-start justify-between gap-3">
+                              <div className="space-y-1">
+                                <h6 className="text-xs font-bold text-indigo-950 font-display">
+                                  Migrate to badge_awards table
+                                </h6>
+                                <p className="text-[11px] text-slate-500 font-sans leading-relaxed max-w-xs">
+                                  One-time backfill of existing badge history
+                                  into the new per-month table for monthly
+                                  dashboard reporting. Safe to run more than
+                                  once.
+                                </p>
+                              </div>
+                              <button
+                                onClick={handleMigrateBadges}
+                                disabled={isMigratingBadges}
+                                className="bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer shrink-0 disabled:opacity-60"
+                              >
+                                {isMigratingBadges ? "Migrating..." : "Migrate Now"}
+                              </button>
+                            </div>
+
+                            {/* Iron Doctor auto-scan trigger */}
+                            <div className="p-4 bg-sky-50/50 rounded-2xl border border-sky-100 flex items-start justify-between gap-3">
+                              <div className="space-y-1">
+                                <h6 className="text-xs font-bold text-sky-950 font-display">
+                                  Iron Doctor auto-scan
+                                </h6>
+                                <p className="text-[11px] text-slate-500 font-sans leading-relaxed max-w-xs">
+                                  Auto-reward completed shifts of{" "}
+                                  <strong>12+ hours</strong> once the shift
+                                  has already ended — no need to close out
+                                  performance first.
+                                </p>
+                              </div>
+                              <button
+                                onClick={handleIronDoctorScan}
+                                className="bg-[#001F3F] text-white hover:bg-[#001226] text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer shrink-0"
+                              >
+                                Run Check
+                              </button>
+                            </div>
+
                             {/* Unstoppable monthly eval trigger */}
                             <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex items-start justify-between gap-3">
                               <div className="space-y-1">
