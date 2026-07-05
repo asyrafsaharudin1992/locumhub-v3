@@ -281,11 +281,20 @@ export function useAppState() {
 
   const cloudSaveUsersBulk = async (usersToSave: UserProfile[]) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
-      for (const u of usersToSave) {
-        saveUserToSupabase(u).catch((err) =>
-          console.error("Supabase saveUser bulk failed:", err),
-        );
-      }
+      // Must actually await each save — previously this fired all saves
+      // without waiting, so callers like recalculateBadges() would think
+      // they were done while writes were still in flight. That created a
+      // race with the 10-second background poll: if the poll fired before
+      // these saves landed, it would pull back stale data (missing the
+      // newly-added badge locks), making the same badges look "not yet
+      // awarded" and get double-counted on the next recalculation run.
+      await Promise.all(
+        usersToSave.map((u) =>
+          saveUserToSupabase(u).catch((err) =>
+            console.error("Supabase saveUser bulk failed:", err),
+          ),
+        ),
+      );
     }
   };
 
@@ -1692,16 +1701,18 @@ export function useAppState() {
       console.error("Cloud recalculateBadges saveUsers failed:", err),
     );
 
-    badgeAwardDetails.forEach((detail) => {
-      saveBadgeAwardToSupabase(
-        detail.phone,
-        detail.name,
-        detail.badgeName,
-        detail.monthTag,
-        detail.totalCount,
-        detail.slotIds,
-      ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
-    });
+    await Promise.all(
+      badgeAwardDetails.map((detail) =>
+        saveBadgeAwardToSupabase(
+          detail.phone,
+          detail.name,
+          detail.badgeName,
+          detail.monthTag,
+          detail.totalCount,
+          detail.slotIds,
+        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err)),
+      ),
+    );
 
     logActivity(`Recalculated AraCoins badges for ${month}/${year}`);
     return `✅ Badges recalculated!\n\n${summaryLines.join("\n")}`;
@@ -1710,7 +1721,7 @@ export function useAppState() {
   // Iron Doctor — auto-detects shifts of 12+ hours (or specific back-to-back
   // time patterns) once the shift's end time has passed, without needing the
   // Clinical Performance Close-Out form to be filled in first.
-  const processIronDoctorScan = (): string => {
+  const processIronDoctorScan = async (): Promise<string> => {
     const now = new Date();
     const parseSlotEnd = (tarikh: string, masa: string): Date | null => {
       const dParts = tarikh.split("/");
@@ -1806,30 +1817,32 @@ export function useAppState() {
     });
 
     if (updatedDocList.length > 0) {
-      cloudSaveUsersBulk(updatedDocList).catch((err) =>
+      await cloudSaveUsersBulk(updatedDocList).catch((err) =>
         console.error("Cloud processIronDoctorScan failed:", err),
       );
-      badgeSyncQueue.forEach(({ phone, name, monthTag }) => {
-        const finalUser = updatedDocList.find((u) => u.phone === phone);
-        if (!finalUser) return;
-        saveBadgeAwardToSupabase(
-          phone,
-          name,
-          "Iron Doctor",
-          monthTag,
-          getBadgeCountForMonth(finalUser.badges, "Iron Doctor", monthTag),
-        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
-      });
+      await Promise.all(
+        badgeSyncQueue.map(({ phone, name, monthTag }) => {
+          const finalUser = updatedDocList.find((u) => u.phone === phone);
+          if (!finalUser) return Promise.resolve();
+          return saveBadgeAwardToSupabase(
+            phone,
+            name,
+            "Iron Doctor",
+            monthTag,
+            getBadgeCountForMonth(finalUser.badges, "Iron Doctor", monthTag),
+          ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
+        }),
+      );
       logActivity(`Iron Doctor scan ran. Awarded: ${awardedList.join(", ")}`);
       return `✅ SUCCESS! Awarded "Iron Doctor" to: ${awardedList.join(", ")}`;
     }
     return "ℹ️ All qualifying shifts have already been awarded — nothing new to give.";
   };
 
-  const processMonthlyUnstoppable = (
+  const processMonthlyUnstoppable = async (
     selectedMonth: string,
     selectedYear: string,
-  ): string => {
+  ): Promise<string> => {
     const monthlySlots = state.slots.filter((s) => {
       const parts = s.tarikh.split("/");
       if (parts.length === 3) {
@@ -1918,18 +1931,20 @@ export function useAppState() {
       }
     });
     if (updatedDocList.length > 0) {
-      cloudSaveUsersBulk(updatedDocList).catch((err) =>
+      await cloudSaveUsersBulk(updatedDocList).catch((err) =>
         console.error("Cloud processMonthlyUnstoppable failed:", err),
       );
-      updatedDocList.forEach((u) => {
-        saveBadgeAwardToSupabase(
-          u.phone,
-          u.name,
-          "The Unstoppable",
-          `${selectedMonth}/${selectedYear}`,
-          getBadgeCountForMonth(u.badges, "The Unstoppable", `${selectedMonth}/${selectedYear}`),
-        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
-      });
+      await Promise.all(
+        updatedDocList.map((u) =>
+          saveBadgeAwardToSupabase(
+            u.phone,
+            u.name,
+            "The Unstoppable",
+            `${selectedMonth}/${selectedYear}`,
+            getBadgeCountForMonth(u.badges, "The Unstoppable", `${selectedMonth}/${selectedYear}`),
+          ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err)),
+        ),
+      );
     }
 
     if (awardedList.length > 0) {
