@@ -2,24 +2,29 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DashboardCharts } from './DashboardCharts';
 import { LocumSlot, UserProfile } from '../types';
-import { ClipboardCheck, Sparkles, Filter, CheckCircle2, UserCheck, BarChart2, MessageSquare } from 'lucide-react';
+import { ClipboardCheck, Sparkles, Filter, CheckCircle2, UserCheck, BarChart2, MessageSquare, Coins, Loader2 } from 'lucide-react';
 
 interface AdminDashTabProps {
   slots: LocumSlot[];
   users: UserProfile[];
   onCompleteSlot: (slotId: string, sales: number, patients: number, pay: number, period: string) => string;
+  onRecalculateBadges: (month: string, year: string) => Promise<string>;
 }
 
 export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   slots,
   users,
-  onCompleteSlot
+  onCompleteSlot,
+  onRecalculateBadges
 }) => {
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
   const [year, setYear] = useState(String(now.getFullYear()));
   const [viewMode, setViewMode] = useState<'monthly' | 'cumulative'>('monthly');
   const [selectedDoctorFilter, setSelectedDoctorFilter] = useState('');
+  const [isRecalculatingBadges, setIsRecalculatingBadges] = useState(false);
+  const [showBadgeResultModal, setShowBadgeResultModal] = useState(false);
+  const [badgeResultText, setBadgeResultText] = useState('');
 
   // Close-out states
   const [selectedSlotId, setSelectedSlotId] = useState('');
@@ -176,8 +181,54 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
               </option>
             ))}
           </select>
+
+          <button
+            type="button"
+            disabled={isRecalculatingBadges || viewMode === 'cumulative'}
+            onClick={async () => {
+              setIsRecalculatingBadges(true);
+              const result = await onRecalculateBadges(month, year);
+              setIsRecalculatingBadges(false);
+              setBadgeResultText(result);
+              setShowBadgeResultModal(true);
+            }}
+            title={viewMode === 'cumulative' ? 'Switch to Monthly view to pick a month first' : 'Recalculate AraCoins badges for the selected month'}
+            className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-3 rounded-xl shadow-sm transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRecalculatingBadges ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Coins className="w-3.5 h-3.5" />}
+            {isRecalculatingBadges ? 'Recalculating...' : 'Recalculate Badges'}
+          </button>
         </div>
       </div>
+
+      {/* Badge recalculation result modal */}
+      <AnimatePresence>
+        {showBadgeResultModal && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full space-y-4"
+            >
+              <div className="flex items-center gap-2">
+                <Coins className="w-5 h-5 text-amber-500" />
+                <h5 className="font-display font-bold text-slate-900 text-sm">AraCoins Recalculation Result</h5>
+              </div>
+              <pre className="text-xs text-slate-600 whitespace-pre-wrap font-sans max-h-72 overflow-y-auto bg-slate-50 rounded-xl p-3 border border-slate-100">
+                {badgeResultText}
+              </pre>
+              <button
+                type="button"
+                onClick={() => setShowBadgeResultModal(false)}
+                className="w-full bg-[#001F3F] hover:bg-[#001226] text-white font-bold text-xs py-2.5 rounded-xl transition"
+              >
+                Close
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Statistics Counter Bento */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
