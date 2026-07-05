@@ -141,6 +141,14 @@ function slotIsInMonth(slot: LocumSlot, month: string, year: string): boolean {
 interface RecalcResult {
   updatedUsers: UserProfile[];
   summaryLines: string[];
+  badgeAwardDetails: {
+    phone: string;
+    name: string;
+    badgeName: string;
+    monthTag: string; // "MM/YYYY" — for the Supabase table (distinct from the display monthLabel)
+    totalCount: number;
+    slotIds?: string[];
+  }[];
 }
 
 export function recalculateBadgesForMonth(
@@ -294,6 +302,9 @@ export function recalculateBadgesForMonth(
   //  - Per-month badges (Heart Winner, Unstoppable, Diligent Doc) check
   //    whether that "(Month Year)" tag is already present before adding it.
   const monthTagSuffix = `(${monthLabel})`;
+  const monthTagSlash = `${month}/${year}`; // "MM/YYYY", for the Supabase table
+  const badgeAwardDetails: RecalcResult["badgeAwardDetails"] = [];
+
   const updatedUsers = users.map((u) => {
     const key = normalizeDoctorName(u.name);
     const earnedBadges: string[] = [];
@@ -390,6 +401,39 @@ export function recalculateBadgesForMonth(
 
     summaryLines.push(`${u.name}: +${coinsAwarded} AraCoins (${earnedBadges.join(", ")})`);
 
+    // Record per-badge details for the badge_awards Supabase table — total
+    // count for this month (not just what's new in this run), plus the full
+    // set of contributing slot IDs for Iron Doctor / Last Minute Saviour.
+    perMonthBadges.forEach((badge) => {
+      badgeAwardDetails.push({
+        phone: u.phone,
+        name: u.name,
+        badgeName: badge,
+        monthTag: monthTagSlash,
+        totalCount: badgeMap[`${badge} ${monthTagSuffix}`] || 1,
+      });
+    });
+    if (ironSlotIds && ironSlotIds.size > 0) {
+      badgeAwardDetails.push({
+        phone: u.phone,
+        name: u.name,
+        badgeName: "Iron Doctor",
+        monthTag: monthTagSlash,
+        totalCount: badgeMap[`Iron Doctor ${monthTagSuffix}`] || ironSlotIds.size,
+        slotIds: Array.from(ironSlotIds),
+      });
+    }
+    if (lmsSlotIds && lmsSlotIds.size > 0) {
+      badgeAwardDetails.push({
+        phone: u.phone,
+        name: u.name,
+        badgeName: "Last Minute Saviour",
+        monthTag: monthTagSlash,
+        totalCount: badgeMap[`Last Minute Saviour ${monthTagSuffix}`] || lmsSlotIds.size,
+        slotIds: Array.from(lmsSlotIds),
+      });
+    }
+
     return {
       ...u,
       points: (u.points || 0) + coinsAwarded,
@@ -398,5 +442,5 @@ export function recalculateBadgesForMonth(
     };
   });
 
-  return { updatedUsers, summaryLines };
+  return { updatedUsers, summaryLines, badgeAwardDetails };
 }
