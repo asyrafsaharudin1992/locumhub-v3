@@ -973,3 +973,70 @@ export async function uploadUserFileToSupabase(
     return { url: null, error: err?.message || "Unexpected upload error." };
   }
 }
+
+// BADGE AWARDS — per-award rows (one per doctor+badge+month) for proper
+// monthly reporting, instead of parsing a long text string every time.
+// Written alongside (not instead of) the existing users.badges text column,
+// so nothing that already reads badges from users.badges breaks.
+
+export interface BadgeAwardRow {
+  doctor_phone: string;
+  doctor_name: string;
+  badge_name: string;
+  month_tag: string;
+  award_count: number;
+}
+
+/**
+ * Upserts one badge-award row (doctor+badge+month combination). Safe to call
+ * repeatedly — re-running a scan just updates award_count for that same
+ * combination rather than creating duplicates.
+ */
+export async function saveBadgeAwardToSupabase(
+  doctorPhone: string,
+  doctorName: string,
+  badgeName: string,
+  monthTag: string,
+  awardCount: number,
+): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: "Supabase client not initialized" };
+
+  const { error } = await client.from("badge_awards").upsert(
+    {
+      doctor_phone: doctorPhone,
+      doctor_name: doctorName,
+      badge_name: badgeName,
+      month_tag: monthTag,
+      award_count: awardCount,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "doctor_phone,badge_name,month_tag" },
+  );
+
+  if (error) {
+    console.error("saveBadgeAwardToSupabase failed:", error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+export async function fetchBadgeAwardsFromSupabase(): Promise<BadgeAwardRow[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  const allRows: BadgeAwardRow[] = [];
+  let from = 0;
+  const PAGE_SIZE = 1000;
+  while (true) {
+    const { data, error } = await client
+      .from("badge_awards")
+      .select("*")
+      .range(from, from + PAGE_SIZE - 1);
+    if (error || !data) break;
+    allRows.push(...(data as BadgeAwardRow[]));
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return allRows;
+}
