@@ -509,13 +509,13 @@ export function useAppState() {
     return { success: true, message: "Successfully registered Dr. " + name };
   };
 
-  const adminCreateUser = (
+  const adminCreateUser = async (
     name: string,
     phone: string,
     initialPassword: string,
     role: "Doctor" | "Admin" | "Staff",
     email: string = "",
-  ): { success: boolean; message: string } => {
+  ): Promise<{ success: boolean; message: string }> => {
     const trimmedPhone = phone.trim();
     if (!trimmedPhone || !name.trim()) {
       return { success: false, message: "Name and phone number are required." };
@@ -541,13 +541,20 @@ export function useAppState() {
       locks: "",
     };
 
+    try {
+      await cloudSaveUser(newUser);
+    } catch (err: any) {
+      console.error("Cloud adminCreateUser failed:", err);
+      return {
+        success: false,
+        message: `Failed to save to database: ${err?.message || "Unknown error"}`,
+      };
+    }
+
     setState((prev) => ({
       ...prev,
       users: [...prev.users, newUser],
     }));
-    cloudSaveUser(newUser).catch((err) =>
-      console.error("Cloud adminCreateUser failed:", err),
-    );
     logActivity(`Admin created new ${role} account: ${name} (${trimmedPhone})`);
     return { success: true, message: `Account created for ${name}.` };
   };
@@ -601,14 +608,27 @@ export function useAppState() {
     return "Password successfully updated & secured!";
   };
 
-  const deleteUser = (phone: string) => {
+  const deleteUser = async (phone: string): Promise<string> => {
+    let result: { success: boolean; error?: string };
+    try {
+      result = await deleteUserFromSupabase(phone);
+    } catch (err: any) {
+      console.error("Cloud deleteUser failed:", err);
+      return "⚠️ Failed to delete from database — please check your connection and try again.";
+    }
+
+    if (!result.success) {
+      console.error("deleteUser failed:", result.error);
+      return `⚠️ Delete failed: ${result.error || "Unknown error"}`;
+    }
+
     setState((prev) => ({
       ...prev,
       users: prev.users.filter((u) => u.phone !== phone),
       currentUser: prev.currentUser?.phone === phone ? null : prev.currentUser,
     }));
-    cloudDeleteUser(phone);
     logActivity(`Deleted user profile: ${phone}`);
+    return "success";
   };
 
   const updateProfile = (
