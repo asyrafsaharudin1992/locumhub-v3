@@ -73,6 +73,30 @@ function parseDDMMYYYY(dateStr: string): Date | null {
   return new Date(y, m - 1, d);
 }
 
+/** Parses a date string into {month, year} for month-matching purposes,
+ * accepting either a full "DD/MM/YYYY" date or a "MM/YYYY"-only value —
+ * the Manual Feedback sheet's Timestamp column only records month/year
+ * (no day), unlike the Form responses 1 tab's full auto-timestamp. Returns
+ * null if neither format parses. */
+function parseMonthYear(dateStr: string): { month: string; year: string } | null {
+  const full = parseDDMMYYYY(dateStr);
+  if (full) {
+    return {
+      month: String(full.getMonth() + 1).padStart(2, "0"),
+      year: String(full.getFullYear()),
+    };
+  }
+  const parts = (dateStr || "").trim().split("/");
+  if (parts.length === 2) {
+    const m = parseInt(parts[0], 10);
+    const y = parseInt(parts[1], 10);
+    if (m >= 1 && m <= 12 && y > 2000) {
+      return { month: String(m).padStart(2, "0"), year: String(y) };
+    }
+  }
+  return null;
+}
+
 /** Parses slot "masa" (e.g. "8am-8pm", "6-10pm", "9am-6pm") into actual
  * start/end Date objects on the slot's date, handling overnight shifts. */
 function parseShiftRange(masa: string, dateStr: string): { start: Date; end: Date } | null {
@@ -294,16 +318,24 @@ export function recalculateBadgesForMonth(
     }
   });
 
-  // ---- Heart Winner: perfect/near-perfect rating in Manual Feedback this month ----
+  // ---- Heart Winner: perfect rating in Manual Feedback this month ----
+  // IMPORTANT: only the "MANUAL FEEDBACK" sheet counts here — NOT
+  // "Form responses 1" (a 4-question Likert satisfaction survey that gets
+  // averaged into a 1-5 number). A patient answering "Sangat Setuju" to
+  // all 4 Likert questions produces an average of exactly 5.0, which used
+  // to get treated as a genuine Heart Winner-qualifying review even though
+  // it was never an actual manual review. f.source distinguishes the two
+  // (set in googleSheetsService.ts); entries with no source tag at all
+  // (e.g. rows coming from the Supabase feedbacks_patient table, which
+  // only ever holds real Manual Feedback rows) are treated as manual.
   const heartWinnerDoctors = new Set<string>();
   const heartWinnerReviewIds = new Map<string, Set<string>>();
   manualFeedback.forEach((f) => {
+    if (f.source === "form") return;
     if (!f.target || f.rating < 5) return;
-    const fDate = parseDDMMYYYY(f.tarikh);
-    if (!fDate) return;
-    const fMonth = String(fDate.getMonth() + 1).padStart(2, "0");
-    const fYear = String(fDate.getFullYear());
-    if (fMonth === month && fYear === year) {
+    const parsed = parseMonthYear(f.tarikh);
+    if (!parsed) return;
+    if (parsed.month === month && parsed.year === year) {
       const key = normalizeDoctorName(f.target);
       heartWinnerDoctors.add(key);
       // Prefer the REAL Supabase row id (guaranteed unique) over a
