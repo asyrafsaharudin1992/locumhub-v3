@@ -41,6 +41,7 @@ import {
   deleteAdminAlertFromSupabase,
   uploadUserFileToSupabase,
   saveBadgeAwardToSupabase,
+  deleteBadgeAwardFromSupabase,
   fetchBadgeAwardsFromSupabase,
   BadgeAwardRow,
 } from "./supabaseService";
@@ -197,6 +198,33 @@ export function useAppState() {
   // ✅ KOD BAHARU: PAKSA AKTIF 24 JAM
   const [isSupabaseEnabled, setIsSupabaseEnabled] = useState<boolean>(true);
 
+  // Which Heart Winner review IDs ("HW-<supabase-row-id>") are already
+  // recorded in badge_awards. Used to grey out/skip reviews in the Reviews
+  // Scanner so the same review can't be gifted twice. Deliberately NOT
+  // based on users.locks — that column doesn't exist in the live Supabase
+  // schema, so it never actually persisted across sessions.
+  const [heartWinnerAwardedIds, setHeartWinnerAwardedIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  const refreshHeartWinnerAwardedIds = async () => {
+    try {
+      const rows = await fetchBadgeAwardsFromSupabase();
+      const ids = new Set<string>();
+      rows
+        .filter((r) => r.badge_name === "Heart Winner" && r.slot_ids)
+        .forEach((r) => {
+          r.slot_ids!.split(",").forEach((id) => {
+            const trimmed = id.trim();
+            if (trimmed) ids.add(trimmed);
+          });
+        });
+      setHeartWinnerAwardedIds(ids);
+    } catch (err) {
+      console.error("refreshHeartWinnerAwardedIds failed:", err);
+    }
+  };
+
   const pullFromSupabase = async (): Promise<boolean> => {
     if (!isSupabaseActive()) {
       console.log("Supabase not active, skipping pull.");
@@ -232,6 +260,8 @@ export function useAppState() {
         sbUsers: sbUsers?.length,
         sbSlots: sbSlots?.length,
       });
+
+      refreshHeartWinnerAwardedIds();
 
       setState((prev) => {
         return {
@@ -1686,7 +1716,7 @@ export function useAppState() {
       console.error("recalculateBadges: failed to fetch fresh data", err);
     }
 
-    const { updatedUsers, summaryLines, badgeAwardDetails } = recalculateBadgesForMonth(
+    const { updatedUsers, summaryLines, badgeAwardDetails, badgeRevocations } = recalculateBadgesForMonth(
       freshUsers,
       freshSlots,
       freshActivityLogs,
@@ -1723,6 +1753,18 @@ export function useAppState() {
           detail.totalCount,
           detail.slotIds,
         ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err)),
+      ),
+    );
+
+    // Delete any revoked awards (currently just "The Unstoppable" when a
+    // cancellation is found after it was already given) before reconciling
+    // points, so the SUM in reconcilePointsFromBadgeAwards doesn't still
+    // include a badge that no longer qualifies.
+    await Promise.all(
+      badgeRevocations.map((rev) =>
+        deleteBadgeAwardFromSupabase(rev.phone, rev.badgeName, rev.monthTag).catch((err) =>
+          console.error("deleteBadgeAwardFromSupabase failed:", err),
+        ),
       ),
     );
 
@@ -1986,6 +2028,18 @@ export function useAppState() {
   const getManualHeartCandidates = () => {
     return state.feedbacksPatient
       .filter((f) => f.rating === 5)
+      .filter((f) => {
+        const stableId = f.id
+          ? f.id
+          : `${f.tarikh.replace(/\//g, "-")}_${f.reviewer.trim()}_${f.target.trim()}`
+              .replace(/[^a-zA-Z0-9-_]/g, "")
+              .slice(0, 40);
+        // Skip reviews already recorded in badge_awards — checked against
+        // the real persisted table, not users.locks (that column doesn't
+        // exist in the live schema, so it never actually prevented
+        // double-gifting across sessions).
+        return !heartWinnerAwardedIds.has(`HW-${stableId}`);
+      })
       .map((f) => {
         // Prefer the REAL Supabase row id (guaranteed unique) over a
         // content-based hash — two reviews can share the same
@@ -2381,6 +2435,7 @@ export function useAppState() {
     migrateHistoricalBadgesToSupabase,
     reconcilePointsFromBadgeAwards,
     getManualHeartCandidates,
+    refreshHeartWinnerAwardedIds,
     submitRecruitment,
     logActivity,
     markNotificationsAsRead,
