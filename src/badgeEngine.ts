@@ -404,9 +404,16 @@ export function recalculateBadgesForMonth(
       coinsAwarded += 10;
     }
 
-    // Iron Doctor — count only slot-days not already locked
+    // Iron Doctor — count only slot-days not already locked. Also revoke
+    // if this doctor no longer has ANY qualifying slot this month but was
+    // previously credited — e.g. an admin corrects a slot's `dr` field in
+    // Supabase from the wrong doctor to the right one. Without this, the
+    // wrong doctor's badge_awards row would just sit there forever with a
+    // stale count, since the "add if new" logic below has no equivalent
+    // "remove if gone" path on its own.
     const ironSlotIds = ironDoctorSlotIds.get(key);
-    if (ironSlotIds) {
+    let revokeIronDoctor = false;
+    if (ironSlotIds && ironSlotIds.size > 0) {
       const newIronSlots = Array.from(ironSlotIds).filter(
         (id) => !locksStr.includes(`[IRON-${id}]`),
       );
@@ -415,11 +422,14 @@ export function recalculateBadgesForMonth(
         coinsAwarded += 10 * newIronSlots.length;
         newIronSlots.forEach((id) => newLockIds.push(`[IRON-${id}]`));
       }
+    } else if (alreadyHasMonthBadge("Iron Doctor")) {
+      revokeIronDoctor = true;
     }
 
-    // Last Minute Saviour — count only slots not already locked
+    // Last Minute Saviour — same add/revoke pattern as Iron Doctor above.
     const lmsSlotIds = lastMinuteSlotIds.get(key);
-    if (lmsSlotIds) {
+    let revokeLMS = false;
+    if (lmsSlotIds && lmsSlotIds.size > 0) {
       const newLmsSlots = Array.from(lmsSlotIds).filter(
         (id) => !locksStr.includes(`[LMS-${id}]`),
       );
@@ -428,6 +438,8 @@ export function recalculateBadgesForMonth(
         coinsAwarded += 20 * newLmsSlots.length;
         newLmsSlots.forEach((id) => newLockIds.push(`[LMS-${id}]`));
       }
+    } else if (alreadyHasMonthBadge("Last Minute Saviour")) {
+      revokeLMS = true;
     }
 
     // Heart Winner — counted per qualifying 5-star review this month, not
@@ -435,9 +447,11 @@ export function recalculateBadgesForMonth(
     // in the same month, and each one should count. Uses the same
     // lock-tag pattern as Iron Doctor/LMS to avoid re-crediting a review
     // already counted in an earlier run (id already includes the "HW-"
-    // prefix, so the tag here is just "[HW-xxx]" directly).
+    // prefix, so the tag here is just "[HW-xxx]" directly). Same
+    // add/revoke pattern too.
     const heartWinnerIds = heartWinnerReviewIds.get(key);
-    if (heartWinnerIds) {
+    let revokeHeartWinner = false;
+    if (heartWinnerIds && heartWinnerIds.size > 0) {
       const newHeartWinnerIds = Array.from(heartWinnerIds).filter(
         (id) => !locksStr.includes(`[${id}]`),
       );
@@ -448,7 +462,8 @@ export function recalculateBadgesForMonth(
       }
     }
 
-    if (earnedBadges.length === 0 && !revokeUnstoppable) return u;
+    const anyRevoke = revokeUnstoppable || revokeIronDoctor || revokeLMS || revokeHeartWinner;
+    if (earnedBadges.length === 0 && !anyRevoke) return u;
 
     const badgeMap: { [key: string]: number } = {};
     (u.badges || "").split(",").forEach((item) => {
@@ -500,6 +515,15 @@ export function recalculateBadgesForMonth(
     if (revokeUnstoppable) {
       delete badgeMap[`The Unstoppable ${monthTagSuffix}`];
     }
+    if (revokeIronDoctor) {
+      delete badgeMap[`Iron Doctor ${monthTagSuffix}`];
+    }
+    if (revokeLMS) {
+      delete badgeMap[`Last Minute Saviour ${monthTagSuffix}`];
+    }
+    if (revokeHeartWinner) {
+      delete badgeMap[`Heart Winner ${monthTagSuffix}`];
+    }
 
     const updatedBadgeString = Object.keys(badgeMap)
       .map((k) => `${k}:${badgeMap[k]}`)
@@ -516,6 +540,39 @@ export function recalculateBadgesForMonth(
         phone: u.phone,
         name: u.name,
         badgeName: "The Unstoppable",
+        monthTag: monthTagSlash,
+      });
+    }
+    if (revokeIronDoctor) {
+      summaryLines.push(
+        `${u.name}: Iron Doctor REVOKED for ${monthLabel} (no qualifying slot found)`,
+      );
+      badgeRevocations.push({
+        phone: u.phone,
+        name: u.name,
+        badgeName: "Iron Doctor",
+        monthTag: monthTagSlash,
+      });
+    }
+    if (revokeLMS) {
+      summaryLines.push(
+        `${u.name}: Last Minute Saviour REVOKED for ${monthLabel} (no qualifying slot found)`,
+      );
+      badgeRevocations.push({
+        phone: u.phone,
+        name: u.name,
+        badgeName: "Last Minute Saviour",
+        monthTag: monthTagSlash,
+      });
+    }
+    if (revokeHeartWinner) {
+      summaryLines.push(
+        `${u.name}: Heart Winner REVOKED for ${monthLabel} (no qualifying review found)`,
+      );
+      badgeRevocations.push({
+        phone: u.phone,
+        name: u.name,
+        badgeName: "Heart Winner",
         monthTag: monthTagSlash,
       });
     }
