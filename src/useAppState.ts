@@ -2027,6 +2027,7 @@ export function useAppState() {
 
   const getManualHeartCandidates = () => {
     return state.feedbacksPatient
+      .filter((f) => f.source !== "form")
       .filter((f) => f.rating === 5)
       .filter((f) => {
         const stableId = f.id
