@@ -4,18 +4,28 @@ import { DashboardCharts } from './DashboardCharts';
 import { LocumSlot, UserProfile } from '../types';
 import { ClipboardCheck, Sparkles, Filter, CheckCircle2, UserCheck, BarChart2, MessageSquare, Coins, Loader2 } from 'lucide-react';
 
+interface BadgeAwardRow {
+  doctor_phone: string;
+  doctor_name: string;
+  badge_name: string;
+  month_tag: string;
+  award_count: number;
+}
+
 interface AdminDashTabProps {
   slots: LocumSlot[];
   users: UserProfile[];
   onCompleteSlot: (slotId: string, sales: number, patients: number, pay: number, period: string) => string;
   onRecalculateBadges: (month: string, year: string) => Promise<string>;
+  allBadgeAwards: BadgeAwardRow[];
 }
 
 export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   slots,
   users,
   onCompleteSlot,
-  onRecalculateBadges
+  onRecalculateBadges,
+  allBadgeAwards
 }) => {
   const now = new Date();
   const [month, setMonth] = useState(String(now.getMonth() + 1).padStart(2, '0'));
@@ -256,6 +266,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
         users={users}
         selectedMonth={viewMode === 'cumulative' ? 'All' : month}
         selectedYear={viewMode === 'cumulative' ? 'Time' : year}
+        allBadgeAwards={allBadgeAwards}
       />
 
       {/* Clinical Close-out Data Form Panel - PRESERVED HYBRID LOGIC */}
