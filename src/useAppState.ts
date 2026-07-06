@@ -1726,6 +1726,18 @@ export function useAppState() {
       ),
     );
 
+    // Points are derived fresh from badge_awards here — NOT accumulated
+    // from the old u.points value — so clicking Recalculate Badges more
+    // than once for the same month (or two tabs racing each other) always
+    // converges on the same correct total instead of stacking on top of
+    // the previous run's result. This is the fix for the
+    // "690 -> 850 after two clicks" bug.
+    try {
+      await reconcilePointsFromBadgeAwards();
+    } catch (err) {
+      console.error("recalculateBadges: reconcilePointsFromBadgeAwards failed", err);
+    }
+
     logActivity(`Recalculated AraCoins badges for ${month}/${year}`);
     return `✅ Badges recalculated!\n\n${summaryLines.join("\n")}`;
   };
