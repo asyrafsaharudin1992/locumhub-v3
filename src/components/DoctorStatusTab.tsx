@@ -135,7 +135,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       name: 'Heart Winner',
       color: 'linear-gradient(135deg, #A2FF00, #349300)',
       Icon: Heart,
-      description: 'Earned when a patient leaves a perfect 5-star Google review for you in that month.',
+      description: 'Earned when a patient leaves a perfect 5-star review for you in that month.',
     },
     {
       name: 'Last Minute Savior',
@@ -147,7 +147,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       name: 'Iron Doctor',
       color: 'linear-gradient(135deg, #FF0080, #7928CA)',
       Icon: ShieldCheck,
-      description: 'Earned for completing a 12+ hour shift, or 2 or more shifts in the same day.',
+      description: 'Earned for completing a 10+ hour shift, or 2 or more shifts in the same day.',
     },
     {
       name: 'The Unstoppable',
