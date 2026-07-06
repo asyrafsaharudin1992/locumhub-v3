@@ -297,11 +297,14 @@ export function recalculateBadgesForMonth(
     if (fMonth === month && fYear === year) {
       const key = normalizeDoctorName(f.target);
       heartWinnerDoctors.add(key);
-      // Same stable-ID formula as saveFeedbackPatientToSupabase / the
-      // Reviews Scanner's lock tags — ties this award back to the exact
-      // review that earned it.
-      const stableId = `${f.tarikh.replace(/\//g, "-")}_${f.reviewer.trim()}_${f.target.trim()}`
-        .replace(/[^a-zA-Z0-9\-_]/g, "");
+      // Prefer the REAL Supabase row id (guaranteed unique) over a
+      // content-based hash — two reviews can share the same
+      // date/reviewer/target (e.g. the same patient reviewing twice in one
+      // day), which a content hash alone can't tell apart.
+      const stableId = f.id
+        ? f.id
+        : `${f.tarikh.replace(/\//g, "-")}_${f.reviewer.trim()}_${f.target.trim()}`
+            .replace(/[^a-zA-Z0-9\-_]/g, "");
       if (!heartWinnerReviewIds.has(key)) heartWinnerReviewIds.set(key, new Set());
       heartWinnerReviewIds.get(key)!.add(`HW-${stableId}`);
     }
