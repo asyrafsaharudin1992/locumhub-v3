@@ -135,7 +135,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       name: 'Heart Winner',
       color: 'linear-gradient(135deg, #A2FF00, #349300)',
       Icon: Heart,
-      description: 'Earned when a patient leaves a perfect 5-star review for you in that month.',
+      description: 'Earned when a patient leaves a perfect 5-star Google review for you in that month.',
     },
     {
       name: 'Last Minute Savior',
