@@ -1212,6 +1212,65 @@ export function useAppState() {
     return result;
   };
 
+  // Logs a CME/Briefing session for MULTIPLE doctors at once. The existing
+  // slot system is fundamentally "one slot = one doctor" (LocumSlot.dr is a
+  // single string), so there's no way to have one slot represent a whole
+  // room of attendees. This works around that by creating one Approved
+  // slot per selected doctor — same date/time/branch, different dr — which
+  // is exactly what The Diligent Doc's detection in badgeEngine.ts looks
+  // for (any Approved slot that month whose branch contains "CME" or
+  // "BRIEFING"). No new detection logic needed on the badge side; this
+  // just makes it possible to log attendance for many doctors in one go
+  // instead of creating slots one at a time.
+  const adminLogCMEAttendance = (
+    doctorPhones: string[],
+    date: string, // "YYYY-MM-DD" from a date input
+    time: string,
+    sessionType: "CME" | "Briefing",
+  ): string => {
+    if (doctorPhones.length === 0) {
+      return "❌ Select at least one doctor.";
+    }
+    const parts = date.split("-");
+    const formattedDate =
+      parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : date;
+    const now = Date.now();
+
+    const attendees = doctorPhones
+      .map((phone) => state.users.find((u) => normalizePhone(u.phone) === normalizePhone(phone)))
+      .filter((u): u is UserProfile => !!u);
+
+    if (attendees.length === 0) {
+      return "❌ Could not match any selected doctor to a user record.";
+    }
+
+    const newSlots: LocumSlot[] = attendees.map((doc, index) => ({
+      id: `SLOT${now + index}CME`,
+      tarikh: formattedDate,
+      masa: time,
+      cawangan: sessionType, // "CME" or "Briefing" — matches badgeEngine.ts's .includes() check
+      status: "Approved",
+      dr: doc.name,
+      phone: doc.phone,
+      gaji: 0, // CME/Briefing attendance, not a paid clinical shift
+    }));
+
+    setState((prev) => ({
+      ...prev,
+      slots: [...prev.slots, ...newSlots],
+    }));
+
+    cloudSaveSlotsBulk(newSlots).catch((err) =>
+      console.error("Cloud adminLogCMEAttendance failed:", err),
+    );
+
+    logActivity(
+      `ADMIN: Logged ${sessionType} attendance on ${formattedDate} for: ${attendees.map((a) => a.name).join(", ")}`,
+    );
+
+    return `✅ Logged ${sessionType} attendance for ${attendees.length} doctor(s): ${attendees.map((a) => a.name).join(", ")}. Run "Recalculate Badges" for this month to award The Diligent Doc.`;
+  };
+
   const adminCreateBulkSlots = (
     dates: string[],
     branch: string,
@@ -2545,6 +2604,7 @@ export function useAppState() {
     adminApproveSlot,
     adminManageSlot,
     adminCreateBulkSlots,
+    adminLogCMEAttendance,
     publishAnnouncement,
     deleteAnnouncement,
     adminGivePoints,
