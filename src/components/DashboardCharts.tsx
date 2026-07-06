@@ -80,8 +80,8 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({
 
   const slotData = Object.entries(slotCounts)
     .map(([name, v]) => ({ name, count: v.completed, assigned: v.assigned }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5); // top 5
+    .sort((a, b) => b.assigned - a.assigned)
+    .slice(0, 5); // top 5 by shifts taken this month
 
   // --- CHART 2: Aracoins Leaderboard ---
   // "All-Time" reads straight from users.points (the cumulative figure
