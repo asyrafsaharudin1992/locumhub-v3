@@ -118,6 +118,7 @@ export default function App() {
     reconcilePointsFromBadgeAwards,
     getManualHeartCandidates,
     refreshHeartWinnerAwardedIds,
+    giftHeartWinnerReview,
     submitRecruitment,
     logActivity,
     markNotificationsAsRead,
@@ -454,7 +455,7 @@ export default function App() {
     alert(resp);
   };
 
-  const handleGoogleReviewScannerAward = (
+  const handleGoogleReviewScannerAward = async (
     name: string,
     badgeId: string,
     phone: string,
@@ -463,12 +464,8 @@ export default function App() {
       alert("❌ Selection error. Target is unmapped.");
       return;
     }
-    const res = adminGivePoints(phone, 15, badgeId);
+    const res = await giftHeartWinnerReview(phone, badgeId);
     alert(res);
-    // Small delay so the fire-and-forget save to badge_awards has time to
-    // land before we re-check it — otherwise the refresh might run before
-    // the row actually exists yet and the review would still show up.
-    setTimeout(() => refreshHeartWinnerAwardedIds(), 1200);
   };
 
   // Restrict navigation arrays depending on logged roles
@@ -1491,6 +1488,9 @@ export default function App() {
                                         </span>
                                         <span className="text-[10px] text-slate-400 font-mono">
                                           Date: {review.date}
+                                        </span>
+                                        <span className="text-[9px] text-slate-300 font-mono block">
+                                          Row: {review.row}
                                         </span>
                                         <p className="text-[10px] italic text-slate-500 mt-1 line-clamp-1">
                                           "{review.comment}"
