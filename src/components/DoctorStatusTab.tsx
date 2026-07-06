@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2, Trophy, Award } from 'lucide-react';
+import { ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2, Trophy, Award, Heart, Zap, ShieldCheck, Flame, BookOpen, Users } from 'lucide-react';
 import { LocumSlot, UserProfile } from '../types';
 
 interface DoctorStatusTabProps {
@@ -96,7 +96,13 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
   // Compact badge summary for the mobile-only Profile & Medals card above the
   // shift list — the full "Profile & Medals" tab isn't reachable in the mobile
   // bottom nav (it only shows the first 5 tabs), so a summary lives here instead.
-  const badgeMap: { [key: string]: number } = {};
+  //
+  // currentUser.badges format: "BadgeName (MM/YYYY):count, BadgeName (MM/YYYY):count, ..."
+  // — one entry per badge+month combination. cumulativeBadgeMap sums ALL
+  // months together for the true all-time total; monthlyBreakdown keeps
+  // each individual month's count for the detail modal.
+  const cumulativeBadgeMap: { [key: string]: number } = {};
+  const monthlyBreakdown: { [key: string]: { month: string; count: number }[] } = {};
   if (currentUser.badges) {
     currentUser.badges.split(',').forEach(item => {
       const trimmed = item.trim();
@@ -108,17 +114,53 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
         namePart = trimmed.substring(0, lastColon).trim();
         count = parseInt(trimmed.substring(lastColon + 1).trim()) || 1;
       }
+      const monthMatch = namePart.match(/\(([^)]+)\)\s*$/);
+      const monthLabel = monthMatch ? monthMatch[1] : '';
       const cleanName = namePart.split('(')[0].trim();
-      badgeMap[cleanName] = Math.max(badgeMap[cleanName] || 0, count);
+      cumulativeBadgeMap[cleanName] = (cumulativeBadgeMap[cleanName] || 0) + count;
+      if (!monthlyBreakdown[cleanName]) monthlyBreakdown[cleanName] = [];
+      if (monthLabel) monthlyBreakdown[cleanName].push({ month: monthLabel, count });
     });
   }
+  const [selectedBadgeDetail, setSelectedBadgeDetail] = useState<string | null>(null);
+
   const MOBILE_BADGES_CONFIG = [
-    { name: 'Team Favorite', color: 'linear-gradient(135deg, #00DFD8, #007CF0)' },
-    { name: 'Heart Winner', color: 'linear-gradient(135deg, #A2FF00, #349300)' },
-    { name: 'Last Minute Savior', color: 'linear-gradient(135deg, #FF4D4D, #F9CB28)' },
-    { name: 'Iron Doctor', color: 'linear-gradient(135deg, #FF0080, #7928CA)' },
-    { name: 'The Unstoppable', color: 'linear-gradient(135deg, #5EE7DF, #B490CA)' },
-    { name: 'The Diligent Doc', color: 'linear-gradient(135deg, #F9CB28, #FF4D4D)' },
+    {
+      name: 'Team Favorite',
+      color: 'linear-gradient(135deg, #00DFD8, #007CF0)',
+      Icon: Users,
+      description: "Awarded by admin to recognize a doctor as the clinic team's pick for standout contribution that month.",
+    },
+    {
+      name: 'Heart Winner',
+      color: 'linear-gradient(135deg, #A2FF00, #349300)',
+      Icon: Heart,
+      description: 'Earned when a patient leaves a perfect 5-star review for you in that month.',
+    },
+    {
+      name: 'Last Minute Savior',
+      color: 'linear-gradient(135deg, #FF4D4D, #F9CB28)',
+      Icon: Zap,
+      description: 'Earned for stepping in on a shift booked less than 25 hours before it started — helping cover a last-minute gap.',
+    },
+    {
+      name: 'Iron Doctor',
+      color: 'linear-gradient(135deg, #FF0080, #7928CA)',
+      Icon: ShieldCheck,
+      description: 'Earned for completing a 12+ hour shift, or 2 or more shifts in the same day.',
+    },
+    {
+      name: 'The Unstoppable',
+      color: 'linear-gradient(135deg, #5EE7DF, #B490CA)',
+      Icon: Flame,
+      description: 'Earned for completing 2 or more approved shifts in a month with zero cancellations.',
+    },
+    {
+      name: 'The Diligent Doc',
+      color: 'linear-gradient(135deg, #F9CB28, #FF4D4D)',
+      Icon: BookOpen,
+      description: 'Earned for attending a CME or briefing session that month.',
+    },
   ];
 
   // Doctors can only withdraw upcoming shifts — past shifts can only be
@@ -183,13 +225,15 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
           </span>
           <div className="grid grid-cols-6 gap-2">
             {MOBILE_BADGES_CONFIG.map(config => {
-              const count = badgeMap[config.name] || 0;
+              const count = cumulativeBadgeMap[config.name] || 0;
               const unlocked = count > 0;
+              const BadgeIcon = config.Icon;
               return (
-                <div
+                <button
                   key={config.name}
                   title={config.name}
-                  className="flex flex-col items-center gap-1"
+                  onClick={() => setSelectedBadgeDetail(config.name)}
+                  className="flex flex-col items-center gap-1 cursor-pointer active:scale-95 transition-transform"
                 >
                   <div
                     className="relative w-9 h-9 rounded-full flex items-center justify-center shadow-md border border-[#D4AF37]/20"
@@ -199,21 +243,81 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
                       filter: unlocked ? 'none' : 'grayscale(100%)'
                     }}
                   >
-                    <Award className="w-4.5 h-4.5 text-white" />
+                    <BadgeIcon className="w-4.5 h-4.5 text-white" />
                     {unlocked && (
                       <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-black rounded-full h-3.5 w-3.5 flex items-center justify-center border border-white">
                         {count}
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
         </div>
       </div>
 
-      {/* Control header filter pills */}
+      {/* Badge detail modal */}
+      {selectedBadgeDetail && (() => {
+        const config = MOBILE_BADGES_CONFIG.find(c => c.name === selectedBadgeDetail);
+        if (!config) return null;
+        const BadgeIcon = config.Icon;
+        const total = cumulativeBadgeMap[config.name] || 0;
+        const breakdown = (monthlyBreakdown[config.name] || []).sort((a, b) => {
+          const [ma, ya] = a.month.split('/');
+          const [mb, yb] = b.month.split('/');
+          return yb === ya ? mb.localeCompare(ma) : yb.localeCompare(ya);
+        });
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={() => setSelectedBadgeDetail(null)}
+          >
+            <div
+              className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-6 space-y-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center shadow-md shrink-0"
+                  style={{ background: total > 0 ? config.color : '#1e293b', opacity: total > 0 ? 1 : 0.3 }}
+                >
+                  <BadgeIcon className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-display font-bold text-slate-800">{config.name}</h4>
+                  <p className="text-[11px] text-slate-400 font-semibold">
+                    {total > 0 ? `${total} total, all-time` : 'Not earned yet'}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-500 leading-relaxed">{config.description}</p>
+
+              {breakdown.length > 0 && (
+                <div className="border-t border-slate-100 pt-3 space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    By month
+                  </span>
+                  {breakdown.map((b, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span className="text-slate-600">{b.month}</span>
+                      <span className="font-bold text-slate-800">×{b.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button
+                onClick={() => setSelectedBadgeDetail(null)}
+                className="w-full bg-[#001F3F] text-white font-bold py-3 rounded-xl text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        );
+      })()}
       <div className="flex flex-wrap gap-2 items-center">
         <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
           {(['All', 'Approved', 'Pending'] as const).map(fType => (
