@@ -99,7 +99,7 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
     { name: 'Team Favorite', icon: 'bi-people-fill', color: 'linear-gradient(135deg, #00DFD8, #007CF0)', desc: 'Awarded for being the most helpful doctor voted by clinic staff.' },
     { name: 'Heart Winner', icon: 'bi-heart-fill', color: 'linear-gradient(135deg, #A2FF00, #349300)', desc: 'Name mentioned by a patient in a 5-star Google Review.' },
     { name: 'Last Minute Savior', icon: 'bi-shield-shaded', color: 'linear-gradient(135deg, #FF4D4D, #F9CB28)', desc: 'Covered an open slot with less than 48 hours notice.' },
-    { name: 'Iron Doctor', icon: 'bi-lightning-fill', color: 'linear-gradient(135deg, #FF0080, #7928CA)', desc: 'Completed a marathon 12-hour clinic shift.' },
+    { name: 'Iron Doctor', icon: 'bi-lightning-fill', color: 'linear-gradient(135deg, #FF0080, #7928CA)', desc: 'Completed a marathon 10-hour clinic shift.' },
     { name: 'The Unstoppable', icon: 'bi-infinity', color: 'linear-gradient(135deg, #5EE7DF, #B490CA)', desc: 'High consistency: Completed 2 approved slots in a single month with zero cancellations.' },
     { name: 'The Diligent Doc', icon: 'bi-book-fill', color: 'linear-gradient(135deg, #F9CB28, #FF4D4D)', desc: 'Attended a Klinik ARA CME briefing session or training syllabus.' }
   ];
