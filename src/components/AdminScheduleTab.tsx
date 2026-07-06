@@ -37,6 +37,11 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isPublishing, setIsPublishing] = useState<boolean>(false);
 
+  // Staff clicking an empty (Available) slot — shows a doctor picker so
+  // they can WhatsApp one or more doctors directly about the open shift,
+  // instead of just being blocked with an access-restricted message.
+  const [broadcastSlot, setBroadcastSlot] = useState<LocumSlot | null>(null);
+
   // Filter available doctors
   const availableDoctors = users.filter(u => {
     const roleStr = (u.role || (u as any).Role || '').toLowerCase().trim();
@@ -145,6 +150,12 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         window.open(waUrl, '_blank', 'noopener,noreferrer');
         return;
       }
+
+      if (currentStatus === 'available') {
+        setBroadcastSlot(slot);
+        return;
+      }
+
       setNotification({
         type: 'error',
         text: "🔒 Akses Terhad: Akaun Operations Staff tidak dibenarkan mengurus gantian atau memadam jadual."
@@ -387,6 +398,74 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         onClose={() => setManagingSlot(null)}
         onManage={onManageSlot}
       />
+
+      {/* Staff WhatsApp broadcast picker — pick one or more doctors to
+          notify about an open (Available) slot. wa.me links only support
+          one recipient at a time, so this opens a fresh WhatsApp chat per
+          doctor tapped, letting staff quickly ping several candidates. */}
+      <AnimatePresence>
+        {broadcastSlot && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={() => setBroadcastSlot(null)}
+          >
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-6 space-y-4 max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-bold text-slate-800">Notify Doctors — Open Shift</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {broadcastSlot.tarikh} ({broadcastSlot.masa}) — {broadcastSlot.cawangan}
+                  </p>
+                </div>
+                <button onClick={() => setBroadcastSlot(null)} className="text-slate-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Tap a doctor to open WhatsApp with a pre-filled message about this open shift.
+              </p>
+              <div className="space-y-2">
+                {availableDoctors.length === 0 && (
+                  <p className="text-xs text-slate-400 text-center py-4">No doctors found.</p>
+                )}
+                {availableDoctors.map((doc) => {
+                  const digitsOnly = (doc.phone || '').replace(/\D/g, '');
+                  const waPhone = digitsOnly.startsWith('0') ? `6${digitsOnly}` : digitsOnly;
+                  const message = `Hi Dr. ${doc.name}, Klinik ARA 24 Jam ada slot kosong pada ${broadcastSlot.tarikh} (${broadcastSlot.masa}) di Cawangan ${broadcastSlot.cawangan}. Berminat untuk ambil shift ni? Terima kasih! 🙏`;
+                  const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
+                  return (
+                    <a
+                      key={doc.phone}
+                      href={waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition text-sm"
+                    >
+                      <span className="font-semibold text-slate-700">Dr. {doc.name}</span>
+                      <span className="text-emerald-600 text-xs font-bold">WhatsApp →</span>
+                    </a>
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setBroadcastSlot(null)}
+                className="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl text-sm"
+              >
+                Close
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
     </div>
   );
