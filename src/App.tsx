@@ -639,7 +639,7 @@ export default function App() {
                   ARA CLINIC LOCUM
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  Every shift matters. Every patient counts.
+                  24 Hour Clinic Medical Roster & Operations Hub
                 </p>
               </div>
 
@@ -1695,16 +1695,6 @@ export default function App() {
                               count: r.award_count,
                             });
                           });
-                          const doctorNames = Object.keys(byDoctor).sort();
-
-                          if (doctorNames.length === 0) {
-                            return (
-                              <p className="text-center text-slate-400 text-xs py-8">
-                                No badges match this filter.
-                              </p>
-                            );
-                          }
-
                           const POINTS_PER_BADGE_LOCAL: { [badge: string]: number } = {
                             "Iron Doctor": 10,
                             "Heart Winner": 15,
@@ -1714,16 +1704,35 @@ export default function App() {
                             "Team Favorite": 20,
                           };
 
+                          const doctorTotals: { [doctor: string]: number } = {};
+                          Object.keys(byDoctor).forEach((doctorName) => {
+                            const badges = byDoctor[doctorName];
+                            doctorTotals[doctorName] = Object.keys(badges).reduce((sum, bn) => {
+                              const perBadge = POINTS_PER_BADGE_LOCAL[bn] ?? 10;
+                              const badgeCount = badges[bn].reduce((s, e) => s + e.count, 0);
+                              return sum + perBadge * badgeCount;
+                            }, 0);
+                          });
+
+                          // Highest total AraCoins first, not alphabetical
+                          const doctorNames = Object.keys(byDoctor).sort(
+                            (a, b) => doctorTotals[b] - doctorTotals[a],
+                          );
+
+                          if (doctorNames.length === 0) {
+                            return (
+                              <p className="text-center text-slate-400 text-xs py-8">
+                                No badges match this filter.
+                              </p>
+                            );
+                          }
+
                           return (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                               {doctorNames.map((doctorName) => {
                                 const badges = byDoctor[doctorName];
                                 const badgeNames = Object.keys(badges).sort();
-                                const doctorTotal = badgeNames.reduce((sum, bn) => {
-                                  const perBadge = POINTS_PER_BADGE_LOCAL[bn] ?? 10;
-                                  const badgeCount = badges[bn].reduce((s, e) => s + e.count, 0);
-                                  return sum + perBadge * badgeCount;
-                                }, 0);
+                                const doctorTotal = doctorTotals[doctorName];
                                 return (
                                   <div
                                     key={doctorName}
