@@ -15,7 +15,7 @@
 //                          (a slot whose branch/cawangan is "CME" or
 //                          "Briefing"). Awarded per month attended, not a
 //                          one-time lifetime milestone.
-// 4. Iron Doctor        — doctor worked a shift >12 hours, OR 2+ shifts in
+// 4. Iron Doctor        — doctor worked a shift >10 hours, OR 2+ shifts in
 //                          the same calendar day, that month. Triggers as
 //                          soon as the shift's end time has passed — does
 //                          NOT require the admin to have closed out
@@ -275,7 +275,7 @@ export function recalculateBadgesForMonth(
         const range = parseShiftRange(s.masa, s.tarikh);
         if (range && range.end.getTime() <= now.getTime()) {
           const hours = (range.end.getTime() - range.start.getTime()) / (1000 * 60 * 60);
-          if (hours >= 12) qualifies = true;
+          if (hours >= 10) qualifies = true;
         } else if (!range) {
           qualifies = false; // can't confirm timing, don't guess
         }
