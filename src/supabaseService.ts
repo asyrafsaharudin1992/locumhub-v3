@@ -240,6 +240,7 @@ export async function fetchFeedbacksPatientFromSupabase(): Promise<
       )
     : [];
   return filtered.map((row) => ({
+    id: String(row.id || "").trim() || undefined,
     tarikh: row.tarikh || row.Tarikh || "",
     nama: row.nama || row.Nama || "",
     reviewer: row.reviewer || row.Reviewer || "",
