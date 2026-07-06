@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, CalendarDays, Clock, MapPin, Plus, Info } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Clock, MapPin, Plus, Info, Users } from 'lucide-react';
 import { LocumSlot } from '../types';
 
 interface CustomCalendarProps {
@@ -20,6 +20,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
+  const [cmeCardExpanded, setCmeCardExpanded] = useState(false);
 
   const monthNames = [
     "January", "February", "March", "April", "May", "June",
@@ -435,7 +436,77 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
               </motion.div>
             ) : (
               <div className="space-y-2">
-                {selectedDateSlots.map((slot) => {
+                {(() => {
+                  const cmeSlots = selectedDateSlots.filter((s) => {
+                    const b = s.cawangan.toLowerCase();
+                    return b.includes('cme') || b.includes('briefing');
+                  });
+                  const nonCmeSlots = selectedDateSlots.filter((s) => {
+                    const b = s.cawangan.toLowerCase();
+                    return !(b.includes('cme') || b.includes('briefing'));
+                  });
+
+                  return (
+                    <>
+                      {/* Grouped CME/Briefing card — avoids one card per
+                          attending doctor cluttering the day view; click to
+                          expand the full list. */}
+                      {cmeSlots.length > 0 && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="bg-purple-50/50 rounded-2xl border border-purple-100 shadow-sm overflow-hidden"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setCmeCardExpanded((prev) => !prev)}
+                            className="w-full p-4 flex items-center justify-between gap-2 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-purple-600" />
+                              <div className="text-left">
+                                <span className="text-xs font-bold text-purple-900 block">
+                                  CME / Briefing — {cmeSlots.length} doctor{cmeSlots.length > 1 ? 's' : ''}
+                                </span>
+                                <span className="text-[10px] text-purple-500">{cmeSlots[0].masa}</span>
+                              </div>
+                            </div>
+                            <ChevronDown
+                              className={`w-4 h-4 text-purple-500 transition-transform ${cmeCardExpanded ? 'rotate-180' : ''}`}
+                            />
+                          </button>
+                          <AnimatePresence>
+                            {cmeCardExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="px-4 pb-4 space-y-1.5">
+                                  {cmeSlots.map((s) => (
+                                    <button
+                                      key={s.id}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (onSlotClick) onSlotClick(s);
+                                      }}
+                                      className="w-full text-left text-xs font-bold text-purple-800 bg-white py-1.5 px-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer hover:bg-purple-50 transition"
+                                    >
+                                      <span>👨‍⚕️</span>
+                                      <span>Dr. {(s.dr || 'Unknown').toUpperCase().trim().replace(/^DR\s+/i, '')}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      )}
+
+                {nonCmeSlots.map((slot) => {
                   const isSK = slot.cawangan.toLowerCase().includes('sk') || slot.cawangan.toLowerCase().includes('seri');
                   const isKajangSlot = slot.cawangan.toLowerCase().includes('kajang') || slot.cawangan.toLowerCase().includes('kj');
                   const badgeStyle = slot.status === 'Available'
@@ -530,6 +601,9 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                     </motion.div>
                   );
                 })}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </AnimatePresence>
