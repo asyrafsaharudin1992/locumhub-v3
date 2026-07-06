@@ -263,18 +263,29 @@ export function useAppState() {
 
       refreshHeartWinnerAwardedIds();
 
+      // nonEmpty: treat an empty array the same as null/undefined — i.e.
+      // "no valid new data, keep what we had". Without this, `sbX || prev.X`
+      // is wrong: an empty array [] is truthy in JS, so a degraded/partial
+      // Supabase response (more likely right now given Supabase's own
+      // ongoing incident, per the status banner) could silently WIPE OUT
+      // a perfectly good local users/slots/etc. list by replacing it with
+      // an empty one, causing exactly the kind of intermittent "User not
+      // found" / doctor-disappears-from-dropdown behavior seen in testing.
+      const nonEmpty = <T,>(arr: T[] | null | undefined, fallback: T[]): T[] =>
+        arr && arr.length > 0 ? arr : fallback;
+
       setState((prev) => {
         return {
-          users: sbUsers || prev.users,
-          slots: sbSlots || prev.slots,
-          announcements: sbAnnouncements || prev.announcements,
-          feedbacksPatient: sbFbP || prev.feedbacksPatient,
-          feedbacksStaff: sbFbS || prev.feedbacksStaff,
-          feedbacksLocum: sbFbL || prev.feedbacksLocum,
-          newApplications: sbApps || prev.newApplications,
-          activityLogs: sbLogs || prev.activityLogs,
-          notifications: sbNotifs || prev.notifications,
-          adminAlerts: sbAlerts || prev.adminAlerts,
+          users: nonEmpty(sbUsers, prev.users),
+          slots: nonEmpty(sbSlots, prev.slots),
+          announcements: nonEmpty(sbAnnouncements, prev.announcements),
+          feedbacksPatient: nonEmpty(sbFbP, prev.feedbacksPatient),
+          feedbacksStaff: nonEmpty(sbFbS, prev.feedbacksStaff),
+          feedbacksLocum: nonEmpty(sbFbL, prev.feedbacksLocum),
+          newApplications: nonEmpty(sbApps, prev.newApplications),
+          activityLogs: nonEmpty(sbLogs, prev.activityLogs),
+          notifications: nonEmpty(sbNotifs, prev.notifications),
+          adminAlerts: nonEmpty(sbAlerts, prev.adminAlerts),
           currentUser: prev.currentUser
             ? sbUsers?.find((u) => u.phone === prev.currentUser?.phone) ||
               prev.currentUser
@@ -1014,7 +1025,11 @@ export function useAppState() {
     markNotificationsReadInSupabase(phone).catch((err) =>
       console.error("Cloud markNotificationsRead failed:", err),
     );
-    logActivity(`Cleared unread notifications count for phone: ${phone}`);
+    // Deliberately NOT logged via logActivity — this fires every single
+    // time a doctor opens their notifications, which flooded activity_logs
+    // with thousands of noise entries for no benefit (nothing reads this
+    // for badges or auditing, unlike ADMIN: CANCEL & RESET / DOCTOR:
+    // SELF-CANCEL, which badgeEngine.ts actually depends on).
   };
 
   const deleteNotification = (id: string) => {
@@ -1876,10 +1891,10 @@ export function useAppState() {
         fetchActivityLogsFromSupabase(),
         fetchAdminAlertsFromSupabase(),
       ]);
-      if (usersResult) freshUsers = usersResult;
-      if (slotsResult) freshSlots = slotsResult;
-      if (logsResult) freshActivityLogs = logsResult;
-      if (alertsResult) freshAdminAlerts = alertsResult;
+      if (usersResult && usersResult.length > 0) freshUsers = usersResult;
+      if (slotsResult && slotsResult.length > 0) freshSlots = slotsResult;
+      if (logsResult && logsResult.length > 0) freshActivityLogs = logsResult;
+      if (alertsResult && alertsResult.length > 0) freshAdminAlerts = alertsResult;
     } catch (err) {
       console.error("recalculateBadges: failed to fetch fresh data", err);
     }
