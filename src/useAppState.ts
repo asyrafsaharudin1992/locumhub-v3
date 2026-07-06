@@ -9,7 +9,7 @@ import {
   AdminAlert,
 } from "./types";
 import { getSupabaseConfig, getSupabaseClient } from "./supabaseClient";
-import { recalculateBadgesForMonth } from "./badgeEngine";
+import { recalculateBadgesForMonth, normalizeDoctorName } from "./badgeEngine";
 import {
   isSupabaseActive,
   fetchUsersFromSupabase,
@@ -1407,13 +1407,16 @@ export function useAppState() {
     return `✅ Migration complete! ${migratedCount} badge/month entries synced across ${doctorCount} doctors.`;
   };
 
+  const normalizePhone = (p: string) => (p || "").replace(/[\s-]/g, "").trim();
+
   const adminGivePoints = (
     phone: string,
     pointsToAdd: number,
     awardName: string,
     monthTag?: string, // "MM/YYYY" — defaults to current month if not given
   ): string => {
-    let result = "Error: User not found.";
+    let result = `Error: User not found (searched for phone "${phone}").`;
+    const targetPhone = normalizePhone(phone);
     // awardName may already carry "(MM/YYYY)" (e.g. from the Heart Winner
     // review scanner) — extract it if present, otherwise fall back to the
     // explicit monthTag param, then to the current month.
@@ -1434,7 +1437,7 @@ export function useAppState() {
 
     setState((prev) => {
       const updatedUsers = prev.users.map((u) => {
-        if (u.phone === phone) {
+        if (normalizePhone(u.phone) === targetPhone) {
           // Check anti-double award logic using locks
           const currentLocks = u.locks || "";
           if (rowTag && currentLocks.indexOf(rowTag) !== -1) {
@@ -1461,16 +1464,18 @@ export function useAppState() {
       });
 
       const currentUpdated =
-        updatedUsers.find((u) => u.phone === phone) || null;
+        updatedUsers.find((u) => normalizePhone(u.phone) === targetPhone) || null;
       return {
         ...prev,
         users: updatedUsers,
         currentUser:
-          prev.currentUser?.phone === phone ? currentUpdated : prev.currentUser,
+          normalizePhone(prev.currentUser?.phone || "") === targetPhone
+            ? currentUpdated
+            : prev.currentUser,
       };
     });
 
-    const user = state.users.find((u) => u.phone === phone);
+    const user = state.users.find((u) => normalizePhone(u.phone) === targetPhone);
     if (user) {
       const currentLocks = user.locks || "";
       if (!(rowTag && currentLocks.indexOf(rowTag) !== -1)) {
@@ -2053,12 +2058,29 @@ export function useAppState() {
               .slice(0, 40);
         const rowId = `HW-${stableId}`;
         const parts = f.tarikh.split("/");
+        // Handles both "DD/MM/YYYY" (3 parts) and the Manual Feedback
+        // sheet's "MM/YYYY"-only format (2 parts) — falls back to the
+        // current month only if the value is genuinely unparseable.
         const monthSegment =
-          parts.length === 3 ? `(${parts[1]}/${parts[2]})` : "(06/2026)";
+          parts.length === 3
+            ? `(${parts[1]}/${parts[2]})`
+            : parts.length === 2
+              ? `(${parts[0].padStart(2, "0")}/${parts[1]})`
+              : `(${String(new Date().getMonth() + 1).padStart(2, "0")}/${new Date().getFullYear()})`;
         const badgeId = `Heart Winner ${monthSegment} [${rowId}]`;
+
+        // Exact match on normalized name ("Ain" and "Dr Ain" both become
+        // "AIN") — NOT a substring/.includes() check, which could
+        // wrongly match "Ain" against a name like "Wan Zainol" (contains
+        // the letters "ain" inside "Zainol").
+        const targetKey = normalizeDoctorName(f.target);
+        const matchedDoctor = state.users.find(
+          (u) => normalizeDoctorName(u.name) === targetKey,
+        );
 
         return {
           name: f.target,
+          phone: matchedDoctor?.phone || "",
           date: f.tarikh,
           row: rowId,
           badgeId,
