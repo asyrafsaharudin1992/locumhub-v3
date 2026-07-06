@@ -440,7 +440,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
                 {availableDoctors.map((doc) => {
                   const digitsOnly = (doc.phone || '').replace(/\D/g, '');
                   const waPhone = digitsOnly.startsWith('0') ? `6${digitsOnly}` : digitsOnly;
-                  const message = `Hi Dr. ${doc.name}, Klinik ARA 24 Jam ada slot kosong pada ${broadcastSlot.tarikh} (${broadcastSlot.masa}) di Cawangan ${broadcastSlot.cawangan}. Berminat untuk ambil shift ni? Terima kasih! 🙏`;
+                  const message = `Hi/Salam Dr ${doc.name}, KLINIK ARA 24 JAM ${broadcastSlot.cawangan} ada slot kosong pada ${broadcastSlot.tarikh} (${broadcastSlot.masa}). Doktor berminat untuk ambil slot ini?`;
                   const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
                   return (
                     <a
