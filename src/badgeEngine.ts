@@ -432,22 +432,33 @@ export function recalculateBadgesForMonth(
         const s = heartWinnerReviewIds.get(key);
         if (s && s.size > 0) slotIds = Array.from(s);
       }
+      // totalCount is ALWAYS 1 here — this is a per-month pass/fail check
+      // (did the doctor qualify this month, yes or no), computed fresh from
+      // this run's real slot/feedback data. It never reads or adds onto
+      // whatever was in the badges string before, so running this twice
+      // (double-click, two tabs, whatever) always upserts the same correct
+      // value instead of compounding it.
       badgeAwardDetails.push({
         phone: u.phone,
         name: u.name,
         badgeName: badge,
         monthTag: monthTagSlash,
-        totalCount: badgeMap[`${badge} ${monthTagSuffix}`] || 1,
+        totalCount: 1,
         slotIds,
       });
     });
     if (ironSlotIds && ironSlotIds.size > 0) {
+      // totalCount = the actual number of distinct qualifying slot IDs this
+      // month, recomputed fresh from real slot data every run. Deliberately
+      // NOT read from badgeMap/badges-string, since that was the source of
+      // the double-award bug: two overlapping runs could each add their own
+      // "new" count on top of an already-saved total.
       badgeAwardDetails.push({
         phone: u.phone,
         name: u.name,
         badgeName: "Iron Doctor",
         monthTag: monthTagSlash,
-        totalCount: badgeMap[`Iron Doctor ${monthTagSuffix}`] || ironSlotIds.size,
+        totalCount: ironSlotIds.size,
         slotIds: Array.from(ironSlotIds),
       });
     }
@@ -457,14 +468,21 @@ export function recalculateBadgesForMonth(
         name: u.name,
         badgeName: "Last Minute Saviour",
         monthTag: monthTagSlash,
-        totalCount: badgeMap[`Last Minute Saviour ${monthTagSuffix}`] || lmsSlotIds.size,
+        totalCount: lmsSlotIds.size,
         slotIds: Array.from(lmsSlotIds),
       });
     }
 
+    // NOTE: points are intentionally NOT set here anymore. badge_awards
+    // (upserted above, in useAppState.ts) is now the single source of
+    // truth for points — recalculateBadges calls reconcilePointsFromBadgeAwards
+    // right after saving these rows, which derives every doctor's points by
+    // summing badge_awards fresh each time (a SET, not an ADD). That's what
+    // makes repeated clicks / concurrent tabs harmless: no matter how many
+    // times this whole flow runs, the final points always land on the same
+    // correct number instead of stacking on top of the last run's result.
     return {
       ...u,
-      points: (u.points || 0) + coinsAwarded,
       badges: updatedBadgeString,
       locks: locksStr + newLockIds.join(""),
     };
