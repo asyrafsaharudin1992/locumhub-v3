@@ -35,6 +35,10 @@ export interface LocumSlot {
 }
 
 export interface FeedbackRecord {
+  id?: string; // real Supabase row id, when available — used to uniquely
+  // identify a review for Heart Winner tracking, since two reviews CAN
+  // share the same date/reviewer/target (e.g. same patient reviewing twice
+  // in one day), which content-based hashing alone can't distinguish.
   tarikh: string;
   nama: string; // Sender or Subject
   reviewer: string; // Reviewer name
