@@ -264,15 +264,20 @@ export function useAppState() {
       refreshHeartWinnerAwardedIds();
 
       // nonEmpty: treat an empty array the same as null/undefined — i.e.
-      // "no valid new data, keep what we had". Without this, `sbX || prev.X`
-      // is wrong: an empty array [] is truthy in JS, so a degraded/partial
-      // Supabase response (more likely right now given Supabase's own
-      // ongoing incident, per the status banner) could silently WIPE OUT
-      // a perfectly good local users/slots/etc. list by replacing it with
-      // an empty one, causing exactly the kind of intermittent "User not
-      // found" / doctor-disappears-from-dropdown behavior seen in testing.
-      const nonEmpty = <T,>(arr: T[] | null | undefined, fallback: T[]): T[] =>
-        arr && arr.length > 0 ? arr : fallback;
+      // "no valid new data, keep what we had". Also guards against a fetch
+      // that came back NON-empty but suspiciously SMALLER than what we
+      // already have locally — e.g. a flaky/partial read during Supabase's
+      // own ongoing incident (per the dashboard status banner) that
+      // returns real data but misses some rows. Without this, an admin
+      // could see a doctor correctly in a dropdown (from a good earlier
+      // fetch), then have a background poll silently swap in an
+      // incomplete list moments later, causing a genuine "User not found"
+      // on submit even though the doctor was right there on screen.
+      const nonEmpty = <T,>(arr: T[] | null | undefined, fallback: T[]): T[] => {
+        if (!arr || arr.length === 0) return fallback;
+        if (arr.length < fallback.length) return fallback;
+        return arr;
+      };
 
       setState((prev) => {
         return {
@@ -1505,7 +1510,6 @@ export function useAppState() {
     awardName: string,
     monthTag?: string, // "MM/YYYY" — defaults to current month if not given
   ): string => {
-    let result = `Error: User not found (searched for phone "${phone}").`;
     const targetPhone = normalizePhone(phone);
     // awardName may already carry "(MM/YYYY)" (e.g. from the Heart Winner
     // review scanner) — extract it if present, otherwise fall back to the
@@ -1525,78 +1529,62 @@ export function useAppState() {
       ? awardName.match(/\[[^\]]+\]/)![0]
       : "";
 
-    setState((prev) => {
-      const updatedUsers = prev.users.map((u) => {
-        if (normalizePhone(u.phone) === targetPhone) {
-          // Check anti-double award logic using locks
-          const currentLocks = u.locks || "";
-          if (rowTag && currentLocks.indexOf(rowTag) !== -1) {
-            result =
-              "🔒 This review has already been rewarded to Dr. " + u.name;
-            return u;
-          }
-
-          const updatedBadges = addBadgeAward(u.badges, cleanBadgeName, resolvedMonthTag);
-          const updatedLocks = rowTag
-            ? currentLocks + `[${rowTag}]`
-            : currentLocks;
-
-          result = `✅ Success! Awarded ${pointsToAdd} Aracoins. ${cleanBadgeName} (${resolvedMonthTag}) recorded for Dr. ${u.name}.`;
-
-          return {
-            ...u,
-            points: (u.points || 0) + pointsToAdd,
-            badges: updatedBadges,
-            locks: updatedLocks,
-          };
-        }
-        return u;
-      });
-
-      const currentUpdated =
-        updatedUsers.find((u) => normalizePhone(u.phone) === targetPhone) || null;
-      return {
-        ...prev,
-        users: updatedUsers,
-        currentUser:
-          normalizePhone(prev.currentUser?.phone || "") === targetPhone
-            ? currentUpdated
-            : prev.currentUser,
-      };
-    });
-
+    // ONE lookup, used consistently for the result message, the local
+    // state update, AND the cloud save below. Previously this function
+    // searched twice — once inside setState's updater (against `prev`)
+    // to decide the returned message, and again separately (against the
+    // outer `state` closure) to decide whether to actually save to
+    // Supabase. Those two lookups could disagree if a background poll
+    // swapped `prev.users` for something slightly different between
+    // renders, producing exactly the confusing "shows an error, but the
+    // row appears in Supabase anyway" behavior seen in testing — the save
+    // used the (correct) outer `state`, while the message used the
+    // (sometimes stale) `prev`. A single lookup makes that impossible.
     const user = state.users.find((u) => normalizePhone(u.phone) === targetPhone);
-    if (user) {
-      const currentLocks = user.locks || "";
-      if (!(rowTag && currentLocks.indexOf(rowTag) !== -1)) {
-        const updatedBadges = addBadgeAward(user.badges, cleanBadgeName, resolvedMonthTag);
-        const updatedLocks = rowTag
-          ? currentLocks + `[${rowTag}]`
-          : currentLocks;
-
-        const updatedUser = {
-          ...user,
-          points: (user.points || 0) + pointsToAdd,
-          badges: updatedBadges,
-          locks: updatedLocks,
-        };
-        cloudSaveUser(updatedUser).catch((err) =>
-          console.error("Cloud adminGivePoints failed:", err),
-        );
-        saveBadgeAwardToSupabase(
-          phone,
-          user.name,
-          cleanBadgeName,
-          resolvedMonthTag,
-          getBadgeCountForMonth(updatedBadges, cleanBadgeName, resolvedMonthTag),
-        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
-      }
+    if (!user) {
+      return `Error: User not found (searched for phone "${phone}").`;
     }
+
+    const currentLocks = user.locks || "";
+    if (rowTag && currentLocks.indexOf(rowTag) !== -1) {
+      return "🔒 This review has already been rewarded to Dr. " + user.name;
+    }
+
+    const updatedBadges = addBadgeAward(user.badges, cleanBadgeName, resolvedMonthTag);
+    const updatedLocks = rowTag ? currentLocks + `[${rowTag}]` : currentLocks;
+    const updatedUser = {
+      ...user,
+      points: (user.points || 0) + pointsToAdd,
+      badges: updatedBadges,
+      locks: updatedLocks,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      users: prev.users.map((u) =>
+        normalizePhone(u.phone) === targetPhone ? updatedUser : u,
+      ),
+      currentUser:
+        normalizePhone(prev.currentUser?.phone || "") === targetPhone
+          ? updatedUser
+          : prev.currentUser,
+    }));
+
+    cloudSaveUser(updatedUser).catch((err) =>
+      console.error("Cloud adminGivePoints failed:", err),
+    );
+    saveBadgeAwardToSupabase(
+      user.phone,
+      user.name,
+      cleanBadgeName,
+      resolvedMonthTag,
+      getBadgeCountForMonth(updatedBadges, cleanBadgeName, resolvedMonthTag),
+    ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
 
     logActivity(
       `ADMIN AWARD: Given ${cleanBadgeName} (${resolvedMonthTag}) (${pointsToAdd} pts) to user ${phone}`,
     );
-    return result;
+    return `✅ Success! Awarded ${pointsToAdd} Aracoins. ${cleanBadgeName} (${resolvedMonthTag}) recorded for Dr. ${user.name}.`;
   };
 
   // Dedicated Heart Winner gifting flow — separate from adminGivePoints
@@ -1891,9 +1879,9 @@ export function useAppState() {
         fetchActivityLogsFromSupabase(),
         fetchAdminAlertsFromSupabase(),
       ]);
-      if (usersResult && usersResult.length > 0) freshUsers = usersResult;
-      if (slotsResult && slotsResult.length > 0) freshSlots = slotsResult;
-      if (logsResult && logsResult.length > 0) freshActivityLogs = logsResult;
+      if (usersResult && usersResult.length >= freshUsers.length) freshUsers = usersResult;
+      if (slotsResult && slotsResult.length >= freshSlots.length) freshSlots = slotsResult;
+      if (logsResult && logsResult.length >= freshActivityLogs.length) freshActivityLogs = logsResult;
       if (alertsResult && alertsResult.length > 0) freshAdminAlerts = alertsResult;
     } catch (err) {
       console.error("recalculateBadges: failed to fetch fresh data", err);
