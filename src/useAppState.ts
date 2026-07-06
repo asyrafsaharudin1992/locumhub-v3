@@ -207,9 +207,12 @@ export function useAppState() {
     new Set(),
   );
 
+  const [allBadgeAwards, setAllBadgeAwards] = useState<BadgeAwardRow[]>([]);
+
   const refreshHeartWinnerAwardedIds = async () => {
     try {
       const rows = await fetchBadgeAwardsFromSupabase();
+      setAllBadgeAwards(rows);
       const ids = new Set<string>();
       rows
         .filter((r) => r.badge_name === "Heart Winner" && r.slot_ids)
@@ -2626,6 +2629,7 @@ export function useAppState() {
     reconcilePointsFromBadgeAwards,
     getManualHeartCandidates,
     refreshHeartWinnerAwardedIds,
+    allBadgeAwards,
     giftHeartWinnerReview,
     submitRecruitment,
     logActivity,
