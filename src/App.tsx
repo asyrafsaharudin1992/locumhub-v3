@@ -1567,8 +1567,9 @@ export default function App() {
                             ✓ Log Attendance for {cmeSelectedPhones.length} Doctor(s)
                           </button>
                         </div>
+                      </div>
 
-                        {/* Scanner modules bento */}
+                      {/* Scanner modules bento */}
                         <div className="bg-white rounded-3xl border border-slate-100 p-6 space-y-4">
                           <h5 className="font-display font-semibold text-slate-800 text-sm uppercase tracking-tight flex items-center gap-1.5">
                             <Sparkles className="w-4 h-4 text-emerald-500" />
@@ -1617,7 +1618,6 @@ export default function App() {
                               </button>
                             </div>
                           </div>
-                        </div>
                       </div>
 
                       {/* Badge History table — filter by doctor and month to
