@@ -107,6 +107,7 @@ export default function App() {
     adminApproveSlot,
     adminManageSlot,
     adminCreateBulkSlots,
+    adminLogCMEAttendance,
     publishAnnouncement,
     deleteAnnouncement,
     adminGivePoints,
@@ -227,6 +228,12 @@ export default function App() {
     LocumSurveyEntry[]
   >([]);
   const [loadingFeedback, setLoadingFeedback] = useState(false);
+
+  // Log CME/Briefing Attendance (multi-doctor) form state
+  const [cmeSelectedPhones, setCmeSelectedPhones] = useState<string[]>([]);
+  const [cmeDate, setCmeDate] = useState("");
+  const [cmeTime, setCmeTime] = useState("2pm-4pm");
+  const [cmeType, setCmeType] = useState<"CME" | "Briefing">("CME");
 
   useEffect(() => {
     if (activeTab === "admin-fb" || activeTab === "feedback") {
@@ -1414,6 +1421,115 @@ export default function App() {
                               ✓ Submit Point injection
                             </button>
                           </form>
+                        </div>
+
+                        {/* Log CME/Briefing Attendance — multi-doctor at once.
+                            Works around the "one slot = one doctor" limit by
+                            creating one Approved slot per selected doctor for
+                            the same session; The Diligent Doc detection
+                            (badgeEngine.ts) already picks these up as-is. */}
+                        <div className="bg-white rounded-3xl border border-slate-100 p-6 space-y-4">
+                          <h5 className="text-sm font-bold text-slate-800 font-display flex items-center gap-2">
+                            📋 Log CME/Briefing Attendance
+                          </h5>
+                          <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+                            Select every doctor who attended one session —
+                            creates one Approved record per doctor so all of
+                            them qualify for The Diligent Doc once you run
+                            "Recalculate Badges" for this month.
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                Session Type
+                              </label>
+                              <select
+                                value={cmeType}
+                                onChange={(e) =>
+                                  setCmeType(e.target.value as "CME" | "Briefing")
+                                }
+                                className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 cursor-pointer"
+                              >
+                                <option value="CME">CME</option>
+                                <option value="Briefing">Briefing</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-slate-400 uppercase">
+                                Date
+                              </label>
+                              <input
+                                type="date"
+                                value={cmeDate}
+                                onChange={(e) => setCmeDate(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">
+                              Time
+                            </label>
+                            <input
+                              type="text"
+                              value={cmeTime}
+                              onChange={(e) => setCmeTime(e.target.value)}
+                              placeholder="e.g. 2pm-4pm"
+                              className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 font-mono"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase">
+                              Attendees ({cmeSelectedPhones.length} selected)
+                            </label>
+                            <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                              {state.users
+                                .filter((u) => u.role === "Doctor")
+                                .map((u) => (
+                                  <label
+                                    key={u.phone}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-slate-50"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={cmeSelectedPhones.includes(u.phone)}
+                                      onChange={(e) => {
+                                        setCmeSelectedPhones((prev) =>
+                                          e.target.checked
+                                            ? [...prev, u.phone]
+                                            : prev.filter((p) => p !== u.phone),
+                                        );
+                                      }}
+                                    />
+                                    <span>Dr. {u.name}</span>
+                                  </label>
+                                ))}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!cmeDate) {
+                                alert("❌ Pick a date first.");
+                                return;
+                              }
+                              const res = adminLogCMEAttendance(
+                                cmeSelectedPhones,
+                                cmeDate,
+                                cmeTime,
+                                cmeType,
+                              );
+                              alert(res);
+                              setCmeSelectedPhones([]);
+                            }}
+                            className="w-full bg-[#001F3F] text-white hover:bg-[#001226] font-bold py-3 px-4 rounded-xl text-xs transition shadow-sm"
+                          >
+                            ✓ Log Attendance for {cmeSelectedPhones.length} Doctor(s)
+                          </button>
                         </div>
 
                         {/* Scanner modules bento */}
