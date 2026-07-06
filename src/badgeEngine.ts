@@ -328,7 +328,6 @@ export function recalculateBadgesForMonth(
   // (set in googleSheetsService.ts); entries with no source tag at all
   // (e.g. rows coming from the Supabase feedbacks_patient table, which
   // only ever holds real Manual Feedback rows) are treated as manual.
-  const heartWinnerDoctors = new Set<string>();
   const heartWinnerReviewIds = new Map<string, Set<string>>();
   manualFeedback.forEach((f) => {
     if (f.source === "form") return;
@@ -337,7 +336,6 @@ export function recalculateBadgesForMonth(
     if (!parsed) return;
     if (parsed.month === month && parsed.year === year) {
       const key = normalizeDoctorName(f.target);
-      heartWinnerDoctors.add(key);
       // Prefer the REAL Supabase row id (guaranteed unique) over a
       // content-based hash — two reviews can share the same
       // date/reviewer/target (e.g. the same patient reviewing twice in one
@@ -358,7 +356,15 @@ export function recalculateBadgesForMonth(
   //    `locks` field for that exact slot ID before crediting it.
   //  - Per-month badges (Heart Winner, Unstoppable, Diligent Doc) check
   //    whether that "(Month Year)" tag is already present before adding it.
-  const monthTagSuffix = `(${monthLabel})`;
+  // IMPORTANT: this must match the exact format used everywhere else a
+  // badge+month tag gets written into the badges string — adminGivePoints,
+  // giftHeartWinnerReview, and reconcilePointsFromBadgeAwards (in
+  // useAppState.ts) all use "MM/YYYY", not the human-readable month name.
+  // Using a different format here (it used to be "(July 2026)") caused the
+  // same month to show up as two separate entries in a doctor's badges
+  // string — e.g. "The Unstoppable (July 2026):1, The Unstoppable
+  // (07/2026):1" — once both code paths had touched the same badge.
+  const monthTagSuffix = `(${month}/${year})`;
   const monthTagSlash = `${month}/${year}`; // "MM/YYYY", for the Supabase table
   const badgeAwardDetails: RecalcResult["badgeAwardDetails"] = [];
   const badgeRevocations: RecalcResult["badgeRevocations"] = [];
@@ -372,11 +378,6 @@ export function recalculateBadgesForMonth(
 
     const alreadyHasMonthBadge = (badgeName: string) =>
       (u.badges || "").includes(`${badgeName} ${monthTagSuffix}`);
-
-    if (heartWinnerDoctors.has(key) && !alreadyHasMonthBadge("Heart Winner")) {
-      earnedBadges.push("Heart Winner");
-      coinsAwarded += 10;
-    }
 
     // The Unstoppable can flip from qualifying to disqualified within the
     // same month: a doctor might complete 2 shifts early on, get awarded,
@@ -429,6 +430,24 @@ export function recalculateBadgesForMonth(
       }
     }
 
+    // Heart Winner — counted per qualifying 5-star review this month, not
+    // capped at 1: a doctor can genuinely earn several excellent reviews
+    // in the same month, and each one should count. Uses the same
+    // lock-tag pattern as Iron Doctor/LMS to avoid re-crediting a review
+    // already counted in an earlier run (id already includes the "HW-"
+    // prefix, so the tag here is just "[HW-xxx]" directly).
+    const heartWinnerIds = heartWinnerReviewIds.get(key);
+    if (heartWinnerIds) {
+      const newHeartWinnerIds = Array.from(heartWinnerIds).filter(
+        (id) => !locksStr.includes(`[${id}]`),
+      );
+      if (newHeartWinnerIds.length > 0) {
+        earnedBadges.push("Heart Winner");
+        coinsAwarded += 15 * newHeartWinnerIds.length;
+        newHeartWinnerIds.forEach((id) => newLockIds.push(`[${id}]`));
+      }
+    }
+
     if (earnedBadges.length === 0 && !revokeUnstoppable) return u;
 
     const badgeMap: { [key: string]: number } = {};
@@ -442,10 +461,10 @@ export function recalculateBadgesForMonth(
       badgeMap[name] = count;
     });
 
-    // Per-month badges get +1; Iron Doctor/Last Minute Saviour get +1 per
-    // newly-qualifying slot found above.
+    // Per-month badges get +1; Iron Doctor/Last Minute Saviour/Heart Winner
+    // get +1 per newly-qualifying slot/review found above.
     const perMonthBadges = earnedBadges.filter(
-      (b) => b !== "Iron Doctor" && b !== "Last Minute Saviour",
+      (b) => b !== "Iron Doctor" && b !== "Last Minute Saviour" && b !== "Heart Winner",
     );
     perMonthBadges.forEach((badge) => {
       const tag = `${badge} ${monthTagSuffix}`;
@@ -467,6 +486,15 @@ export function recalculateBadgesForMonth(
       if (newLmsCount > 0) {
         const tag = `Last Minute Saviour ${monthTagSuffix}`;
         badgeMap[tag] = (badgeMap[tag] || 0) + newLmsCount;
+      }
+    }
+    if (heartWinnerIds) {
+      const newHeartWinnerCount = Array.from(heartWinnerIds).filter((id) =>
+        newLockIds.includes(`[${id}]`),
+      ).length;
+      if (newHeartWinnerCount > 0) {
+        const tag = `Heart Winner ${monthTagSuffix}`;
+        badgeMap[tag] = (badgeMap[tag] || 0) + newHeartWinnerCount;
       }
     }
     if (revokeUnstoppable) {
@@ -503,9 +531,6 @@ export function recalculateBadgesForMonth(
       } else if (badge === "The Unstoppable") {
         const s = shiftsByDoctor.get(key);
         if (s && s.length > 0) slotIds = s.map((slot) => slot.id);
-      } else if (badge === "Heart Winner") {
-        const s = heartWinnerReviewIds.get(key);
-        if (s && s.size > 0) slotIds = Array.from(s);
       }
       // totalCount is ALWAYS 1 here — this is a per-month pass/fail check
       // (did the doctor qualify this month, yes or no), computed fresh from
@@ -545,6 +570,16 @@ export function recalculateBadgesForMonth(
         monthTag: monthTagSlash,
         totalCount: lmsSlotIds.size,
         slotIds: Array.from(lmsSlotIds),
+      });
+    }
+    if (heartWinnerIds && heartWinnerIds.size > 0) {
+      badgeAwardDetails.push({
+        phone: u.phone,
+        name: u.name,
+        badgeName: "Heart Winner",
+        monthTag: monthTagSlash,
+        totalCount: heartWinnerIds.size,
+        slotIds: Array.from(heartWinnerIds),
       });
     }
 
