@@ -1025,6 +1025,34 @@ export async function saveBadgeAwardToSupabase(
   return { success: true };
 }
 
+/**
+ * Deletes one badge-award row (doctor+badge+month combination). Used by the
+ * auto-revoke path in recalculateBadges — e.g. when a doctor's
+ * "The Unstoppable" no longer holds up because a cancellation was found
+ * for a month it was already awarded for.
+ */
+export async function deleteBadgeAwardFromSupabase(
+  doctorPhone: string,
+  badgeName: string,
+  monthTag: string,
+): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: "Supabase client not initialized" };
+
+  const { error } = await client
+    .from("badge_awards")
+    .delete()
+    .eq("doctor_phone", doctorPhone)
+    .eq("badge_name", badgeName)
+    .eq("month_tag", monthTag);
+
+  if (error) {
+    console.error("deleteBadgeAwardFromSupabase failed:", error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
 export async function fetchBadgeAwardsFromSupabase(): Promise<BadgeAwardRow[]> {
   const client = getSupabaseClient();
   if (!client) return [];
