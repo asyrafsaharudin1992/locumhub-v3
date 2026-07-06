@@ -2196,8 +2196,8 @@ export function useAppState() {
     return `❌ No eligible doctors found for ${selectedMonth}/${selectedYear} (Requires min 2 approved shifts & zero cancellations).`;
   };
 
-  const getManualHeartCandidates = () => {
-    return state.feedbacksPatient
+  const getManualHeartCandidates = (feedbackData?: FeedbackRecord[]) => {
+    return (feedbackData ?? state.feedbacksPatient)
       .filter((f) => f.source !== "form")
       .filter((f) => f.rating === 5)
       .filter((f) => {
