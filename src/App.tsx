@@ -1718,46 +1718,95 @@ export default function App() {
                           </select>
                         </div>
 
-                        <div className="overflow-x-auto rounded-xl border border-slate-100">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="bg-slate-50 text-slate-400 uppercase text-[10px]">
-                                <th className="text-left p-3 font-bold">Doctor</th>
-                                <th className="text-left p-3 font-bold">Badge</th>
-                                <th className="text-left p-3 font-bold">Month</th>
-                                <th className="text-right p-3 font-bold">Count</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {allBadgeAwards
-                                .filter(
-                                  (r) =>
-                                    (!badgeHistoryDoctor || r.doctor_name === badgeHistoryDoctor) &&
-                                    (!badgeHistoryMonth || r.month_tag === badgeHistoryMonth),
-                                )
-                                .sort((a, b) => b.month_tag.localeCompare(a.month_tag))
-                                .map((r, i) => (
-                                  <tr key={i} className="hover:bg-slate-50">
-                                    <td className="p-3 font-semibold text-slate-700">{r.doctor_name}</td>
-                                    <td className="p-3 text-slate-600">{r.badge_name}</td>
-                                    <td className="p-3 text-slate-500 font-mono">{r.month_tag}</td>
-                                    <td className="p-3 text-right font-bold text-slate-800">{r.award_count}</td>
-                                  </tr>
-                                ))}
-                              {allBadgeAwards.filter(
-                                (r) =>
-                                  (!badgeHistoryDoctor || r.doctor_name === badgeHistoryDoctor) &&
-                                  (!badgeHistoryMonth || r.month_tag === badgeHistoryMonth),
-                              ).length === 0 && (
-                                <tr>
-                                  <td colSpan={4} className="p-6 text-center text-slate-400">
-                                    No badges match this filter.
-                                  </td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
+                        {(() => {
+                          const filtered = allBadgeAwards.filter(
+                            (r) =>
+                              (!badgeHistoryDoctor || r.doctor_name === badgeHistoryDoctor) &&
+                              (!badgeHistoryMonth || r.month_tag === badgeHistoryMonth),
+                          );
+
+                          // Group: doctor -> badge -> [{month, count}], so
+                          // each doctor's card shows every badge they've
+                          // earned, with a cumulative total plus a
+                          // month-by-month breakdown underneath.
+                          const byDoctor: {
+                            [doctor: string]: {
+                              [badge: string]: { month: string; count: number }[];
+                            };
+                          } = {};
+                          filtered.forEach((r) => {
+                            if (!byDoctor[r.doctor_name]) byDoctor[r.doctor_name] = {};
+                            if (!byDoctor[r.doctor_name][r.badge_name]) {
+                              byDoctor[r.doctor_name][r.badge_name] = [];
+                            }
+                            byDoctor[r.doctor_name][r.badge_name].push({
+                              month: r.month_tag,
+                              count: r.award_count,
+                            });
+                          });
+                          const doctorNames = Object.keys(byDoctor).sort();
+
+                          if (doctorNames.length === 0) {
+                            return (
+                              <p className="text-center text-slate-400 text-xs py-8">
+                                No badges match this filter.
+                              </p>
+                            );
+                          }
+
+                          return (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {doctorNames.map((doctorName) => {
+                                const badges = byDoctor[doctorName];
+                                const badgeNames = Object.keys(badges).sort();
+                                return (
+                                  <div
+                                    key={doctorName}
+                                    className="rounded-2xl border border-slate-100 p-4 space-y-3 bg-slate-50/50"
+                                  >
+                                    <h6 className="font-display font-bold text-slate-800 text-sm">
+                                      {doctorName}
+                                    </h6>
+                                    <div className="space-y-2.5">
+                                      {badgeNames.map((badgeName) => {
+                                        const entries = [...badges[badgeName]].sort((a, b) =>
+                                          b.month.localeCompare(a.month),
+                                        );
+                                        const total = entries.reduce((sum, e) => sum + e.count, 0);
+                                        return (
+                                          <div
+                                            key={badgeName}
+                                            className="bg-white rounded-xl p-3 border border-slate-100"
+                                          >
+                                            <div className="flex justify-between items-center">
+                                              <span className="text-xs font-bold text-slate-700">
+                                                {badgeName}
+                                              </span>
+                                              <span className="text-xs font-bold text-amber-600">
+                                                ×{total} total
+                                              </span>
+                                            </div>
+                                            <div className="mt-1.5 space-y-0.5">
+                                              {entries.map((e, i) => (
+                                                <div
+                                                  key={i}
+                                                  className="flex justify-between text-[10px] text-slate-500"
+                                                >
+                                                  <span className="font-mono">{e.month}</span>
+                                                  <span>×{e.count}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   )}
