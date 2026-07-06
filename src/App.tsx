@@ -1113,9 +1113,27 @@ export default function App() {
                       slots={state.slots}
                       users={state.users}
                       onCompleteSlot={completeSlotAndAwardPoints}
-                      onRecalculateBadges={(month, year) =>
-                        recalculateBadges(month, year, patientFeedbackEntries)
-                      }
+                      onRecalculateBadges={async (month, year) => {
+                        // Don't rely on patientFeedbackEntries — it's only
+                        // populated after visiting the Feedback Management
+                        // tab, so clicking Recalculate Badges straight from
+                        // this tab (a very normal thing to do) would run
+                        // with an empty feedback list and silently skip
+                        // Heart Winner every time. Fetch fresh right here
+                        // instead, so it works regardless of which tabs
+                        // were visited this session.
+                        let feedbackForRecalc = patientFeedbackEntries;
+                        try {
+                          feedbackForRecalc = await fetchPatientFeedbackFromSheets();
+                          setPatientFeedbackEntries(feedbackForRecalc);
+                        } catch (err) {
+                          console.error(
+                            "Recalculate Badges: failed to fetch fresh feedback, falling back to cached patientFeedbackEntries",
+                            err,
+                          );
+                        }
+                        return recalculateBadges(month, year, feedbackForRecalc);
+                      }}
                     />
                   )}
 
