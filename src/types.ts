@@ -39,6 +39,12 @@ export interface FeedbackRecord {
   // identify a review for Heart Winner tracking, since two reviews CAN
   // share the same date/reviewer/target (e.g. same patient reviewing twice
   // in one day), which content-based hashing alone can't distinguish.
+  source?: "form" | "manual"; // "form" = Form responses 1 (4-question Likert
+  // satisfaction survey, averaged into a 1-5 number) — NOT a genuine review,
+  // and must never count toward Heart Winner. "manual" = MANUAL FEEDBACK
+  // sheet (direct /5 rating), the only legitimate Heart Winner source.
+  // Undefined is treated as manual (e.g. rows already in Supabase, which
+  // only ever hold genuine manual reviews).
   tarikh: string;
   nama: string; // Sender or Subject
   reviewer: string; // Reviewer name
