@@ -1616,55 +1616,6 @@ export default function App() {
                                 {isReconcilingPoints ? "Reconciling..." : "Reconcile Now"}
                               </button>
                             </div>
-
-                            {/* Google Reviews "Heart Winner Check scanner" */}
-                            <div className="p-4 bg-rose-50/40 rounded-2xl border border-rose-100/50 space-y-3">
-                              <h6 className="text-xs font-bold text-rose-950 font-display">
-                                Reviews Scanner ("Heart Winner" finder)
-                              </h6>
-                              <p className="text-[11px] text-slate-500 leading-normal">
-                                Automated reviews parser matching 5-star ratings
-                                where no score awards locker exists.
-                              </p>
-
-                              <div className="space-y-2 max-h-56 overflow-y-auto pr-2">
-                                {getManualHeartCandidates(patientFeedbackEntries).map((review, i) => {
-                                  return (
-                                    <div
-                                      key={i}
-                                      className="bg-white border select-none border-slate-100 rounded-xl p-3 flex justify-between items-center text-xs"
-                                    >
-                                      <div>
-                                        <span className="font-bold block text-slate-700">
-                                          Dr. {review.name}
-                                        </span>
-                                        <span className="text-[10px] text-slate-400 font-mono">
-                                          Date: {review.date}
-                                        </span>
-                                        <span className="text-[9px] text-slate-300 font-mono block">
-                                          Row: {review.row}
-                                        </span>
-                                        <p className="text-[10px] italic text-slate-500 mt-1 line-clamp-1">
-                                          "{review.comment}"
-                                        </p>
-                                      </div>
-                                      <button
-                                        onClick={() =>
-                                          handleGoogleReviewScannerAward(
-                                            review.name,
-                                            review.badgeId,
-                                            review.phone,
-                                          )
-                                        }
-                                        className="bg-rose-600 font-bold hover:bg-rose-700 text-white text-[10px] py-1.5 px-3.5 rounded-lg shrink-0"
-                                      >
-                                        Gift 15
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
                           </div>
                         </div>
                       </div>
@@ -1754,19 +1705,38 @@ export default function App() {
                             );
                           }
 
+                          const POINTS_PER_BADGE_LOCAL: { [badge: string]: number } = {
+                            "Iron Doctor": 10,
+                            "Heart Winner": 15,
+                            "The Unstoppable": 10,
+                            "The Diligent Doc": 10,
+                            "Last Minute Saviour": 20,
+                            "Team Favorite": 20,
+                          };
+
                           return (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                               {doctorNames.map((doctorName) => {
                                 const badges = byDoctor[doctorName];
                                 const badgeNames = Object.keys(badges).sort();
+                                const doctorTotal = badgeNames.reduce((sum, bn) => {
+                                  const perBadge = POINTS_PER_BADGE_LOCAL[bn] ?? 10;
+                                  const badgeCount = badges[bn].reduce((s, e) => s + e.count, 0);
+                                  return sum + perBadge * badgeCount;
+                                }, 0);
                                 return (
                                   <div
                                     key={doctorName}
                                     className="rounded-2xl border border-slate-100 p-4 space-y-3 bg-slate-50/50"
                                   >
-                                    <h6 className="font-display font-bold text-slate-800 text-sm">
-                                      {doctorName}
-                                    </h6>
+                                    <div className="flex justify-between items-baseline">
+                                      <h6 className="font-display font-bold text-slate-800 text-sm">
+                                        {doctorName}
+                                      </h6>
+                                      <span className="text-xs font-bold text-amber-600 font-mono">
+                                        🪙 {doctorTotal}
+                                      </span>
+                                    </div>
                                     <div className="space-y-2.5">
                                       {badgeNames.map((badgeName) => {
                                         const entries = [...badges[badgeName]].sort((a, b) =>
