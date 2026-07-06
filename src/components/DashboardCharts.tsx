@@ -41,19 +41,41 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({
   const [leaderboardView, setLeaderboardView] = useState<'month' | 'all'>('all');
 
   // --- CHART 1: Completed Slots Per Doctor ---
-  const completedSlots = pastSlots.filter(s => s.status === 'Approved');
+  // "Completed" means the slot's actual date has passed (or is today) —
+  // NOT just that its booking status is 'Approved'. Approved only means
+  // the booking was approved by admin; a shift booked for later this
+  // month is still Approved but hasn't happened yet, so it shouldn't
+  // count as done.
+  const parseSlotDate = (tarikh: string): Date | null => {
+    const parts = (tarikh || '').split('/');
+    if (parts.length !== 3) return null;
+    const [d, m, y] = parts.map((p) => parseInt(p, 10));
+    if (!d || !m || !y) return null;
+    return new Date(y, m - 1, d);
+  };
+  const today = new Date();
+  today.setHours(23, 59, 59, 999); // treat "today" as still in-progress/countable
 
-  // Aggregate counts — completed (Approved) vs total assigned this period.
+  const completedSlots = pastSlots.filter(s => {
+    if (s.status !== 'Approved') return false;
+    const d = parseSlotDate(s.tarikh);
+    return d !== null && d <= today;
+  });
+
+  // Aggregate counts — completed-so-far vs total assigned this period.
   // "Assigned" means the slot was actually claimed by this doctor (Pending
-  // or Approved) — "Available" slots aren't counted since nobody has taken
-  // them yet, so they shouldn't count toward any specific doctor's total.
+  // or Approved, regardless of date) — "Available" slots aren't counted
+  // since nobody has taken them yet.
   const slotCounts: { [drName: string]: { completed: number; assigned: number } } = {};
   pastSlots.forEach(s => {
     if (!s.dr || s.status === 'Available') return;
     const cleanName = s.dr.replace(/^(DR|dr)\.?\s+/i, "");
     if (!slotCounts[cleanName]) slotCounts[cleanName] = { completed: 0, assigned: 0 };
     slotCounts[cleanName].assigned += 1;
-    if (s.status === 'Approved') slotCounts[cleanName].completed += 1;
+    const d = parseSlotDate(s.tarikh);
+    if (s.status === 'Approved' && d !== null && d <= today) {
+      slotCounts[cleanName].completed += 1;
+    }
   });
 
   const slotData = Object.entries(slotCounts)
