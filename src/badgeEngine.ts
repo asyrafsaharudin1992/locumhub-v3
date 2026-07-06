@@ -47,7 +47,7 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-function normalizeDoctorName(s: string): string {
+export function normalizeDoctorName(s: string): string {
   return (s || "").toUpperCase().trim().replace(/^DR\.?\s+/i, "");
 }
 
