@@ -1475,7 +1475,14 @@ export function useAppState() {
     return `✅ Migration complete! ${migratedCount} badge/month entries synced across ${doctorCount} doctors.`;
   };
 
-  const normalizePhone = (p: string) => (p || "").replace(/[\s-]/g, "").trim();
+  // Compares the LAST 9 digits only (not the raw string) — this survives
+  // the most common real-world phone formatting mismatches seen in this
+  // data: a leading "0" silently dropped (e.g. by a spreadsheet treating
+  // the column as a number), or a "60"/"+60" country-code prefix present
+  // on one side but not the other. "0103728506", "103728506", and
+  // "60103728506" all normalize to the same "103728506" and correctly
+  // match each other.
+  const normalizePhone = (p: string) => (p || "").replace(/[^0-9]/g, "").slice(-9);
 
   const adminGivePoints = (
     phone: string,
