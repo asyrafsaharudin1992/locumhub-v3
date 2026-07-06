@@ -1661,22 +1661,34 @@ export function useAppState() {
     year: string,
     manualFeedback: FeedbackRecord[],
   ): Promise<string> => {
+    let freshUsers = state.users;
+    let freshSlots = state.slots;
     let freshActivityLogs = state.activityLogs;
     let freshAdminAlerts: AdminAlert[] = [];
     try {
-      const [logsResult, alertsResult] = await Promise.all([
+      // Pull directly from Supabase rather than trusting React state here —
+      // this is what actually fixes "clicking the same month twice still
+      // adds points": if state.users was even slightly stale (a missed
+      // re-render, a lagging background poll, anything), the "already
+      // awarded this month" checks below would silently miss the doctor's
+      // real current locks/badges and re-credit them.
+      const [usersResult, slotsResult, logsResult, alertsResult] = await Promise.all([
+        fetchUsersFromSupabase(),
+        fetchSlotsFromSupabase(),
         fetchActivityLogsFromSupabase(),
         fetchAdminAlertsFromSupabase(),
       ]);
+      if (usersResult) freshUsers = usersResult;
+      if (slotsResult) freshSlots = slotsResult;
       if (logsResult) freshActivityLogs = logsResult;
       if (alertsResult) freshAdminAlerts = alertsResult;
     } catch (err) {
-      console.error("recalculateBadges: failed to fetch fresh logs/alerts", err);
+      console.error("recalculateBadges: failed to fetch fresh data", err);
     }
 
     const { updatedUsers, summaryLines, badgeAwardDetails } = recalculateBadgesForMonth(
-      state.users,
-      state.slots,
+      freshUsers,
+      freshSlots,
       freshActivityLogs,
       freshAdminAlerts,
       manualFeedback,
@@ -1963,13 +1975,15 @@ export function useAppState() {
     return state.feedbacksPatient
       .filter((f) => f.rating === 5)
       .map((f) => {
-        // Stable ID derived from the review's own content (same formula used
-        // when saving feedback to Supabase) — NOT the review's position in
-        // the list, which shifts whenever a review is added/removed/reordered
-        // and would silently break the anti-double-award lock.
-        const stableId = `${f.tarikh.replace(/\//g, "-")}_${f.reviewer.trim()}_${f.target.trim()}`
-          .replace(/[^a-zA-Z0-9-_]/g, "")
-          .slice(0, 40);
+        // Prefer the REAL Supabase row id (guaranteed unique) over a
+        // content-based hash — two reviews can share the same
+        // date/reviewer/target (e.g. the same patient reviewing twice in
+        // one day), which a content hash alone can't tell apart.
+        const stableId = f.id
+          ? f.id
+          : `${f.tarikh.replace(/\//g, "-")}_${f.reviewer.trim()}_${f.target.trim()}`
+              .replace(/[^a-zA-Z0-9-_]/g, "")
+              .slice(0, 40);
         const rowId = `HW-${stableId}`;
         const parts = f.tarikh.split("/");
         const monthSegment =
