@@ -866,6 +866,7 @@ export async function fetchPatientFeedbackFromSheets(): Promise<FeedbackRecord[]
           cawangan: getCell(r, idx.cawangan),
           rating,
           komen,
+          source: "form" as const,
         };
       })
       .reverse();
@@ -895,6 +896,7 @@ export async function fetchPatientFeedbackFromSheets(): Promise<FeedbackRecord[]
           cawangan: getCell(r, idx.cawangan),
           rating: Number(getCell(r, idx.rating)) || 0,
           komen: getCell(r, idx.komen),
+          source: "manual" as const,
         };
       })
       .reverse();
