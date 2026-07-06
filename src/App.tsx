@@ -1604,7 +1604,7 @@ export default function App() {
                               </p>
 
                               <div className="space-y-2 max-h-56 overflow-y-auto pr-2">
-                                {getManualHeartCandidates().map((review, i) => {
+                                {getManualHeartCandidates(patientFeedbackEntries).map((review, i) => {
                                   return (
                                     <div
                                       key={i}
