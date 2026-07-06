@@ -1319,7 +1319,13 @@ export default function App() {
                               >
                                 <option value="">-- Choose Candidate --</option>
                                 {state.users
-                                  .filter((u) => u.role === "Doctor")
+                                  .filter(
+                                    (u) =>
+                                      u.role === "Doctor" &&
+                                      !/^(unknown|n\/a|test)$/i.test(
+                                        u.name.trim(),
+                                      ),
+                                  )
                                   .map((u) => (
                                     <option key={u.phone} value={u.phone}>
                                       {u.name.toUpperCase()} ({u.phone})
@@ -1487,7 +1493,13 @@ export default function App() {
                             </label>
                             <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
                               {state.users
-                                .filter((u) => u.role === "Doctor")
+                                .filter(
+                                  (u) =>
+                                    u.role === "Doctor" &&
+                                    !/^(unknown|n\/a|test)$/i.test(
+                                      u.name.trim(),
+                                    ),
+                                )
                                 .map((u) => (
                                   <label
                                     key={u.phone}
