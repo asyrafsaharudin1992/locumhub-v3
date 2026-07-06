@@ -212,10 +212,14 @@ export function recalculateBadgesForMonth(
 
   // ---- The Diligent Doc: attended a CME/Briefing slot this month ----
   const diligentDocDoctors = new Set<string>();
+  const diligentDocSlotIds = new Map<string, Set<string>>();
   monthSlots.forEach((s) => {
     const branchUpper = (s.cawangan || "").toUpperCase();
     if (branchUpper.includes("CME") || branchUpper.includes("BRIEFING")) {
-      diligentDocDoctors.add(normalizeDoctorName(s.dr));
+      const key = normalizeDoctorName(s.dr);
+      diligentDocDoctors.add(key);
+      if (!diligentDocSlotIds.has(key)) diligentDocSlotIds.set(key, new Set());
+      diligentDocSlotIds.get(key)!.add(s.id);
     }
   });
 
@@ -283,6 +287,7 @@ export function recalculateBadgesForMonth(
 
   // ---- Heart Winner: perfect/near-perfect rating in Manual Feedback this month ----
   const heartWinnerDoctors = new Set<string>();
+  const heartWinnerReviewIds = new Map<string, Set<string>>();
   manualFeedback.forEach((f) => {
     if (!f.target || f.rating < 5) return;
     const fDate = parseDDMMYYYY(f.tarikh);
@@ -290,7 +295,15 @@ export function recalculateBadgesForMonth(
     const fMonth = String(fDate.getMonth() + 1).padStart(2, "0");
     const fYear = String(fDate.getFullYear());
     if (fMonth === month && fYear === year) {
-      heartWinnerDoctors.add(normalizeDoctorName(f.target));
+      const key = normalizeDoctorName(f.target);
+      heartWinnerDoctors.add(key);
+      // Same stable-ID formula as saveFeedbackPatientToSupabase / the
+      // Reviews Scanner's lock tags — ties this award back to the exact
+      // review that earned it.
+      const stableId = `${f.tarikh.replace(/\//g, "-")}_${f.reviewer.trim()}_${f.target.trim()}`
+        .replace(/[^a-zA-Z0-9\-_]/g, "");
+      if (!heartWinnerReviewIds.has(key)) heartWinnerReviewIds.set(key, new Set());
+      heartWinnerReviewIds.get(key)!.add(`HW-${stableId}`);
     }
   });
 
@@ -405,12 +418,24 @@ export function recalculateBadgesForMonth(
     // count for this month (not just what's new in this run), plus the full
     // set of contributing slot IDs for Iron Doctor / Last Minute Saviour.
     perMonthBadges.forEach((badge) => {
+      let slotIds: string[] | undefined;
+      if (badge === "The Diligent Doc") {
+        const s = diligentDocSlotIds.get(key);
+        if (s && s.size > 0) slotIds = Array.from(s);
+      } else if (badge === "The Unstoppable") {
+        const s = shiftsByDoctor.get(key);
+        if (s && s.length > 0) slotIds = s.map((slot) => slot.id);
+      } else if (badge === "Heart Winner") {
+        const s = heartWinnerReviewIds.get(key);
+        if (s && s.size > 0) slotIds = Array.from(s);
+      }
       badgeAwardDetails.push({
         phone: u.phone,
         name: u.name,
         badgeName: badge,
         monthTag: monthTagSlash,
         totalCount: badgeMap[`${badge} ${monthTagSuffix}`] || 1,
+        slotIds,
       });
     });
     if (ironSlotIds && ironSlotIds.size > 0) {
