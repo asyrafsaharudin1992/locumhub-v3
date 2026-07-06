@@ -303,7 +303,14 @@ export function useAppState() {
   // Dual cloud wrappers
   const cloudSaveUser = async (user: UserProfile) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
-      saveUserToSupabase(user).catch((err) =>
+      // Must actually await this — previously it fired the save without
+      // waiting, so callers (like giftHeartWinnerReview) would think the
+      // write was done while it was still in flight. That created a race:
+      // clicking "Recalculate Badges" soon after a manual award could
+      // fetch fresh users BEFORE the award's write had landed, silently
+      // reverting it when recalculateBadges saved its own (stale) copy
+      // back over it.
+      await saveUserToSupabase(user).catch((err) =>
         console.error("Supabase saveUser failed:", err),
       );
     }
@@ -1313,7 +1320,9 @@ export function useAppState() {
     const summaryLines: string[] = [];
 
     byPhone.forEach((rows, phone) => {
-      const existingUser = state.users.find((u) => u.phone === phone);
+      const existingUser = state.users.find(
+        (u) => normalizePhone(u.phone) === normalizePhone(phone),
+      );
       if (!existingUser) return; // badge_awards row references a doctor no longer in users
 
       const badgesParts: string[] = [];
