@@ -1509,6 +1509,94 @@ export function useAppState() {
     return result;
   };
 
+  // Dedicated Heart Winner gifting flow — separate from adminGivePoints
+  // because Heart Winner needs its slot_ids (the "HW-<id>" review tag)
+  // properly MERGED into any existing badge_awards row for that doctor +
+  // month, not overwritten. adminGivePoints never passed slotIds at all,
+  // so the review's HW-id never actually reached badge_awards — meaning
+  // the "already gifted" check could never see it, and the same review
+  // kept reappearing in the Reviews Scanner list no matter how many times
+  // it was gifted.
+  const giftHeartWinnerReview = async (
+    phone: string,
+    badgeId: string, // "Heart Winner (MM/YYYY) [HW-<id>]"
+  ): Promise<string> => {
+    const targetPhone = normalizePhone(phone);
+    const user = state.users.find((u) => normalizePhone(u.phone) === targetPhone);
+    if (!user) return `Error: User not found (searched for phone "${phone}").`;
+
+    const embeddedMonth = badgeId.match(/\((\d{2}\/\d{4})\)/);
+    const monthTag =
+      embeddedMonth?.[1] ||
+      `${String(new Date().getMonth() + 1).padStart(2, "0")}/${new Date().getFullYear()}`;
+    const rowMatch = badgeId.match(/\[([^\]]+)\]/);
+    const rowId = rowMatch ? rowMatch[1] : ""; // "HW-<id>", no brackets
+
+    if (!rowId) return "Error: Could not identify this review's row ID.";
+
+    // Pull the current badge_awards row (if any) for this doctor+month so
+    // we can merge rather than overwrite — a doctor can get more than one
+    // Heart Winner-qualifying review in the same month.
+    let existingSlotIds: string[] = [];
+    let existingCount = 0;
+    try {
+      const rows = await fetchBadgeAwardsFromSupabase();
+      const existing = rows.find(
+        (r) =>
+          normalizePhone(r.doctor_phone) === targetPhone &&
+          r.badge_name === "Heart Winner" &&
+          r.month_tag === monthTag,
+      );
+      if (existing) {
+        existingSlotIds = (existing.slot_ids || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        existingCount = existing.award_count || 0;
+      }
+    } catch (err) {
+      console.error("giftHeartWinnerReview: failed to read existing badge_awards row", err);
+    }
+
+    if (existingSlotIds.includes(rowId)) {
+      return `🔒 This review has already been rewarded to Dr. ${user.name}.`;
+    }
+
+    const mergedSlotIds = [...existingSlotIds, rowId];
+    const newCount = Math.max(existingCount, 0) + 1;
+
+    const updatedBadges = addBadgeAward(user.badges, "Heart Winner", monthTag);
+    const updatedUser = { ...user, points: (user.points || 0) + 15, badges: updatedBadges };
+
+    setState((prev) => ({
+      ...prev,
+      users: prev.users.map((u) => (u.phone === user.phone ? updatedUser : u)),
+      currentUser:
+        prev.currentUser?.phone === user.phone ? updatedUser : prev.currentUser,
+    }));
+    localStorage.setItem(
+      "ara_users",
+      JSON.stringify(state.users.map((u) => (u.phone === user.phone ? updatedUser : u))),
+    );
+
+    await cloudSaveUser(updatedUser).catch((err) =>
+      console.error("giftHeartWinnerReview: cloudSaveUser failed", err),
+    );
+    await saveBadgeAwardToSupabase(
+      user.phone,
+      user.name,
+      "Heart Winner",
+      monthTag,
+      newCount,
+      mergedSlotIds,
+    ).catch((err) => console.error("giftHeartWinnerReview: saveBadgeAwardToSupabase failed", err));
+
+    await refreshHeartWinnerAwardedIds();
+
+    logActivity(`ADMIN AWARD: Given Heart Winner (${monthTag}) (15 pts) to Dr. ${user.name}`);
+    return `✅ Success! Awarded 15 AraCoins. Heart Winner (${monthTag}) recorded for Dr. ${user.name}.`;
+  };
+
   const completeSlotAndAwardPoints = async (
     slotId: string,
     sales: number,
@@ -2459,6 +2547,7 @@ export function useAppState() {
     reconcilePointsFromBadgeAwards,
     getManualHeartCandidates,
     refreshHeartWinnerAwardedIds,
+    giftHeartWinnerReview,
     submitRecruitment,
     logActivity,
     markNotificationsAsRead,
