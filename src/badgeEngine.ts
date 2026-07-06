@@ -149,6 +149,15 @@ interface RecalcResult {
     totalCount: number;
     slotIds?: string[];
   }[];
+  // Badges that no longer qualify and should be deleted from badge_awards
+  // (currently only "The Unstoppable", the one badge whose truth can
+  // change after being awarded — see the revoke logic below).
+  badgeRevocations: {
+    phone: string;
+    name: string;
+    badgeName: string;
+    monthTag: string;
+  }[];
 }
 
 export function recalculateBadgesForMonth(
@@ -320,6 +329,7 @@ export function recalculateBadgesForMonth(
   const monthTagSuffix = `(${monthLabel})`;
   const monthTagSlash = `${month}/${year}`; // "MM/YYYY", for the Supabase table
   const badgeAwardDetails: RecalcResult["badgeAwardDetails"] = [];
+  const badgeRevocations: RecalcResult["badgeRevocations"] = [];
 
   const updatedUsers = users.map((u) => {
     const key = normalizeDoctorName(u.name);
@@ -335,10 +345,27 @@ export function recalculateBadgesForMonth(
       earnedBadges.push("Heart Winner");
       coinsAwarded += 10;
     }
-    if (unstoppableDoctors.has(key) && !alreadyHasMonthBadge("The Unstoppable")) {
+
+    // The Unstoppable can flip from qualifying to disqualified within the
+    // same month: a doctor might complete 2 shifts early on, get awarded,
+    // then cancel a later shift that same month. Since this is the only
+    // badge whose truth can change after being awarded (everything else —
+    // a completed CME slot, a 5-star review, a finished 12h+ shift — is a
+    // fact about the past that can't un-happen), it's the only one that
+    // needs a revoke path. This is what makes it safe to click
+    // "Recalculate Badges" every day for the current, still-open month:
+    // if a cancellation shows up later, the next run strips the badge
+    // again instead of leaving a now-incorrect award sitting there.
+    const alreadyHasUnstoppable = alreadyHasMonthBadge("The Unstoppable");
+    const qualifiesUnstoppable = unstoppableDoctors.has(key);
+    let revokeUnstoppable = false;
+    if (qualifiesUnstoppable && !alreadyHasUnstoppable) {
       earnedBadges.push("The Unstoppable");
       coinsAwarded += 10;
+    } else if (!qualifiesUnstoppable && alreadyHasUnstoppable) {
+      revokeUnstoppable = true;
     }
+
     if (diligentDocDoctors.has(key) && !alreadyHasMonthBadge("The Diligent Doc")) {
       earnedBadges.push("The Diligent Doc");
       coinsAwarded += 10;
@@ -370,7 +397,7 @@ export function recalculateBadgesForMonth(
       }
     }
 
-    if (earnedBadges.length === 0) return u;
+    if (earnedBadges.length === 0 && !revokeUnstoppable) return u;
 
     const badgeMap: { [key: string]: number } = {};
     (u.badges || "").split(",").forEach((item) => {
@@ -410,12 +437,28 @@ export function recalculateBadgesForMonth(
         badgeMap[tag] = (badgeMap[tag] || 0) + newLmsCount;
       }
     }
+    if (revokeUnstoppable) {
+      delete badgeMap[`The Unstoppable ${monthTagSuffix}`];
+    }
 
     const updatedBadgeString = Object.keys(badgeMap)
       .map((k) => `${k}:${badgeMap[k]}`)
       .join(", ");
 
-    summaryLines.push(`${u.name}: +${coinsAwarded} AraCoins (${earnedBadges.join(", ")})`);
+    if (earnedBadges.length > 0) {
+      summaryLines.push(`${u.name}: +${coinsAwarded} AraCoins (${earnedBadges.join(", ")})`);
+    }
+    if (revokeUnstoppable) {
+      summaryLines.push(
+        `${u.name}: The Unstoppable REVOKED for ${monthLabel} (cancellation found)`,
+      );
+      badgeRevocations.push({
+        phone: u.phone,
+        name: u.name,
+        badgeName: "The Unstoppable",
+        monthTag: monthTagSlash,
+      });
+    }
 
     // Record per-badge details for the badge_awards Supabase table — total
     // count for this month (not just what's new in this run), plus the full
@@ -488,5 +531,5 @@ export function recalculateBadgesForMonth(
     };
   });
 
-  return { updatedUsers, summaryLines, badgeAwardDetails };
+  return { updatedUsers, summaryLines, badgeAwardDetails, badgeRevocations };
 }
