@@ -1480,12 +1480,6 @@ export default function App() {
 
                               <div className="space-y-2 max-h-56 overflow-y-auto pr-2">
                                 {getManualHeartCandidates().map((review, i) => {
-                                  // Locate doctor's profile to retrieve phone mapping
-                                  const matchesDoc = state.users.find((u) =>
-                                    u.name
-                                      .toUpperCase()
-                                      .includes(review.name.toUpperCase()),
-                                  );
                                   return (
                                     <div
                                       key={i}
@@ -1507,7 +1501,7 @@ export default function App() {
                                           handleGoogleReviewScannerAward(
                                             review.name,
                                             review.badgeId,
-                                            matchesDoc?.phone || "",
+                                            review.phone,
                                           )
                                         }
                                         className="bg-rose-600 font-bold hover:bg-rose-700 text-white text-[10px] py-1.5 px-3.5 rounded-lg shrink-0"
