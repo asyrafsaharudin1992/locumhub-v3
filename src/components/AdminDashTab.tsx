@@ -88,13 +88,32 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
     return false;
   });
 
-  const uniqueDoctorsList = Array.from(
-    new Set(
-      slots
-        .filter(s => s.status === 'Approved' && s.dr)
-        .map(s => s.dr.trim())
-    )
-  ).sort();
+  // Slot dr values are free-text and can carry inconsistent casing across
+  // different records for the SAME real doctor (e.g. "HAKIM" on some
+  // slots, "Hakim" on others) — a plain Set on the raw string produces
+  // confusing duplicate-looking entries. Group by normalized name instead,
+  // and use whichever raw casing appears most often as the display label
+  // (downstream filtering already matches on normalized name via
+  // doctorNameWordMatch, so this doesn't break the actual filter).
+  const uniqueDoctorsList = (() => {
+    const normalize = (s: string) =>
+      s.toUpperCase().trim().replace(/^DR\.?\s+/i, "");
+    const counts = new Map<string, Map<string, number>>();
+    slots
+      .filter(s => s.status === 'Approved' && s.dr)
+      .forEach(s => {
+        const raw = s.dr.trim();
+        const key = normalize(raw);
+        if (!counts.has(key)) counts.set(key, new Map());
+        const variants = counts.get(key)!;
+        variants.set(raw, (variants.get(raw) || 0) + 1);
+      });
+    return Array.from(counts.values())
+      .map(variants =>
+        Array.from(variants.entries()).sort((a, b) => b[1] - a[1])[0][0],
+      )
+      .sort();
+  })();
 
   const handleActiveSlotSelect = (slotId: string) => {
     const slot = slots.find(s => s.id === slotId);
