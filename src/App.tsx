@@ -120,6 +120,7 @@ export default function App() {
     getManualHeartCandidates,
     refreshHeartWinnerAwardedIds,
     giftHeartWinnerReview,
+    allBadgeAwards,
     submitRecruitment,
     logActivity,
     markNotificationsAsRead,
@@ -234,6 +235,10 @@ export default function App() {
   const [cmeDate, setCmeDate] = useState("");
   const [cmeTime, setCmeTime] = useState("2pm-4pm");
   const [cmeType, setCmeType] = useState<"CME" | "Briefing">("CME");
+
+  // Filters for the badge history table (Loyalty Awards page)
+  const [badgeHistoryDoctor, setBadgeHistoryDoctor] = useState("");
+  const [badgeHistoryMonth, setBadgeHistoryMonth] = useState("");
 
   useEffect(() => {
     if (activeTab === "admin-fb" || activeTab === "feedback") {
@@ -1113,6 +1118,7 @@ export default function App() {
                       slots={state.slots}
                       users={state.users}
                       onCompleteSlot={completeSlotAndAwardPoints}
+                      allBadgeAwards={allBadgeAwards}
                       onRecalculateBadges={async (month, year) => {
                         // Don't rely on patientFeedbackEntries — it's only
                         // populated after visiting the Feedback Management
@@ -1660,6 +1666,97 @@ export default function App() {
                               </div>
                             </div>
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Badge History table — filter by doctor and month to
+                          see exactly what a doctor earned, sourced straight
+                          from badge_awards (the source of truth). */}
+                      <div className="bg-white rounded-3xl border border-slate-100 p-6 space-y-4">
+                        <h5 className="font-display font-semibold text-slate-800 text-sm tracking-tight uppercase flex items-center gap-1.5">
+                          <Award className="w-4 h-4 text-slate-500" />
+                          Badge History
+                        </h5>
+                        <p className="text-xs text-slate-500">
+                          Filter by doctor and/or month to see exactly which
+                          badges were awarded, sourced live from badge_awards.
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <select
+                            value={badgeHistoryDoctor}
+                            onChange={(e) => setBadgeHistoryDoctor(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 cursor-pointer"
+                          >
+                            <option value="">All Doctors</option>
+                            {Array.from(
+                              new Set(allBadgeAwards.map((r) => r.doctor_name)),
+                            )
+                              .sort()
+                              .map((name) => (
+                                <option key={name} value={name}>
+                                  {name}
+                                </option>
+                              ))}
+                          </select>
+                          <select
+                            value={badgeHistoryMonth}
+                            onChange={(e) => setBadgeHistoryMonth(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 cursor-pointer"
+                          >
+                            <option value="">All Months</option>
+                            {Array.from(
+                              new Set(allBadgeAwards.map((r) => r.month_tag)),
+                            )
+                              .sort()
+                              .reverse()
+                              .map((mt) => (
+                                <option key={mt} value={mt}>
+                                  {mt}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-xl border border-slate-100">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-slate-50 text-slate-400 uppercase text-[10px]">
+                                <th className="text-left p-3 font-bold">Doctor</th>
+                                <th className="text-left p-3 font-bold">Badge</th>
+                                <th className="text-left p-3 font-bold">Month</th>
+                                <th className="text-right p-3 font-bold">Count</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {allBadgeAwards
+                                .filter(
+                                  (r) =>
+                                    (!badgeHistoryDoctor || r.doctor_name === badgeHistoryDoctor) &&
+                                    (!badgeHistoryMonth || r.month_tag === badgeHistoryMonth),
+                                )
+                                .sort((a, b) => b.month_tag.localeCompare(a.month_tag))
+                                .map((r, i) => (
+                                  <tr key={i} className="hover:bg-slate-50">
+                                    <td className="p-3 font-semibold text-slate-700">{r.doctor_name}</td>
+                                    <td className="p-3 text-slate-600">{r.badge_name}</td>
+                                    <td className="p-3 text-slate-500 font-mono">{r.month_tag}</td>
+                                    <td className="p-3 text-right font-bold text-slate-800">{r.award_count}</td>
+                                  </tr>
+                                ))}
+                              {allBadgeAwards.filter(
+                                (r) =>
+                                  (!badgeHistoryDoctor || r.doctor_name === badgeHistoryDoctor) &&
+                                  (!badgeHistoryMonth || r.month_tag === badgeHistoryMonth),
+                              ).length === 0 && (
+                                <tr>
+                                  <td colSpan={4} className="p-6 text-center text-slate-400">
+                                    No badges match this filter.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     </div>
