@@ -117,6 +117,7 @@ export default function App() {
     migrateHistoricalBadgesToSupabase,
     reconcilePointsFromBadgeAwards,
     getManualHeartCandidates,
+    refreshHeartWinnerAwardedIds,
     submitRecruitment,
     logActivity,
     markNotificationsAsRead,
@@ -464,6 +465,10 @@ export default function App() {
     }
     const res = adminGivePoints(phone, 15, badgeId);
     alert(res);
+    // Small delay so the fire-and-forget save to badge_awards has time to
+    // land before we re-check it — otherwise the refresh might run before
+    // the row actually exists yet and the review would still show up.
+    setTimeout(() => refreshHeartWinnerAwardedIds(), 1200);
   };
 
   // Restrict navigation arrays depending on logged roles
@@ -1426,29 +1431,20 @@ export default function App() {
                           </p>
 
                           <div className="space-y-3 pt-2">
-                            {/* One-time migration to the new badge_awards table */}
-                            <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <h6 className="text-xs font-bold text-indigo-950 font-display">
-                                  Migrate to badge_awards table
-                                </h6>
-                                <p className="text-[11px] text-slate-500 font-sans leading-relaxed max-w-xs">
-                                  One-time backfill of existing badge history
-                                  into the new per-month table for monthly
-                                  dashboard reporting. Safe to run more than
-                                  once.
-                                </p>
-                              </div>
-                              <button
-                                onClick={handleMigrateBadges}
-                                disabled={isMigratingBadges}
-                                className="bg-indigo-600 text-white hover:bg-indigo-700 text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer shrink-0 disabled:opacity-60"
-                              >
-                                {isMigratingBadges ? "Migrating..." : "Migrate Now"}
-                              </button>
-                            </div>
-
-                            {/* Reverse direction: rebuild users.badges/points from badge_awards */}
+                            {/* Rebuild users.badges/points from badge_awards. This is the
+                                ONLY scanner kept here — "Migrate to badge_awards" (wrote the
+                                opposite direction, from the old badges string into
+                                badge_awards, which could re-introduce stale/corrupted data)
+                                and the two "Run Check" buttons (Iron Doctor auto-scan /
+                                Unstoppable Monthly evaluation) were removed: both called
+                                separate, older functions (processIronDoctorScan /
+                                processMonthlyUnstoppable) that duplicated what
+                                "Recalculate Badges" on the Analytics Dashboard already does
+                                correctly, using cruder detection logic and without the
+                                idempotent-points fix — running them corrupted badge_awards.
+                                Use "Recalculate Badges" (Analytics Dashboard) for all
+                                automatic badge detection now; use this button afterward to
+                                sync points/badges. */}
                             <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 flex items-start justify-between gap-3">
                               <div className="space-y-1">
                                 <h6 className="text-xs font-bold text-amber-950 font-display">
@@ -1456,9 +1452,11 @@ export default function App() {
                                 </h6>
                                 <p className="text-[11px] text-slate-500 font-sans leading-relaxed max-w-xs">
                                   Rebuilds each doctor's badges &amp; points to
-                                  match badge_awards exactly — use this after a
-                                  reset/cleanup to bring the two tables back
-                                  in sync. This OVERWRITES current badges/points.
+                                  match badge_awards exactly — run this after
+                                  using "Recalculate Badges" on the Analytics
+                                  Dashboard, or after any reset/cleanup, to
+                                  bring the two tables back in sync. This
+                                  OVERWRITES current badges/points.
                                 </p>
                               </div>
                               <button
@@ -1467,50 +1465,6 @@ export default function App() {
                                 className="bg-amber-600 text-white hover:bg-amber-700 text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer shrink-0 disabled:opacity-60"
                               >
                                 {isReconcilingPoints ? "Reconciling..." : "Reconcile Now"}
-                              </button>
-                            </div>
-
-                            {/* Iron Doctor auto-scan trigger */}
-                            <div className="p-4 bg-sky-50/50 rounded-2xl border border-sky-100 flex items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <h6 className="text-xs font-bold text-sky-950 font-display">
-                                  Iron Doctor auto-scan
-                                </h6>
-                                <p className="text-[11px] text-slate-500 font-sans leading-relaxed max-w-xs">
-                                  Auto-reward completed shifts of{" "}
-                                  <strong>12+ hours</strong> once the shift
-                                  has already ended — no need to close out
-                                  performance first.
-                                </p>
-                              </div>
-                              <button
-                                onClick={handleIronDoctorScan}
-                                className="bg-[#001F3F] text-white hover:bg-[#001226] text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer shrink-0"
-                              >
-                                Run Check
-                              </button>
-                            </div>
-
-                            {/* Unstoppable monthly eval trigger */}
-                            <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <h6 className="text-xs font-bold text-emerald-950 font-display">
-                                  Unstoppable Monthly evaluation
-                                </h6>
-                                <p className="text-[11px] text-slate-500 font-sans leading-relaxed max-w-xs">
-                                  Auto-reward locum doctors with{" "}
-                                  <strong>
-                                    &gt;= 2 approved Shifts and exactly 0
-                                    Cancellations
-                                  </strong>{" "}
-                                  for any month of audit.
-                                </p>
-                              </div>
-                              <button
-                                onClick={handleMonthlyUnstoppableScan}
-                                className="bg-[#001F3F] text-white hover:bg-[#001226] text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer"
-                              >
-                                Run Check
                               </button>
                             </div>
 
