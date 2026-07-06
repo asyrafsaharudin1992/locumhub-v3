@@ -639,7 +639,7 @@ export default function App() {
                   ARA CLINIC LOCUM
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  24 Hour Clinic Medical Roster & Operations Hub
+                  Every shift matters. Every patient counts.
                 </p>
               </div>
 
