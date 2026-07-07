@@ -133,6 +133,7 @@ export default function App() {
     giftHeartWinnerReview,
     allBadgeAwards,
     shiftDeclarations,
+    refreshShiftDeclarations,
     submitRecruitment,
     logActivity,
     markNotificationsAsRead,
