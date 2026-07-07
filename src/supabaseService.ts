@@ -1061,6 +1061,7 @@ export async function deleteBadgeAwardFromSupabase(
 export async function saveShiftDeclarationToSupabase(declaration: {
   doctorName: string;
   doctorPhone?: string;
+  mmcNumber?: string;
   branch: string;
   residentDoctorName?: string;
 }): Promise<{ success: boolean; error?: string }> {
@@ -1072,6 +1073,7 @@ export async function saveShiftDeclarationToSupabase(declaration: {
     id,
     doctor_name: declaration.doctorName,
     doctor_phone: declaration.doctorPhone || null,
+    mmc_number: declaration.mmcNumber || null,
     branch: declaration.branch,
     resident_doctor_name: declaration.residentDoctorName || null,
   });
@@ -1087,6 +1089,7 @@ export interface ShiftDeclarationRow {
   id: string;
   doctor_name: string;
   doctor_phone: string | null;
+  mmc_number: string | null;
   branch: string;
   resident_doctor_name: string | null;
   declared_at: string;
