@@ -4,6 +4,17 @@ import { UserProfile } from '../types';
 
 const BRANCHES = ['Kajang', 'Seri Kembangan', 'Semenyih'];
 
+// The users.mmc field can contain just a plain number (e.g. "90420"), or
+// that number followed by a Google Drive link to the uploaded credential
+// file (e.g. "90420 https://drive.google.com/..."). Only the number itself
+// should ever be shown/printed on the declaration — strip anything after
+// the first whitespace, and anything that isn't part of a leading number.
+const cleanMmcNumber = (raw: string): string => {
+  if (!raw) return '';
+  const match = raw.trim().match(/^[\d/\-A-Za-z]+/);
+  return match ? match[0].split(/\s+/)[0] : raw.trim().split(/\s+/)[0] || '';
+};
+
 export const DECLARATION_TEXT = [
   {
     title: '1. Use of Latest Malaysian Guidelines',
@@ -100,7 +111,7 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
     setDoctorPhone(phone);
     const match = doctors.find((d) => d.phone === phone);
     setDoctorName(match ? match.name : '');
-    setDoctorMmc(match ? match.mmc || '' : '');
+    setDoctorMmc(match ? cleanMmcNumber(match.mmc || '') : '');
   };
 
   const handleSubmit = async () => {
