@@ -16,14 +16,12 @@ export const DECLARATION_TEXT = [
     title: '2. Pathway for Case Discussion',
     body: [
       'For any complex, complicated, or emergency case during this shift, I will contact the standby resident doctor on call immediately for case discussion and advice.',
-      'I will ensure relevant patient information (including a screenshot of the case file where needed) is prepared and available for discussion.',
-      'I will follow the instructions and advice provided by the resident doctor promptly, and document the discussion and its outcome in the patient\u2019s medical notes.',
     ],
   },
   {
     title: '3. High-Risk Patient Management',
     body: [
-      'All high-risk patients (e.g., elderly, patients with comorbidities, or unstable vital signs) will be identified and managed appropriately according to KKM guidelines.',
+      'All high-risk patients (e.g., elderly, patients with comorbidities, or unstable vital signs) will be identified and managed appropriately according to KKM / latest international guidelines.',
     ],
   },
   {
@@ -35,7 +33,8 @@ export const DECLARATION_TEXT = [
   {
     title: '5. Safe Prescription of Medication',
     body: [
-      'All medications prescribed will be reviewed for possible contraindications and interactions. High-risk medications will be used only when absolutely necessary and in line with guidelines.',
+      'I will ensure the correct dosage is prescribed for all medications, taking into account the patient\u2019s age, weight, and clinical condition.',
+      'I will avoid prescribing medications that are contraindicated or known to cause allergies in the patient.',
     ],
   },
   {
@@ -47,7 +46,7 @@ export const DECLARATION_TEXT = [
   {
     title: '7. Accurate Documentation',
     body: [
-      'All patient interactions, diagnoses, treatments, and advice will be thoroughly and accurately documented in the patient\u2019s medical record.',
+      'All important clinical points will be documented in the patient\u2019s medical record.',
     ],
   },
   {
