@@ -10,6 +10,7 @@ import {
   fetchPatientFeedbackFromSheets,
 } from "./googleSheetsService";
 import { DoctorBookingTab } from "./components/DoctorBookingTab";
+import { PreShiftDeclarationForm } from "./components/PreShiftDeclarationForm";
 import { DoctorStatusTab } from "./components/DoctorStatusTab";
 import { DoctorProfileTab } from "./components/DoctorProfileTab";
 import { DoctorFeedbackView } from "./components/DoctorFeedbackView";
@@ -92,6 +93,16 @@ function doctorNamesMatch(a: string, b: string): boolean {
 }
 
 export default function App() {
+  // Public pre-shift declaration form — reached by scanning the static
+  // per-branch QR code at the clinic counter. Deliberately checked here,
+  // before any of useAppState()'s hooks run, and returns immediately: no
+  // login required, no admin/doctor session needed. The URL is expected
+  // to look like "?declare=Kajang" (the QR code embeds this link).
+  const declareBranchParam = new URLSearchParams(window.location.search).get('declare');
+  if (declareBranchParam !== null) {
+    return <PreShiftDeclarationForm initialBranch={declareBranchParam} />;
+  }
+
   const {
     state,
     loginUser,
@@ -121,6 +132,7 @@ export default function App() {
     refreshHeartWinnerAwardedIds,
     giftHeartWinnerReview,
     allBadgeAwards,
+    shiftDeclarations,
     submitRecruitment,
     logActivity,
     markNotificationsAsRead,
@@ -1786,6 +1798,95 @@ export default function App() {
                             </div>
                           );
                         })()}
+                      </div>
+
+                      {/* Pre-Shift Declarations — QR check-in submissions.
+                          Staff display a static per-branch QR code at the
+                          counter; doctors scan it to acknowledge the
+                          clinical practice declaration before starting
+                          their shift. */}
+                      <div className="bg-white rounded-3xl border border-slate-100 p-6 space-y-4">
+                        <h5 className="font-display font-semibold text-slate-800 text-sm tracking-tight uppercase flex items-center gap-1.5">
+                          <ClipboardList className="w-4 h-4 text-slate-500" />
+                          Pre-Shift Declarations (QR Check-In)
+                        </h5>
+                        <p className="text-xs text-slate-500">
+                          Print and display the QR code for each branch at the counter. Doctors
+                          scan it to read and acknowledge the clinical practice declaration
+                          before starting their shift.
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          {["Kajang", "Seri Kembangan", "Semenyih"].map((branch) => {
+                            const declareUrl = `${window.location.origin}${window.location.pathname}?declare=${encodeURIComponent(branch)}`;
+                            const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(declareUrl)}`;
+                            return (
+                              <div
+                                key={branch}
+                                className="rounded-2xl border border-slate-100 p-4 text-center space-y-2"
+                              >
+                                <p className="text-xs font-bold text-slate-700">{branch}</p>
+                                <img
+                                  src={qrImg}
+                                  alt={`QR code for ${branch}`}
+                                  className="mx-auto rounded-lg border border-slate-100"
+                                />
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(declareUrl);
+                                    alert(`Link copied for ${branch}:\n${declareUrl}`);
+                                  }}
+                                  className="text-[10px] text-indigo-600 font-bold"
+                                >
+                                  Copy link
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">
+                            Recent Submissions ({shiftDeclarations.length})
+                          </span>
+                          <button
+                            onClick={refreshShiftDeclarations}
+                            className="text-[10px] font-bold text-indigo-600"
+                          >
+                            Refresh
+                          </button>
+                        </div>
+                        <div className="overflow-x-auto rounded-xl border border-slate-100 max-h-72 overflow-y-auto">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 bg-slate-50">
+                              <tr className="text-slate-400 uppercase text-[10px]">
+                                <th className="text-left p-3 font-bold">Doctor</th>
+                                <th className="text-left p-3 font-bold">Branch</th>
+                                <th className="text-left p-3 font-bold">Resident Standby</th>
+                                <th className="text-right p-3 font-bold">Declared At</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {shiftDeclarations.slice(0, 100).map((d) => (
+                                <tr key={d.id}>
+                                  <td className="p-3 font-semibold text-slate-700">{d.doctor_name}</td>
+                                  <td className="p-3 text-slate-600">{d.branch}</td>
+                                  <td className="p-3 text-slate-500">{d.resident_doctor_name || '—'}</td>
+                                  <td className="p-3 text-right text-slate-400 font-mono">
+                                    {new Date(d.declared_at).toLocaleString('en-GB')}
+                                  </td>
+                                </tr>
+                              ))}
+                              {shiftDeclarations.length === 0 && (
+                                <tr>
+                                  <td colSpan={4} className="p-6 text-center text-slate-400">
+                                    No declarations submitted yet.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   )}
