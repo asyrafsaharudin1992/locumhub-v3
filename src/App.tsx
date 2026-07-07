@@ -1263,8 +1263,14 @@ export default function App() {
                                           slot.id,
                                         );
                                         if (/not found/i.test(res)) {
-                                          alert(
-                                            "This booking no longer exists in the system — it may have already been resolved or removed elsewhere. It's been cleared from this list.",
+                                          // Blocking alert() freezes repaint,
+                                          // making the already-removed card
+                                          // look "stuck" until the dialog is
+                                          // dismissed — skip it entirely so
+                                          // the card just disappears cleanly.
+                                          console.warn(
+                                            "Slot no longer exists — removed from pending list:",
+                                            slot.id,
                                           );
                                         } else {
                                           alert(res);
@@ -1292,8 +1298,9 @@ export default function App() {
                                               slot.id,
                                             );
                                             if (/not found/i.test(res)) {
-                                              alert(
-                                                "This booking no longer exists in the system — it may have already been resolved or removed elsewhere. It's been cleared from this list.",
+                                              console.warn(
+                                                "Slot no longer exists — removed from pending list:",
+                                                slot.id,
                                               );
                                             } else {
                                               alert(res);
@@ -2027,6 +2034,18 @@ export default function App() {
                             <span className="text-slate-700 font-semibold">{printDeclaration.branch}</span>
                           </div>
                           <div>
+                            <span className="text-slate-400 uppercase font-bold block">MMC Number</span>
+                            <span className="text-slate-700 font-semibold">
+                              {printDeclaration.mmc_number || '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 uppercase font-bold block">Phone</span>
+                            <span className="text-slate-700 font-semibold">
+                              {printDeclaration.doctor_phone || '—'}
+                            </span>
+                          </div>
+                          <div>
                             <span className="text-slate-400 uppercase font-bold block">
                               Resident Doctor on Standby
                             </span>
@@ -2151,6 +2170,8 @@ export default function App() {
                                   <div class="grid">
                                     <div><span class="label">Doctor</span><span class="value">Dr. ${printDeclaration.doctor_name}</span></div>
                                     <div><span class="label">Branch</span><span class="value">${printDeclaration.branch}</span></div>
+                                    <div><span class="label">MMC Number</span><span class="value">${printDeclaration.mmc_number || '—'}</span></div>
+                                    <div><span class="label">Phone</span><span class="value">${printDeclaration.doctor_phone || '—'}</span></div>
                                     <div><span class="label">Resident Doctor on Standby</span><span class="value">${printDeclaration.resident_doctor_name || '—'}</span></div>
                                     <div><span class="label">Declared At</span><span class="value">${new Date(printDeclaration.declared_at).toLocaleString('en-GB')}</span></div>
                                   </div>
