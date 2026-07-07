@@ -4,7 +4,7 @@ import { UserProfile } from '../types';
 
 const BRANCHES = ['Kajang', 'Seri Kembangan', 'Semenyih'];
 
-const DECLARATION_TEXT = [
+export const DECLARATION_TEXT = [
   {
     title: '1. Use of Latest Malaysian Guidelines',
     body: [
