@@ -73,6 +73,7 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
   const [loadingDoctors, setLoadingDoctors] = useState(true);
   const [doctorName, setDoctorName] = useState('');
   const [doctorPhone, setDoctorPhone] = useState('');
+  const [doctorMmc, setDoctorMmc] = useState('');
   const [residentDoctorName, setResidentDoctorName] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -99,6 +100,7 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
     setDoctorPhone(phone);
     const match = doctors.find((d) => d.phone === phone);
     setDoctorName(match ? match.name : '');
+    setDoctorMmc(match ? match.mmc || '' : '');
   };
 
   const handleSubmit = async () => {
@@ -115,6 +117,7 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
     const res = await saveShiftDeclarationToSupabase({
       doctorName: doctorName.trim(),
       doctorPhone: doctorPhone.trim() || undefined,
+      mmcNumber: doctorMmc.trim() || undefined,
       branch,
       residentDoctorName: residentDoctorName.trim() || undefined,
     });
@@ -218,6 +221,33 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
               </p>
             )}
           </div>
+
+          {doctorPhone && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                  MMC Number
+                </label>
+                <input
+                  type="text"
+                  value={doctorMmc || '—'}
+                  readOnly
+                  className="w-full bg-slate-100 border border-slate-200 text-sm rounded-xl p-3 text-slate-500"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase">
+                  Phone Number
+                </label>
+                <input
+                  type="text"
+                  value={doctorPhone}
+                  readOnly
+                  className="w-full bg-slate-100 border border-slate-200 text-sm rounded-xl p-3 text-slate-500"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-slate-400 uppercase">
