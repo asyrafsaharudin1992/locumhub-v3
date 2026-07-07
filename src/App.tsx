@@ -10,7 +10,7 @@ import {
   fetchPatientFeedbackFromSheets,
 } from "./googleSheetsService";
 import { DoctorBookingTab } from "./components/DoctorBookingTab";
-import { PreShiftDeclarationForm } from "./components/PreShiftDeclarationForm";
+import { PreShiftDeclarationForm, DECLARATION_TEXT } from "./components/PreShiftDeclarationForm";
 import { DoctorStatusTab } from "./components/DoctorStatusTab";
 import { DoctorProfileTab } from "./components/DoctorProfileTab";
 import { DoctorFeedbackView } from "./components/DoctorFeedbackView";
@@ -252,6 +252,8 @@ export default function App() {
   // Filters for the badge history table (Loyalty Awards page)
   const [badgeHistoryDoctor, setBadgeHistoryDoctor] = useState("");
   const [badgeHistoryMonth, setBadgeHistoryMonth] = useState("");
+  const [declarationsPage, setDeclarationsPage] = useState(0);
+  const [printDeclaration, setPrintDeclaration] = useState<any>(null);
 
   useEffect(() => {
     if (activeTab === "admin-fb" || activeTab === "feedback") {
@@ -652,7 +654,7 @@ export default function App() {
                   ARA CLINIC LOCUM
                 </h2>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  24 Hour Clinic Medical Roster & Operations Hub
+                  Every shift matters, every patient counts
                 </p>
               </div>
 
@@ -1857,36 +1859,180 @@ export default function App() {
                             Refresh
                           </button>
                         </div>
-                        <div className="overflow-x-auto rounded-xl border border-slate-100 max-h-72 overflow-y-auto">
+                        <div className="overflow-x-auto rounded-xl border border-slate-100">
                           <table className="w-full text-xs">
-                            <thead className="sticky top-0 bg-slate-50">
+                            <thead className="bg-slate-50">
                               <tr className="text-slate-400 uppercase text-[10px]">
                                 <th className="text-left p-3 font-bold">Doctor</th>
                                 <th className="text-left p-3 font-bold">Branch</th>
                                 <th className="text-left p-3 font-bold">Resident Standby</th>
                                 <th className="text-right p-3 font-bold">Declared At</th>
+                                <th className="text-right p-3 font-bold">Print</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                              {shiftDeclarations.slice(0, 100).map((d) => (
-                                <tr key={d.id}>
-                                  <td className="p-3 font-semibold text-slate-700">{d.doctor_name}</td>
-                                  <td className="p-3 text-slate-600">{d.branch}</td>
-                                  <td className="p-3 text-slate-500">{d.resident_doctor_name || '—'}</td>
-                                  <td className="p-3 text-right text-slate-400 font-mono">
-                                    {new Date(d.declared_at).toLocaleString('en-GB')}
-                                  </td>
-                                </tr>
-                              ))}
+                              {shiftDeclarations
+                                .slice(declarationsPage * 10, declarationsPage * 10 + 10)
+                                .map((d) => (
+                                  <tr key={d.id}>
+                                    <td className="p-3 font-semibold text-slate-700">{d.doctor_name}</td>
+                                    <td className="p-3 text-slate-600">{d.branch}</td>
+                                    <td className="p-3 text-slate-500">{d.resident_doctor_name || '—'}</td>
+                                    <td className="p-3 text-right text-slate-400 font-mono">
+                                      {new Date(d.declared_at).toLocaleString('en-GB')}
+                                    </td>
+                                    <td className="p-3 text-right">
+                                      <button
+                                        onClick={() => setPrintDeclaration(d)}
+                                        className="text-indigo-600 font-bold text-[10px] border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-50"
+                                      >
+                                        View
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
                               {shiftDeclarations.length === 0 && (
                                 <tr>
-                                  <td colSpan={4} className="p-6 text-center text-slate-400">
+                                  <td colSpan={5} className="p-6 text-center text-slate-400">
                                     No declarations submitted yet.
                                   </td>
                                 </tr>
                               )}
                             </tbody>
                           </table>
+                        </div>
+                        {shiftDeclarations.length > 10 && (
+                          <div className="flex items-center justify-between pt-1">
+                            <button
+                              onClick={() => setDeclarationsPage((p) => Math.max(0, p - 1))}
+                              disabled={declarationsPage === 0}
+                              className="text-[10px] font-bold text-slate-500 disabled:opacity-30"
+                            >
+                              ← Previous
+                            </button>
+                            <span className="text-[10px] text-slate-400">
+                              Page {declarationsPage + 1} of{" "}
+                              {Math.ceil(shiftDeclarations.length / 10)}
+                            </span>
+                            <button
+                              onClick={() =>
+                                setDeclarationsPage((p) =>
+                                  (p + 1) * 10 < shiftDeclarations.length ? p + 1 : p,
+                                )
+                              }
+                              disabled={(declarationsPage + 1) * 10 >= shiftDeclarations.length}
+                              className="text-[10px] font-bold text-slate-500 disabled:opacity-30"
+                            >
+                              Next →
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Printable view of a single shift declaration — for
+                      keeping a physical record in case of medical/legal
+                      issues arising from that shift. */}
+                  {printDeclaration && (
+                    <div
+                      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 print:bg-white print:static print:p-0"
+                      onClick={() => setPrintDeclaration(null)}
+                    >
+                      <div
+                        className="bg-white rounded-3xl sm:max-w-2xl w-full max-h-[85vh] overflow-y-auto p-8 space-y-6 print:max-h-none print:overflow-visible print:rounded-none print:shadow-none"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="text-center space-y-1 pb-4 border-b border-slate-100">
+                          <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                            Klinik ARA 24 Jam
+                          </p>
+                          <h2 className="text-lg font-bold text-slate-800">
+                            Locum Doctor: Declaration &amp; Rules of Safe Clinical Practice
+                          </h2>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <span className="text-slate-400 uppercase font-bold block">Doctor</span>
+                            <span className="text-slate-700 font-semibold">
+                              Dr. {printDeclaration.doctor_name}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 uppercase font-bold block">Branch</span>
+                            <span className="text-slate-700 font-semibold">{printDeclaration.branch}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 uppercase font-bold block">
+                              Resident Doctor on Standby
+                            </span>
+                            <span className="text-slate-700 font-semibold">
+                              {printDeclaration.resident_doctor_name || '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 uppercase font-bold block">
+                              Declared At
+                            </span>
+                            <span className="text-slate-700 font-semibold">
+                              {new Date(printDeclaration.declared_at).toLocaleString('en-GB')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4 border border-slate-100 rounded-2xl p-4">
+                          {DECLARATION_TEXT.map((section) => (
+                            <div key={section.title}>
+                              <h3 className="text-xs font-bold text-slate-700 mb-1">
+                                {section.title}
+                              </h3>
+                              <ul className="list-disc list-inside space-y-0.5">
+                                {section.body.map((line, i) => (
+                                  <li key={i} className="text-[11px] text-slate-500 leading-relaxed">
+                                    {line}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+
+                        <p className="text-xs text-slate-600 bg-indigo-50/50 border border-indigo-100 rounded-xl p-3">
+                          I hereby acknowledge and agree to the above terms and conditions, and
+                          commit to upholding them throughout my shift.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 text-xs">
+                          <div>
+                            <span className="text-slate-400 uppercase font-bold block mb-4">
+                              Signature (Digital Acknowledgment)
+                            </span>
+                            <span className="text-slate-700 font-semibold border-b border-slate-300 pb-1">
+                              Dr. {printDeclaration.doctor_name}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-slate-400 uppercase font-bold block mb-4">
+                              Clinic Chop
+                            </span>
+                            <div className="border-b border-slate-300 h-6" />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 print:hidden">
+                          <button
+                            onClick={() => setPrintDeclaration(null)}
+                            className="flex-1 bg-slate-100 text-slate-600 font-bold py-3 rounded-xl text-sm"
+                          >
+                            Close
+                          </button>
+                          <button
+                            onClick={() => window.print()}
+                            className="flex-1 bg-[#001F3F] text-white font-bold py-3 rounded-xl text-sm"
+                          >
+                            🖨️ Print
+                          </button>
                         </div>
                       </div>
                     </div>
