@@ -2069,7 +2069,82 @@ export default function App() {
                             Close
                           </button>
                           <button
-                            onClick={() => window.print()}
+                            onClick={() => {
+                              const sectionsHtml = DECLARATION_TEXT.map(
+                                (section) => `
+                                  <div style="margin-bottom:12px;">
+                                    <h3 style="font-size:12px;font-weight:700;color:#334155;margin:0 0 4px;">${section.title}</h3>
+                                    <ul style="margin:0;padding-left:18px;">
+                                      ${section.body
+                                        .map(
+                                          (line) =>
+                                            `<li style="font-size:11px;color:#64748b;line-height:1.5;">${line}</li>`,
+                                        )
+                                        .join('')}
+                                    </ul>
+                                  </div>
+                                `,
+                              ).join('');
+
+                              const html = `
+                                <!DOCTYPE html>
+                                <html>
+                                <head>
+                                  <meta charset="utf-8" />
+                                  <title>Pre-Shift Declaration — Dr. ${printDeclaration.doctor_name}</title>
+                                  <style>
+                                    @page { size: A4; margin: 18mm; }
+                                    body { font-family: -apple-system, Arial, sans-serif; color: #1e293b; margin: 0; padding: 0; }
+                                    .header { text-align: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px; }
+                                    .header .brand { font-size: 11px; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.05em; }
+                                    .header h1 { font-size: 16px; margin: 4px 0 0; }
+                                    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 11px; margin-bottom: 16px; }
+                                    .grid .label { color: #94a3b8; text-transform: uppercase; font-weight: 700; font-size: 9px; display: block; }
+                                    .grid .value { color: #334155; font-weight: 600; }
+                                    .box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 16px; }
+                                    .ack { font-size: 11px; background: #eef2ff; border: 1px solid #e0e7ff; border-radius: 10px; padding: 10px; margin-bottom: 20px; }
+                                    .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 11px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+                                    .sign-grid .label { color: #94a3b8; text-transform: uppercase; font-weight: 700; font-size: 9px; display: block; margin-bottom: 16px; }
+                                    .sign-line { border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
+                                  </style>
+                                </head>
+                                <body>
+                                  <div class="header">
+                                    <div class="brand">Klinik ARA 24 Jam</div>
+                                    <h1>Locum Doctor: Declaration &amp; Rules of Safe Clinical Practice</h1>
+                                  </div>
+                                  <div class="grid">
+                                    <div><span class="label">Doctor</span><span class="value">Dr. ${printDeclaration.doctor_name}</span></div>
+                                    <div><span class="label">Branch</span><span class="value">${printDeclaration.branch}</span></div>
+                                    <div><span class="label">Resident Doctor on Standby</span><span class="value">${printDeclaration.resident_doctor_name || '—'}</span></div>
+                                    <div><span class="label">Declared At</span><span class="value">${new Date(printDeclaration.declared_at).toLocaleString('en-GB')}</span></div>
+                                  </div>
+                                  <div class="box">${sectionsHtml}</div>
+                                  <div class="ack">I hereby acknowledge and agree to the above terms and conditions, and commit to upholding them throughout my shift.</div>
+                                  <div class="sign-grid">
+                                    <div>
+                                      <span class="label">Signature (Digital Acknowledgment)</span>
+                                      <span class="sign-line">Dr. ${printDeclaration.doctor_name}</span>
+                                    </div>
+                                    <div>
+                                      <span class="label">Clinic Chop</span>
+                                      <div class="sign-line">&nbsp;</div>
+                                    </div>
+                                  </div>
+                                </body>
+                                </html>
+                              `;
+
+                              const printWindow = window.open('', '_blank', 'width=800,height=1000');
+                              if (printWindow) {
+                                printWindow.document.write(html);
+                                printWindow.document.close();
+                                printWindow.onload = () => {
+                                  printWindow.focus();
+                                  printWindow.print();
+                                };
+                              }
+                            }}
                             className="flex-1 bg-[#001F3F] text-white font-bold py-3 rounded-xl text-sm"
                           >
                             🖨️ Print
