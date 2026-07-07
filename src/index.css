@@ -25,3 +25,23 @@
   background: #94a3b8;
 }
 
+/* Print isolation for the shift declaration "View/Print" modal — Tailwind's
+   print:hidden on the buttons alone isn't enough, since the REST of the
+   page (sidebar, dashboard cards behind the modal, etc.) still prints too.
+   This hides everything on the page except the element tagged
+   .printable-declaration when printing. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .printable-declaration,
+  .printable-declaration * {
+    visibility: visible;
+  }
+  .printable-declaration {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}
