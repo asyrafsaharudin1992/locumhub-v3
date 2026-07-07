@@ -211,6 +211,7 @@ export default function App() {
     setStickyPendingSlots((prev) => {
       const next = { ...prev };
       state.slots.forEach((s) => {
+        if (resolvedSlotIdsRef.current.has(s.id)) return;
         if (s.status === "Pending") {
           next[s.id] = s;
         } else if (next[s.id]) {
@@ -288,6 +289,13 @@ export default function App() {
   // means it was genuinely resolved elsewhere, not just dropped by a bad
   // fetch.
   const [stickyPendingSlots, setStickyPendingSlots] = useState<Record<string, any>>({});
+  // IDs the admin has explicitly approved/declined this session — once
+  // resolved, never re-add to stickyPendingSlots even if a slow/stale
+  // background poll still returns that slot as "Pending" (the action just
+  // hasn't finished propagating to Supabase yet). Without this, clicking
+  // Decline would make the card disappear for a moment, then reappear as
+  // soon as the next 10-second poll ran with pre-decline data.
+  const resolvedSlotIdsRef = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (activeTab === "admin-fb" || activeTab === "feedback") {
@@ -1245,6 +1253,7 @@ export default function App() {
                                   <div className="flex gap-2 text-xs">
                                     <button
                                       onClick={async () => {
+                                        resolvedSlotIdsRef.current.add(slot.id);
                                         setStickyPendingSlots((prev) => {
                                           const next = { ...prev };
                                           delete next[slot.id];
@@ -1253,7 +1262,13 @@ export default function App() {
                                         const res = await adminApproveSlot(
                                           slot.id,
                                         );
-                                        alert(res);
+                                        if (/not found/i.test(res)) {
+                                          alert(
+                                            "This booking no longer exists in the system — it may have already been resolved or removed elsewhere. It's been cleared from this list.",
+                                          );
+                                        } else {
+                                          alert(res);
+                                        }
                                       }}
                                       className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl cursor-pointer"
                                     >
@@ -1266,6 +1281,7 @@ export default function App() {
                                             "Purge application request? Available status parameters will restore.",
                                             )
                                           ) {
+                                            resolvedSlotIdsRef.current.add(slot.id);
                                             setStickyPendingSlots((prev) => {
                                               const next = { ...prev };
                                               delete next[slot.id];
@@ -1275,7 +1291,13 @@ export default function App() {
                                               "CANCEL",
                                               slot.id,
                                             );
-                                            alert(res);
+                                            if (/not found/i.test(res)) {
+                                              alert(
+                                                "This booking no longer exists in the system — it may have already been resolved or removed elsewhere. It's been cleared from this list.",
+                                              );
+                                            } else {
+                                              alert(res);
+                                            }
                                           }
                                         }}
                                         className="bg-slate-50 border border-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl hover:bg-slate-100"
@@ -2093,8 +2115,11 @@ export default function App() {
                                   <meta charset="utf-8" />
                                   <title>Pre-Shift Declaration — Dr. ${printDeclaration.doctor_name}</title>
                                   <style>
-                                    @page { size: A4; margin: 18mm; }
-                                    body { font-family: -apple-system, Arial, sans-serif; color: #1e293b; margin: 0; padding: 0; }
+                                    @page { size: A4; margin: 0; }
+                                    * { box-sizing: border-box; }
+                                    html, body { margin: 0; padding: 0; background: #e2e8f0; }
+                                    body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1e293b; }
+                                    .page { width: 210mm; min-height: 297mm; margin: 0 auto; background: #fff; padding: 18mm; }
                                     .header { text-align: center; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px; }
                                     .header .brand { font-size: 11px; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 0.05em; }
                                     .header h1 { font-size: 16px; margin: 4px 0 0; }
@@ -2102,13 +2127,23 @@ export default function App() {
                                     .grid .label { color: #94a3b8; text-transform: uppercase; font-weight: 700; font-size: 9px; display: block; }
                                     .grid .value { color: #334155; font-weight: 600; }
                                     .box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; margin-bottom: 16px; }
+                                    .box h3 { font-size: 12px; font-weight: 700; color: #334155; margin: 0 0 4px; }
+                                    .box:last-of-type h3, .box h3:last-child { margin-bottom: 0; }
+                                    .box ul { margin: 0 0 12px; padding-left: 18px; }
+                                    .box > div:last-child ul { margin-bottom: 0; }
+                                    .box li { font-size: 11px; color: #64748b; line-height: 1.5; }
                                     .ack { font-size: 11px; background: #eef2ff; border: 1px solid #e0e7ff; border-radius: 10px; padding: 10px; margin-bottom: 20px; }
                                     .sign-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; font-size: 11px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
                                     .sign-grid .label { color: #94a3b8; text-transform: uppercase; font-weight: 700; font-size: 9px; display: block; margin-bottom: 16px; }
                                     .sign-line { border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
+                                    @media print {
+                                      body { background: #fff; }
+                                      .page { width: auto; min-height: 0; margin: 0; padding: 0; }
+                                    }
                                   </style>
                                 </head>
                                 <body>
+                                  <div class="page">
                                   <div class="header">
                                     <div class="brand">Klinik ARA 24 Jam</div>
                                     <h1>Locum Doctor: Declaration &amp; Rules of Safe Clinical Practice</h1>
@@ -2131,11 +2166,12 @@ export default function App() {
                                       <div class="sign-line">&nbsp;</div>
                                     </div>
                                   </div>
+                                  </div>
                                 </body>
                                 </html>
                               `;
 
-                              const printWindow = window.open('', '_blank', 'width=800,height=1000');
+                              const printWindow = window.open('', '_blank', 'width=850,height=1100');
                               if (printWindow) {
                                 printWindow.document.write(html);
                                 printWindow.document.close();
