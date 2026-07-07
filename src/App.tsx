@@ -208,6 +208,28 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    setStickyPendingSlots((prev) => {
+      const next = { ...prev };
+      state.slots.forEach((s) => {
+        if (s.status === "Pending") {
+          next[s.id] = s;
+        } else if (next[s.id]) {
+          // This exact slot ID was found again, but with a real,
+          // definitively different status — genuinely resolved (approved/
+          // declined/cancelled elsewhere), not just dropped by a flaky
+          // fetch. Safe to remove from the sticky cache.
+          delete next[s.id];
+        }
+      });
+      // Anything in the sticky cache whose ID isn't in this fetch AT ALL
+      // is left untouched — that's exactly the flaky-fetch case being
+      // guarded against, so it stays visible until a fetch either
+      // confirms it's still Pending or shows it resolved.
+      return next;
+    });
+  }, [state.slots]);
+
+  useEffect(() => {
     if (activeTab === "admin-tasks") {
       // The recruitment pipeline is sourced directly from the "NEW LOCUM" Google Form
       // responses sheet — not from Supabase — so it always reflects real submissions.
@@ -254,6 +276,18 @@ export default function App() {
   const [badgeHistoryMonth, setBadgeHistoryMonth] = useState("");
   const [declarationsPage, setDeclarationsPage] = useState(0);
   const [printDeclaration, setPrintDeclaration] = useState<any>(null);
+
+  // Sticky cache of pending slot bookings — the 10-second background poll
+  // (pullFromSupabase) occasionally returns a slots snapshot that's
+  // missing a genuinely-still-pending record (a flaky fetch, not a real
+  // status change), which made the "Booking approvals" list flicker/
+  // disappear moments after correctly showing a real pending booking.
+  // This keeps a doctor's booking visible once seen, until it's either
+  // explicitly approved/declined here, OR a fresh fetch shows that exact
+  // slot ID with a definitively different (non-Pending) status — which
+  // means it was genuinely resolved elsewhere, not just dropped by a bad
+  // fetch.
+  const [stickyPendingSlots, setStickyPendingSlots] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (activeTab === "admin-fb" || activeTab === "feedback") {
@@ -505,7 +539,7 @@ export default function App() {
     : 0;
 
   const pendingApprovalCount = state.currentUser && state.currentUser.role === "Admin"
-    ? (state.slots || []).filter((s) => s.status === "Pending").length
+    ? Object.keys(stickyPendingSlots).length
     : 0;
 
   const DOCTOR_TABS = [
@@ -1178,58 +1212,65 @@ export default function App() {
                           Pending Slots Registrations
                         </h5>
 
-                        {state.slots.filter((s) => s.status === "Pending")
-                          .length === 0 ? (
+                        {Object.keys(stickyPendingSlots).length === 0 ? (
                           <div className="bg-white rounded-3xl p-8 text-center text-slate-400 border border-slate-150 shadow-sm">
                             No shift approvals pending at this time.
                           </div>
                         ) : (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {state.slots
-                              .filter((s) => s.status === "Pending")
-                              .map((slot) => {
-                                return (
-                                  <div
-                                    key={slot.id}
-                                    className="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm space-y-4"
-                                  >
-                                    <div className="space-y-1">
-                                      <h6 className="font-display font-medium text-xs text-sky-800 block uppercase">
-                                        Shift Booking Request
-                                      </h6>
-                                      <div className="font-bold text-slate-800 font-sans text-sm">
-                                        Dr. {slot.dr}
-                                      </div>
-                                      <span className="text-[10px] text-slate-400 block font-mono">
-                                        Clinic: ARA {slot.cawangan} |{" "}
-                                        {slot.tarikh} ({slot.masa})
-                                      </span>
-                                      {slot.bookedAt && (
-                                        <div className="text-[10px] text-rose-500 font-mono font-bold">
-                                          Received: {slot.bookedAt}
-                                        </div>
-                                      )}
+                            {Object.values(stickyPendingSlots).map((slot: any) => {
+                              return (
+                                <div
+                                  key={slot.id}
+                                  className="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm space-y-4"
+                                >
+                                  <div className="space-y-1">
+                                    <h6 className="font-display font-medium text-xs text-sky-800 block uppercase">
+                                      Shift Booking Request
+                                    </h6>
+                                    <div className="font-bold text-slate-800 font-sans text-sm">
+                                      Dr. {slot.dr}
                                     </div>
+                                    <span className="text-[10px] text-slate-400 block font-mono">
+                                      Clinic: ARA {slot.cawangan} |{" "}
+                                      {slot.tarikh} ({slot.masa})
+                                    </span>
+                                    {slot.bookedAt && (
+                                      <div className="text-[10px] text-rose-500 font-mono font-bold">
+                                        Received: {slot.bookedAt}
+                                      </div>
+                                    )}
+                                  </div>
 
-                                    <div className="flex gap-2 text-xs">
-                                      <button
-                                        onClick={async () => {
-                                          const res = await adminApproveSlot(
-                                            slot.id,
-                                          );
-                                          alert(res);
-                                        }}
-                                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl cursor-pointer"
-                                      >
-                                        ✓ Approve Booking
-                                      </button>
-                                      <button
-                                        onClick={async () => {
-                                          if (
-                                            window.confirm(
-                                              "Purge application request? Available status parameters will restore.",
+                                  <div className="flex gap-2 text-xs">
+                                    <button
+                                      onClick={async () => {
+                                        setStickyPendingSlots((prev) => {
+                                          const next = { ...prev };
+                                          delete next[slot.id];
+                                          return next;
+                                        });
+                                        const res = await adminApproveSlot(
+                                          slot.id,
+                                        );
+                                        alert(res);
+                                      }}
+                                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-xl cursor-pointer"
+                                    >
+                                      ✓ Approve Booking
+                                    </button>
+                                    <button
+                                      onClick={async () => {
+                                        if (
+                                          window.confirm(
+                                            "Purge application request? Available status parameters will restore.",
                                             )
                                           ) {
+                                            setStickyPendingSlots((prev) => {
+                                              const next = { ...prev };
+                                              delete next[slot.id];
+                                              return next;
+                                            });
                                             const res = await adminManageSlot(
                                               "CANCEL",
                                               slot.id,
@@ -1936,7 +1977,7 @@ export default function App() {
                       issues arising from that shift. */}
                   {printDeclaration && (
                     <div
-                      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 print:bg-white print:static print:p-0"
+                      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 print:bg-white print:!static print:!block print:!p-0 print:!h-auto print:!w-auto"
                       onClick={() => setPrintDeclaration(null)}
                     >
                       <div
