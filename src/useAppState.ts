@@ -1065,12 +1065,25 @@ export function useAppState() {
   };
 
   const adminApproveSlot = async (id: string): Promise<string> => {
+    // Refresh from Supabase first — acting on a possibly-stale in-memory
+    // state.slots snapshot was causing genuine pending bookings to
+    // incorrectly report as gone/not-found, only for them to reappear
+    // after a page reload (which does a truly fresh fetch) once the
+    // in-memory state eventually caught back up.
+    let baseSlots = state.slots;
+    try {
+      const freshSlots = await fetchSlotsFromSupabase();
+      if (freshSlots && freshSlots.length > 0) baseSlots = freshSlots;
+    } catch (err) {
+      console.error("adminApproveSlot: fresh fetch failed, using in-memory state", err);
+    }
+
     let docName = "";
     let branchName = "";
     let dateStr = "";
     let scheduleStr = "";
 
-    const updatedSlots = state.slots.map((s) => {
+    const updatedSlots = baseSlots.map((s) => {
       if (s.id === id) {
         docName = s.dr;
         branchName = s.cawangan;
@@ -1084,13 +1097,12 @@ export function useAppState() {
     setState((prev) => ({ ...prev, slots: updatedSlots }));
 
     const slot = updatedSlots.find((s) => s.id === id);
-    if (slot) {
-      await cloudSaveSlot(slot).catch((err) =>
-        console.error("Cloud adminApproveSlot failed:", err),
-      );
-      // Trigger local application notification
-      triggerApprovalNotification(slot);
-    }
+    if (!slot) return "Error: Slot not found.";
+    await cloudSaveSlot(slot).catch((err) =>
+      console.error("Cloud adminApproveSlot failed:", err),
+    );
+    // Trigger local application notification
+    triggerApprovalNotification(slot);
 
     if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
       await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
@@ -1112,13 +1124,21 @@ export function useAppState() {
     manualName?: string,
   ): Promise<string> => {
     let result = "Error executing action.";
-    const slot = state.slots.find((s) => s.id === id);
+    // Same fresh-fetch guard as adminApproveSlot — see comment there.
+    let baseSlots = state.slots;
+    try {
+      const freshSlots = await fetchSlotsFromSupabase();
+      if (freshSlots && freshSlots.length > 0) baseSlots = freshSlots;
+    } catch (err) {
+      console.error("adminManageSlot: fresh fetch failed, using in-memory state", err);
+    }
+    const slot = baseSlots.find((s) => s.id === id);
     if (!slot) return "Error: Slot not found.";
     const drAsal = slot.dr || "Unknown";
     const branch = slot.cawangan;
 
     if (action === "DELETE") {
-      const updatedSlots = state.slots.filter((s) => s.id !== id);
+      const updatedSlots = baseSlots.filter((s) => s.id !== id);
       setState((prev) => ({
         ...prev,
         slots: updatedSlots,
@@ -1141,7 +1161,7 @@ export function useAppState() {
     }
 
     if (action === "CANCEL") {
-      const updatedSlots = state.slots.map((s) => {
+      const updatedSlots = baseSlots.map((s) => {
         if (s.id === id) {
           return {
             ...s,
@@ -1198,7 +1218,7 @@ export function useAppState() {
 
       if (finalName) {
         const assignedAt = new Date().toLocaleString("en-GB");
-        const updatedSlots = state.slots.map((s) => {
+        const updatedSlots = baseSlots.map((s) => {
           if (s.id === id) {
             return {
               ...s,
