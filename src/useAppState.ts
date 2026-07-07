@@ -44,6 +44,8 @@ import {
   deleteBadgeAwardFromSupabase,
   fetchBadgeAwardsFromSupabase,
   BadgeAwardRow,
+  fetchShiftDeclarationsFromSupabase,
+  ShiftDeclarationRow,
 } from "./supabaseService";
 
 import {
@@ -208,6 +210,16 @@ export function useAppState() {
   );
 
   const [allBadgeAwards, setAllBadgeAwards] = useState<BadgeAwardRow[]>([]);
+  const [shiftDeclarations, setShiftDeclarations] = useState<ShiftDeclarationRow[]>([]);
+
+  const refreshShiftDeclarations = async () => {
+    try {
+      const rows = await fetchShiftDeclarationsFromSupabase();
+      setShiftDeclarations(rows);
+    } catch (err) {
+      console.error("refreshShiftDeclarations failed:", err);
+    }
+  };
 
   const refreshHeartWinnerAwardedIds = async () => {
     try {
@@ -265,6 +277,7 @@ export function useAppState() {
       });
 
       refreshHeartWinnerAwardedIds();
+      refreshShiftDeclarations();
 
       // nonEmpty: treat an empty array the same as null/undefined — i.e.
       // "no valid new data, keep what we had". Also guards against a fetch
@@ -2630,6 +2643,8 @@ export function useAppState() {
     getManualHeartCandidates,
     refreshHeartWinnerAwardedIds,
     allBadgeAwards,
+    shiftDeclarations,
+    refreshShiftDeclarations,
     giftHeartWinnerReview,
     submitRecruitment,
     logActivity,
