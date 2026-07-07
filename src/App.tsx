@@ -1940,7 +1940,7 @@ export default function App() {
                       onClick={() => setPrintDeclaration(null)}
                     >
                       <div
-                        className="bg-white rounded-3xl sm:max-w-2xl w-full max-h-[85vh] overflow-y-auto p-8 space-y-6 print:max-h-none print:overflow-visible print:rounded-none print:shadow-none"
+                        className="printable-declaration bg-white rounded-3xl sm:max-w-2xl w-full max-h-[85vh] overflow-y-auto p-8 space-y-6 print:max-h-none print:overflow-visible print:rounded-none print:shadow-none"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="text-center space-y-1 pb-4 border-b border-slate-100">
