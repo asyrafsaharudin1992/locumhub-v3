@@ -43,5 +43,16 @@
     top: 0;
     left: 0;
     width: 100%;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+  /* html/body can otherwise retain the app's normal fixed 100vh/overflow
+     layout, which makes the browser think there's a tall, mostly-blank
+     document to paginate across many pages even though the actual
+     declaration content only spans one or two. */
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
   }
 }
