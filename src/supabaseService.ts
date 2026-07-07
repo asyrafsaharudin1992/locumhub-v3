@@ -1053,6 +1053,62 @@ export async function deleteBadgeAwardFromSupabase(
   return { success: true };
 }
 
+/**
+ * Saves a doctor's pre-shift declaration (digital acknowledgment of the
+ * clinical practice rules) — submitted via a doctor scanning the static
+ * per-branch QR code at the clinic counter.
+ */
+export async function saveShiftDeclarationToSupabase(declaration: {
+  doctorName: string;
+  doctorPhone?: string;
+  branch: string;
+  residentDoctorName?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: "Supabase client not initialized" };
+
+  const id = `decl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const { error } = await client.from("shift_declarations").insert({
+    id,
+    doctor_name: declaration.doctorName,
+    doctor_phone: declaration.doctorPhone || null,
+    branch: declaration.branch,
+    resident_doctor_name: declaration.residentDoctorName || null,
+  });
+
+  if (error) {
+    console.error("saveShiftDeclarationToSupabase failed:", error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+export interface ShiftDeclarationRow {
+  id: string;
+  doctor_name: string;
+  doctor_phone: string | null;
+  branch: string;
+  resident_doctor_name: string | null;
+  declared_at: string;
+}
+
+export async function fetchShiftDeclarationsFromSupabase(): Promise<ShiftDeclarationRow[]> {
+  const client = getSupabaseClient();
+  if (!client) return [];
+
+  const { data, error } = await client
+    .from("shift_declarations")
+    .select("*")
+    .order("declared_at", { ascending: false })
+    .limit(2000);
+
+  if (error) {
+    console.error("fetchShiftDeclarationsFromSupabase failed:", error);
+    return [];
+  }
+  return data || [];
+}
+
 export async function fetchBadgeAwardsFromSupabase(): Promise<BadgeAwardRow[]> {
   const client = getSupabaseClient();
   if (!client) return [];
