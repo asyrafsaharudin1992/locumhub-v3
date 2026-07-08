@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAppState } from "./useAppState";
 import { NewApplication, LocumSurveyEntry, StaffFeedbackEntry, FeedbackRecord } from "./types";
-import { isSupabaseActive } from "./supabaseService";
+import { isSupabaseActive, verifyStaffKey } from "./supabaseService";
 import {
   loadAllDataFromPublicGoogleSheet,
   fetchLocumSurveyResponses,
@@ -356,7 +356,7 @@ export default function App() {
   const [feedbackDoctorFilter, setFeedbackDoctorFilter] = useState<string>("All");
 
 
-  const handleStaffKeywordLogin = (e: React.FormEvent) => {
+  const handleStaffKeywordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setStaffAuthError("");
     const keyword = staffKeywordInput.trim();
@@ -364,21 +364,18 @@ export default function App() {
       setStaffAuthError("Please enter your access keyword.");
       return;
     }
-    // A staff "keyword" is really just that staff account's password — this
-    // lets admin issue staff members a simple keyword (via Create User) instead
-    // of a phone number + password pair for this restricted, view-only role.
-    let encodedKeyword = "";
-    try {
-      encodedKeyword = btoa(keyword);
-    } catch (err) {}
-    const staffUser = state.users.find(
-      (u) => u.role === "Staff" && u.password === encodedKeyword,
-    );
-    if (!staffUser) {
-      setStaffAuthError("Invalid access keyword.");
+    // The keyword IS that staff account's password under the hood — this
+    // lets admin issue staff members a simple keyword (via Create User)
+    // instead of a phone number + password pair for this restricted,
+    // view-only role. The match is now found server-side (verify_staff_key
+    // RPC), so no password/keyword value is ever compared in the browser.
+    const staffRes = await verifyStaffKey(keyword);
+    if (!staffRes.success || !staffRes.user) {
+      setStaffAuthError(staffRes.message || "Invalid access keyword.");
       return;
     }
-    const res = loginUser(staffUser.phone, keyword, "Staff");
+    const staffPhone = String(staffRes.user.phone || "").trim();
+    const res = await loginUser(staffPhone, keyword, "Staff");
     if (res.success) {
       setActiveTab("admin-cal");
       setStaffKeywordInput("");
@@ -387,7 +384,7 @@ export default function App() {
     }
   };
 
-  const handleManualLogin = (e: React.FormEvent) => {
+  const handleManualLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
     if (!phoneInput) {
@@ -398,7 +395,7 @@ export default function App() {
       setAuthError("Please input password credentials.");
       return;
     }
-    const res = loginUser(phoneInput, passwordInput);
+    const res = await loginUser(phoneInput, passwordInput);
     if (res.success) {
       if (res.user?.role === "Admin") {
         setActiveTab("admin-cal");
