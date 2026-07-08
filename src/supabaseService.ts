@@ -138,15 +138,87 @@ async function deleteTableWithFallback(
 }
 
 // FETCH OPERATIONS
-export async function fetchUsersFromSupabase(): Promise<UserProfile[] | null> {
-  const { data, error } = await queryTableWithFallback(["users", "Users"]);
+/**
+ * Server-side login check — the password comparison happens entirely
+ * inside Postgres (verify_login RPC, SECURITY DEFINER), so the actual
+ * password value never travels to the browser at any point, even during
+ * a successful login.
+ */
+export async function verifyLogin(
+  phone: string,
+  password: string,
+): Promise<{ success: boolean; message?: string; user?: any }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, message: "Supabase client not initialized" };
+
+  const { data, error } = await client.rpc("verify_login", {
+    p_phone: phone,
+    p_password: password,
+  });
   if (error) {
-    console.warn("Supabase fetchUsers failed:", error);
-    return null;
+    console.error("verifyLogin RPC failed:", error);
+    return { success: false, message: "Login check failed — please try again." };
   }
+  return data as { success: boolean; message?: string; user?: any };
+}
+
+export async function verifyStaffKey(
+  keyword: string,
+): Promise<{ success: boolean; message?: string; user?: any }> {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, message: "Supabase client not initialized" };
+
+  const { data, error } = await client.rpc("verify_staff_key", {
+    p_keyword: keyword,
+  });
+  if (error) {
+    console.error("verifyStaffKey RPC failed:", error);
+    return { success: false, message: "Login check failed — please try again." };
+  }
+  return data as { success: boolean; message?: string; user?: any };
+}
+
+export async function fetchUsersFromSupabase(): Promise<UserProfile[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  // Reads from users_safe (a view that strips the password column
+  // entirely via to_jsonb(u) - 'password') instead of the base `users`
+  // table — this is what keeps password out of the browser for every
+  // normal app screen (badges, dashboard, doctor list, etc.), not just
+  // at login time. The base table itself also has SELECT revoked on the
+  // password column specifically, so even a direct API call bypassing
+  // this view can't retrieve it.
+  const PAGE_SIZE = 1000;
+  const allRows: any[] = [];
+  let from = 0;
+  let keepGoing = true;
+
+  while (keepGoing) {
+    const { data, error } = await client
+      .from("users_safe")
+      .select("data")
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) {
+      console.warn("Supabase fetchUsers (users_safe) failed:", error);
+      return allRows.length > 0 ? mapUserRows(allRows) : null;
+    }
+    if (!data || data.length === 0) {
+      keepGoing = false;
+      break;
+    }
+    allRows.push(...data.map((r: any) => r.data));
+    if (data.length < PAGE_SIZE) keepGoing = false;
+    from += PAGE_SIZE;
+  }
+
+  return mapUserRows(allRows);
+}
+
+function mapUserRows(data: any[]): UserProfile[] {
   return (data || []).map((row) => ({
     phone: String(row.phone || row.Phone || "").trim(),
-    password: row.password || row.Password || "",
+    password: "", // deliberately never populated from a general fetch — see verifyLogin/verifyStaffKey
     name: row.name || row.nama || row.Nama || "",
     role: (row.role || row.Role || "Doctor") as any,
     email: row.email || row.Email || "",
