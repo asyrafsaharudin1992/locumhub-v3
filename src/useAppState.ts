@@ -46,6 +46,7 @@ import {
   BadgeAwardRow,
   fetchShiftDeclarationsFromSupabase,
   ShiftDeclarationRow,
+  verifyLogin,
 } from "./supabaseService";
 
 import {
@@ -575,11 +576,55 @@ export function useAppState() {
 
   // --- CORE SYSTEM FUNCTIONS ---
 
-  const loginUser = (
+  const loginUser = async (
     phone: string,
     passwordInput?: string,
     role?: string,
-  ): { success: boolean; message: string; user: UserProfile | null } => {
+  ): Promise<{ success: boolean; message: string; user: UserProfile | null }> => {
+    // The password check now happens entirely server-side (verify_login
+    // RPC) — the actual stored password is never fetched to the browser,
+    // whether login succeeds or fails. This replaces the old
+    // state.users.find(...) + client-side password comparison.
+    if (passwordInput !== undefined) {
+      const res = await verifyLogin(phone, passwordInput);
+      if (!res.success || !res.user) {
+        return {
+          success: false,
+          message: res.message || "Invalid Password!",
+          user: null,
+        };
+      }
+      const rawUser = res.user;
+      const user: UserProfile = {
+        phone: String(rawUser.phone || "").trim(),
+        password: "",
+        name: rawUser.name || rawUser.nama || "",
+        role: (rawUser.role || "Doctor") as any,
+        email: rawUser.email || "",
+        mmc: rawUser.mmc || "",
+        apc: rawUser.apc || "",
+        indemnity: rawUser.indemnity || "Tiada",
+        workplace: rawUser.workplace || "",
+        points: Number(rawUser.points || 0),
+        badges: typeof rawUser.badges === "string" ? rawUser.badges : "",
+        locks: typeof rawUser.locks === "string" ? rawUser.locks : "",
+      };
+      if (role && user.role !== role) {
+        return {
+          success: false,
+          message: `Access denied. Selected account is a ${user.role}.`,
+          user: null,
+        };
+      }
+      setState((prev) => ({ ...prev, currentUser: user }));
+      logActivity(`Logged in: ${user.name} (${user.role})`);
+      return { success: true, message: "Login successful", user };
+    }
+
+    // No password provided — this path is used for role-restore /
+    // session-continuation checks against already-loaded state.users
+    // (which never carries a password value now anyway), not a fresh
+    // credential check.
     const user = state.users.find((u) => u.phone.trim() === phone.trim());
     if (user) {
       if (role && user.role !== role) {
@@ -588,21 +633,6 @@ export function useAppState() {
           message: `Access denied. Selected account is a ${user.role}.`,
           user: null,
         };
-      }
-      if (passwordInput !== undefined) {
-        const storedPass = (user.password || "").trim();
-        const inputTrimmed = (passwordInput || "").trim();
-        let encodedInput = "";
-        try {
-          encodedInput = btoa(inputTrimmed);
-        } catch (e) {}
-        if (
-          storedPass !== "" &&
-          storedPass !== inputTrimmed &&
-          storedPass !== encodedInput
-        ) {
-          return { success: false, message: "Invalid Password!", user: null };
-        }
       }
       setState((prev) => ({ ...prev, currentUser: user }));
       logActivity(`Logged in: ${user.name} (${user.role})`);
@@ -2387,9 +2417,18 @@ export function useAppState() {
                   (u) => u.phone.trim() === sheetUser.phone.trim()
                 );
                 if (existing && isSupabaseActive()) {
+                  const { password: _sheetPassword, ...sheetUserNoPassword } = sheetUser;
                   return {
-                    ...sheetUser,
-                    password: existing.password || sheetUser.password,
+                    ...sheetUserNoPassword,
+                    // Password is deliberately NOT merged here — the
+                    // fetch that populates `existing` no longer carries a
+                    // real password value (it's protected server-side via
+                    // verify_login now), so blindly falling back to
+                    // sheetUser.password would silently overwrite each
+                    // user's real password with whatever's in the Google
+                    // Sheet (often blank/stale) on every sync. Omitting
+                    // the key means the save step leaves password
+                    // untouched in Supabase.
                     points: existing.points !== undefined ? existing.points : sheetUser.points,
                     badges: existing.badges || sheetUser.badges,
                   };
@@ -2475,9 +2514,9 @@ export function useAppState() {
                       (u) => u.phone.trim() === sheetUser.phone.trim()
                     );
                     if (existing) {
+                      const { password: _sheetPassword2, ...sheetUserNoPassword2 } = sheetUser;
                       return {
-                        ...sheetUser,
-                        password: existing.password || sheetUser.password,
+                        ...sheetUserNoPassword2,
                         points: existing.points !== undefined ? existing.points : sheetUser.points,
                         badges: existing.badges || sheetUser.badges,
                       };
