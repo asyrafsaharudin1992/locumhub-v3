@@ -474,7 +474,12 @@ export function useAppState() {
 
     const interval = setInterval(() => {
       pullFromSupabase();
-    }, 10000); // 10 seconds
+    }, 45000); // 45 seconds — was 10s; the tighter interval was pushing the
+    // Supabase project over its free-tier 5GB/month egress quota (109%
+    // used), which is a plausible contributor to the intermittent fetch
+    // failures/phantom-data issues debugged earlier. 45s is still frequent
+    // enough for near-real-time booking approvals while cutting egress
+    // volume by roughly 4-5x.
 
     return () => clearInterval(interval);
   }, [isSupabaseEnabled]);
