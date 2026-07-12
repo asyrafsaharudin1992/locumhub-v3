@@ -47,6 +47,7 @@ import {
   fetchShiftDeclarationsFromSupabase,
   ShiftDeclarationRow,
   verifyLogin,
+  claimSlotAtomically,
 } from "./supabaseService";
 
 import {
@@ -885,22 +886,47 @@ export function useAppState() {
     doctorName: string,
     doctorPhone: string,
   ): Promise<string> => {
-    let resultMessage = "Error: Slot booking failed.";
-
-    // Check if the slot is currently available
+    // Check local state first purely for a fast, friendly early exit (no
+    // point trying to claim a slot that's obviously already gone from
+    // this doctor's own point of view) — but this check is NOT what
+    // actually prevents double-booking; the atomic claim below is.
     const slot = state.slots.find((s) => s.id === slotId);
     if (!slot) return "Error: Slot not found.";
     if (slot.status !== "Available") return "Slot is no longer available.";
 
+    const bookedAt = new Date().toLocaleString("en-GB");
+
+    // The real fix: atomically claim the slot in Supabase first — this
+    // only succeeds if the slot is STILL "Available" at the exact moment
+    // this write reaches the database, closing the race where two
+    // doctors both saw it as Available from their own (possibly
+    // slightly-stale) local state and both clicked Book within moments
+    // of each other. Whoever's claim reaches the database first wins;
+    // the second cleanly fails instead of silently overwriting the first.
+    if (isSupabaseEnabled && isSupabaseActive()) {
+      const claimResult = await claimSlotAtomically(
+        slotId,
+        doctorName,
+        doctorPhone,
+        bookedAt,
+      );
+      if (!claimResult.claimed) {
+        // Someone else claimed it first — refresh local state so this
+        // doctor immediately sees the slot is really gone, rather than
+        // it lingering as "Available" in their view until the next poll.
+        pullFromSupabase();
+        return "Sorry, this slot was just booked by another doctor. Please choose a different slot.";
+      }
+    }
+
     const updatedSlots = state.slots.map((s) => {
       if (s.id === slotId) {
-        resultMessage = "Application successfully submitted!";
         return {
           ...s,
           status: "Pending",
           dr: doctorName,
           phone: doctorPhone,
-          bookedAt: new Date().toLocaleString("en-GB"),
+          bookedAt,
         } as LocumSlot;
       }
       return s;
@@ -913,11 +939,8 @@ export function useAppState() {
       status: "Pending",
       dr: doctorName,
       phone: doctorPhone,
-      bookedAt: new Date().toLocaleString("en-GB"),
+      bookedAt,
     };
-    await cloudSaveSlot(updatedSlot).catch((err) =>
-      console.error("Cloud bookSlot failed:", err),
-    );
 
     if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
       await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
@@ -929,7 +952,7 @@ export function useAppState() {
     logActivity(
       `Doctor ${doctorName} applied for slot: ${slotId} (${slot.tarikh} ${slot.masa})`,
     );
-    return resultMessage;
+    return "Application successfully submitted!";
   };
 
   const triggerCancellationAlert = (
