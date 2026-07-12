@@ -663,6 +663,52 @@ export async function deleteUserFromSupabase(phone: string): Promise<{ success: 
   return { success: true, error: anyMatched ? undefined : "No matching user found to delete." };
 }
 
+/**
+ * Atomically claims an Available slot for a doctor — this is the fix for
+ * a real double-booking race condition: two doctors both seeing the slot
+ * as "Available" (from their own possibly-slightly-stale local state) and
+ * both clicking "Book" within moments of each other. A blind upsert would
+ * let whichever request reaches Supabase LAST silently overwrite the
+ * other's booking. This instead does a conditional UPDATE — "set to
+ * Pending WHERE status is still Available" — so only the first request to
+ * actually reach the database can succeed; the second cleanly fails with
+ * zero rows affected, and the app can tell that doctor the slot was just
+ * taken instead of falsely reporting success.
+ */
+export async function claimSlotAtomically(
+  slotId: string,
+  doctorName: string,
+  doctorPhone: string,
+  bookedAt: string,
+): Promise<{ claimed: boolean; error?: string }> {
+  const client = getSupabaseClient();
+  if (!client) return { claimed: false, error: "Supabase client not initialized" };
+
+  const { data, error } = await client
+    .from("slots")
+    .update({
+      status: "Pending",
+      nama_locum: doctorName,
+      no_telefon_locum: doctorPhone,
+      booked_at: bookedAt,
+    })
+    .eq("id", slotId)
+    .eq("status", "Available")
+    .select("id");
+
+  if (error) {
+    console.error("claimSlotAtomically failed:", error);
+    return { claimed: false, error: error.message };
+  }
+  // If no row matched (someone else's write already changed status away
+  // from "Available" first), data comes back as an empty array — that's
+  // the race condition being caught, not a real error.
+  if (!data || data.length === 0) {
+    return { claimed: false, error: "Slot is no longer available." };
+  }
+  return { claimed: true };
+}
+
 export async function saveSlotToSupabase(slot: LocumSlot) {
   const client = getSupabaseClient();
   if (!client) return;
