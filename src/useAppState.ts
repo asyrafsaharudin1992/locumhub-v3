@@ -623,7 +623,9 @@ export function useAppState() {
         };
       }
       setState((prev) => ({ ...prev, currentUser: user }));
-      logActivity(`Logged in: ${user.name} (${user.role})`);
+      // Deliberately NOT logged via logActivity — never read/displayed
+      // anywhere in the app, so it was just adding write-only noise to
+      // activity_logs for no benefit.
       return { success: true, message: "Login successful", user };
     }
 
@@ -641,7 +643,6 @@ export function useAppState() {
         };
       }
       setState((prev) => ({ ...prev, currentUser: user }));
-      logActivity(`Logged in: ${user.name} (${user.role})`);
       return { success: true, message: "Login successful", user };
     }
     return {
