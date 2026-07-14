@@ -405,10 +405,10 @@ export async function fetchActivityLogsFromSupabase(): Promise<
   // usage (much bigger than the polling-interval itself). Nothing in the
   // app actually displays this data or needs more than the current/
   // recent month for badge-cancellation checks, so bound it to the last
-  // 60 days instead of the entire ever-growing history.
-  const sixtyDaysAgo = new Date();
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const cutoffIso = sixtyDaysAgo.toISOString();
+  // 45 days instead of the entire ever-growing history.
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - 45);
+  const cutoffIso = cutoffDate.toISOString();
 
   for (const table of ["activity_logs", "ActivityLogs"]) {
     try {
