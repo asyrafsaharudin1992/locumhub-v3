@@ -394,15 +394,41 @@ export async function fetchApplicationsFromSupabase(): Promise<
 export async function fetchActivityLogsFromSupabase(): Promise<
   { timestamp: string; action: string }[] | null
 > {
-  const { data, error } = await queryTableWithFallback([
-    "activity_logs",
-    "ActivityLogs",
-  ]);
-  if (error) return null;
-  return (data || []).map((row) => ({
-    timestamp: row.timestamp || "",
-    action: row.action || "",
-  }));
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  // This table only ever gets APPENDED to (never trimmed), and after
+  // months of daily clinic operation it's grown large enough that
+  // fetching the FULL history via queryTableWithFallback's pagination
+  // was requiring 9+ separate 1000-row requests on every single 45-second
+  // poll cycle — by far the single biggest driver of Supabase egress
+  // usage (much bigger than the polling-interval itself). Nothing in the
+  // app actually displays this data or needs more than the current/
+  // recent month for badge-cancellation checks, so bound it to the last
+  // 60 days instead of the entire ever-growing history.
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const cutoffIso = sixtyDaysAgo.toISOString();
+
+  for (const table of ["activity_logs", "ActivityLogs"]) {
+    try {
+      const { data, error } = await client
+        .from(table)
+        .select("timestamp,action")
+        .gte("created_at", cutoffIso)
+        .order("created_at", { ascending: false })
+        .limit(2000);
+      if (!error && data) {
+        return data.map((row: any) => ({
+          timestamp: row.timestamp || "",
+          action: row.action || "",
+        }));
+      }
+    } catch (err) {
+      console.warn(`fetchActivityLogs: table "${table}" failed`, err);
+    }
+  }
+  return null;
 }
 
 export async function fetchNotificationsFromSupabase(): Promise<
