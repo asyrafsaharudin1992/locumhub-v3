@@ -602,18 +602,18 @@ export function useAppState() {
       }
       const rawUser = res.user;
       const user: UserProfile = {
-        phone: String(rawUser.phone || "").trim(),
+        phone: String(rawUser.phone || rawUser.Phone || "").trim(),
         password: "",
-        name: rawUser.name || rawUser.nama || "",
-        role: (rawUser.role || "Doctor") as any,
-        email: rawUser.email || "",
-        mmc: rawUser.mmc || "",
-        apc: rawUser.apc || "",
-        indemnity: rawUser.indemnity || "Tiada",
-        workplace: rawUser.workplace || "",
-        points: Number(rawUser.points || 0),
-        badges: typeof rawUser.badges === "string" ? rawUser.badges : "",
-        locks: typeof rawUser.locks === "string" ? rawUser.locks : "",
+        name: rawUser.name || rawUser.nama || rawUser.Nama || "",
+        role: (rawUser.role || rawUser.Role || "Doctor") as any,
+        email: rawUser.email || rawUser.Email || "",
+        mmc: rawUser.mmc || rawUser.MMC || "",
+        apc: rawUser.apc || rawUser.APC || rawUser.apc_2026 || rawUser["APC 2026"] || "",
+        indemnity: rawUser.indemnity || rawUser.Indemnity || rawUser.indemnity_insurance || "Tiada",
+        workplace: rawUser.workplace || rawUser.Workplace || rawUser.tempat_berkhidmat || "",
+        points: Number(rawUser.points || rawUser.Points || 0),
+        badges: typeof rawUser.badges === "string" ? rawUser.badges : (Array.isArray(rawUser.badges) ? rawUser.badges.join(", ") : ""),
+        locks: typeof rawUser.locks === "string" ? rawUser.locks : (Array.isArray(rawUser.locks) ? rawUser.locks.join(", ") : ""),
       };
       if (role && user.role !== role) {
         return {
