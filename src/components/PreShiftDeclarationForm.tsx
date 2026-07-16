@@ -85,6 +85,7 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
   const [doctorName, setDoctorName] = useState('');
   const [doctorPhone, setDoctorPhone] = useState('');
   const [doctorMmc, setDoctorMmc] = useState('');
+  const [isOtherDoctor, setIsOtherDoctor] = useState(false);
   const [residentDoctorName, setResidentDoctorName] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -108,6 +109,14 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
   }, []);
 
   const handleDoctorSelect = (phone: string) => {
+    if (phone === 'OTHERS') {
+      setIsOtherDoctor(true);
+      setDoctorPhone('');
+      setDoctorName('');
+      setDoctorMmc('');
+      return;
+    }
+    setIsOtherDoctor(false);
     setDoctorPhone(phone);
     const match = doctors.find((d) => d.phone === phone);
     setDoctorName(match ? match.name : '');
@@ -116,7 +125,11 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
 
   const handleSubmit = async () => {
     if (!doctorName.trim()) {
-      setError('Please select your name from the list.');
+      setError(
+        isOtherDoctor
+          ? 'Please enter your full name.'
+          : 'Please select your name from the list.',
+      );
       return;
     }
     if (!acknowledged) {
@@ -212,7 +225,7 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
               Your Name (Locum Doctor)
             </label>
             <select
-              value={doctorPhone}
+              value={isOtherDoctor ? 'OTHERS' : doctorPhone}
               onChange={(e) => handleDoctorSelect(e.target.value)}
               disabled={loadingDoctors}
               className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl p-3 cursor-pointer disabled:opacity-60"
@@ -225,6 +238,7 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
                   Dr. {d.name}
                 </option>
               ))}
+              <option value="OTHERS">Others (not listed / outside system)</option>
             </select>
             {!loadingDoctors && doctors.length === 0 && (
               <p className="text-[10px] text-rose-500">
@@ -233,7 +247,26 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
             )}
           </div>
 
-          {doctorPhone && (
+          {isOtherDoctor && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">
+                Full Name (please type manually)
+              </label>
+              <input
+                type="text"
+                value={doctorName}
+                onChange={(e) => setDoctorName(e.target.value)}
+                placeholder="Dr. Full Name"
+                className="w-full bg-white border border-slate-200 text-sm rounded-xl p-3"
+              />
+              <p className="text-[10px] text-amber-600">
+                You're not part of our regular locumers — if you'd like to join our team, do
+                let us know so we can arrange an interview session.
+              </p>
+            </div>
+          )}
+
+          {(doctorPhone || isOtherDoctor) && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase">
@@ -241,9 +274,13 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
                 </label>
                 <input
                   type="text"
-                  value={doctorMmc || '—'}
-                  readOnly
-                  className="w-full bg-slate-100 border border-slate-200 text-sm rounded-xl p-3 text-slate-500"
+                  value={doctorMmc}
+                  onChange={isOtherDoctor ? (e) => setDoctorMmc(e.target.value) : undefined}
+                  readOnly={!isOtherDoctor}
+                  placeholder={isOtherDoctor ? 'Enter MMC number' : ''}
+                  className={`w-full border border-slate-200 text-sm rounded-xl p-3 ${
+                    isOtherDoctor ? 'bg-white' : 'bg-slate-100 text-slate-500'
+                  }`}
                 />
               </div>
               <div className="space-y-1">
@@ -253,8 +290,12 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
                 <input
                   type="text"
                   value={doctorPhone}
-                  readOnly
-                  className="w-full bg-slate-100 border border-slate-200 text-sm rounded-xl p-3 text-slate-500"
+                  onChange={isOtherDoctor ? (e) => setDoctorPhone(e.target.value) : undefined}
+                  readOnly={!isOtherDoctor}
+                  placeholder={isOtherDoctor ? '01xxxxxxxx' : ''}
+                  className={`w-full border border-slate-200 text-sm rounded-xl p-3 ${
+                    isOtherDoctor ? 'bg-white' : 'bg-slate-100 text-slate-500'
+                  }`}
                 />
               </div>
             </div>
