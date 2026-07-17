@@ -1201,6 +1201,44 @@ export function useAppState() {
     return `Slot Approved! LocumHub Notification dispatched directly to Dr. ${docName} for shift on ${dateStr} at ARA ${branchName}`;
   };
 
+  /**
+   * Lets admin edit a slot's shift timing (masa) directly from the
+   * Clinical Schedules calendar, without needing to open Supabase
+   * manually. Uses the same fresh-fetch guard as adminManageSlot to
+   * avoid acting on a stale in-memory snapshot.
+   */
+  const adminEditSlotTiming = async (id: string, newMasa: string): Promise<string> => {
+    let baseSlots = state.slots;
+    try {
+      const freshSlots = await fetchSlotsFromSupabase();
+      if (freshSlots && freshSlots.length > 0) baseSlots = freshSlots;
+    } catch (err) {
+      console.error("adminEditSlotTiming: fresh fetch failed, using in-memory state", err);
+    }
+    const slot = baseSlots.find((s) => s.id === id);
+    if (!slot) return "Error: Slot not found.";
+
+    const updatedSlot: LocumSlot = { ...slot, masa: newMasa };
+    const updatedSlots = baseSlots.map((s) => (s.id === id ? updatedSlot : s));
+    setState((prev) => ({ ...prev, slots: updatedSlots }));
+
+    await cloudSaveSlot(updatedSlot).catch((err) =>
+      console.error("Cloud adminEditSlotTiming failed:", err),
+    );
+
+    if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
+      await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
+        ...state,
+        slots: updatedSlots,
+      }).catch((err) =>
+        console.error("Google Sheets edit-timing sync failed:", err),
+      );
+    }
+
+    logActivity(`ADMIN EDITED TIMING: Slot ${id} -> ${newMasa}`);
+    return `Timing updated to "${newMasa}".`;
+  };
+
   const adminManageSlot = async (
     action: "DELETE" | "CANCEL" | "REPLACE",
     id: string,
@@ -2742,6 +2780,7 @@ export function useAppState() {
     cancelSlotByDoctor,
     adminApproveSlot,
     adminManageSlot,
+    adminEditSlotTiming,
     adminCreateBulkSlots,
     adminLogCMEAttendance,
     publishAnnouncement,
