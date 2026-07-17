@@ -10,6 +10,7 @@ interface AdminScheduleTabProps {
   users: UserProfile[];
   currentUserRole: string;
   onManageSlot: (action: 'DELETE' | 'CANCEL' | 'REPLACE', id: string, phone?: string, manualName?: string) => Promise<string>;
+  onEditTiming: (id: string, newMasa: string) => Promise<string>;
   onBulkCreateSlots: (dates: string[], branch: string, time: string, pay: number) => string;
   adminAlerts?: AdminAlert[];
   onDismissAlert?: (id: string) => void;
@@ -20,6 +21,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
   users = [], 
   currentUserRole,
   onManageSlot,
+  onEditTiming,
   onBulkCreateSlots,
   adminAlerts = [],
   onDismissAlert
@@ -147,7 +149,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         const digitsOnly = phone.replace(/\D/g, '');
         const waPhone = digitsOnly.startsWith('0') ? `6${digitsOnly}` : digitsOnly;
         const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
-        window.open(waUrl, '_blank', 'noopener,noreferrer');
+        window.location.href = waUrl;
         return;
       }
 
@@ -397,6 +399,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         doctors={availableDoctors}
         onClose={() => setManagingSlot(null)}
         onManage={onManageSlot}
+        onEditTiming={onEditTiming}
       />
 
       {/* Staff WhatsApp broadcast picker — pick one or more doctors to
@@ -440,19 +443,19 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
                 {availableDoctors.map((doc) => {
                   const digitsOnly = (doc.phone || '').replace(/\D/g, '');
                   const waPhone = digitsOnly.startsWith('0') ? `6${digitsOnly}` : digitsOnly;
-                  const message = `Hi/Salam Dr ${doc.name}, KLINIK ARA 24 JAM ${broadcastSlot.cawangan} ada slot kosong pada ${broadcastSlot.tarikh} (${broadcastSlot.masa}). Doktor berminat untuk ambil slot ini?`;
+                  const message = `Hi/Salam Dr ${doc.name}, KLINIK ARA 24 JAM ${broadcastSlot.cawangan} ada slot kosong pada ${broadcastSlot.tarikh} (${broadcastSlot.masa}). Doktor berminat untuk ambil shift ini?`;
                   const waUrl = `https://wa.me/${waPhone}?text=${encodeURIComponent(message)}`;
                   return (
-                    <a
+                    <button
                       key={doc.phone}
-                      href={waUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition text-sm"
+                      onClick={() => {
+                        window.location.href = waUrl;
+                      }}
+                      className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition text-sm"
                     >
                       <span className="font-semibold text-slate-700">Dr. {doc.name}</span>
                       <span className="text-emerald-600 text-xs font-bold">WhatsApp →</span>
-                    </a>
+                    </button>
                   );
                 })}
               </div>
