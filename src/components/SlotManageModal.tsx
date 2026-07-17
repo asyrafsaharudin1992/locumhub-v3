@@ -9,6 +9,7 @@ interface SlotManageModalProps {
   doctors: UserProfile[];
   onClose: () => void;
   onManage: (action: 'DELETE' | 'CANCEL' | 'REPLACE', id: string, phone?: string, manualName?: string) => Promise<string>;
+  onEditTiming: (id: string, newMasa: string) => Promise<string>;
 }
 
 type ManagementAction = 'REPLACE' | 'RESET' | 'DELETE';
@@ -19,6 +20,7 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
   doctors = [], 
   onClose,
   onManage,
+  onEditTiming,
 }) => {
   const [selectedAction, setSelectedAction] = useState<ManagementAction>('REPLACE');
   const [chosenDoctorPhone, setChosenDoctorPhone] = useState<string>('');
@@ -26,12 +28,16 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
   const [isManualInput, setIsManualInput] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isEditingTiming, setIsEditingTiming] = useState<boolean>(false);
+  const [editedMasa, setEditedMasa] = useState<string>('');
+  const [isSavingTiming, setIsSavingTiming] = useState<boolean>(false);
 
   const [slot, setSlot] = useState<LocumSlot | null>(null);
 
   React.useEffect(() => {
     if (incomingSlot) {
       setSlot(incomingSlot);
+      setEditedMasa(incomingSlot.masa || '');
     }
   }, [incomingSlot]);
 
@@ -43,8 +49,26 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
       setManualDoctorName('');
       setIsManualInput(false);
       setSelectedAction('REPLACE');
+      setIsEditingTiming(false);
+      setIsSavingTiming(false);
     }
   }, [isOpen]);
+
+  const handleSaveTiming = async () => {
+    if (!slot || !editedMasa.trim()) return;
+    setIsSavingTiming(true);
+    setStatusMessage(null);
+    try {
+      const result = await onEditTiming(slot.id, editedMasa.trim());
+      setStatusMessage({ type: 'success', text: result });
+      setSlot((prev) => (prev ? { ...prev, masa: editedMasa.trim() } : prev));
+      setIsEditingTiming(false);
+    } catch (err) {
+      setStatusMessage({ type: 'error', text: 'Failed to update timing. Please try again.' });
+    } finally {
+      setIsSavingTiming(false);
+    }
+  };
 
   const currentDocName = slot?.nama_locum || slot?.dr || 'OPEN';
   const slotDr = currentDocName !== 'OPEN' ? `DR ${currentDocName.toUpperCase().trim().replace(/^DR\s+/i, '')}` : 'OPEN';
@@ -153,7 +177,47 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
                   </div>
                   <div className="space-y-0.5">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">🕒 Shift Timing</span>
-                    <div className="text-sm font-bold text-slate-800">{slot.masa}</div>
+                    {isEditingTiming ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={editedMasa}
+                          onChange={(e) => setEditedMasa(e.target.value)}
+                          placeholder="e.g. 8am-8pm"
+                          autoFocus
+                          className="text-sm font-bold text-slate-800 border border-indigo-200 rounded-lg px-2 py-1 w-full outline-none focus:border-indigo-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveTiming}
+                          disabled={isSavingTiming || !editedMasa.trim()}
+                          className="text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2 py-1.5 disabled:opacity-50 shrink-0"
+                        >
+                          {isSavingTiming ? '...' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditingTiming(false);
+                            setEditedMasa(slot.masa || '');
+                          }}
+                          disabled={isSavingTiming}
+                          className="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg px-2 py-1.5 shrink-0"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => setIsEditingTiming(true)}
+                        className="text-sm font-bold text-slate-800 cursor-pointer hover:text-indigo-600 flex items-center gap-1.5 group"
+                      >
+                        <span>{slot.masa}</span>
+                        <span className="text-[9px] text-slate-400 group-hover:text-indigo-500 font-bold uppercase tracking-widest">
+                          (click to edit)
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -167,7 +231,13 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
                   </div>
                   <div className="bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 text-right">
                     <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest block">Payment</span>
-                    <span className="text-sm font-bold text-indigo-750 font-mono">RM {slotPayment}</span>
+                    {Number(slotPayment) > 0 ? (
+                      <span className="text-sm font-bold text-indigo-750 font-mono">RM {slotPayment}</span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-indigo-700">
+                        Refer to noticeboard tab for locum rate
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
