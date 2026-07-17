@@ -15,10 +15,6 @@ import {
   fetchUsersFromSupabase,
   fetchSlotsFromSupabase,
   fetchAnnouncementsFromSupabase,
-  fetchFeedbacksPatientFromSupabase,
-  fetchFeedbacksStaffFromSupabase,
-  fetchFeedbacksLocumFromSupabase,
-  fetchApplicationsFromSupabase,
   fetchActivityLogsFromSupabase,
   saveUserToSupabase,
   deleteUserFromSupabase,
@@ -242,84 +238,105 @@ export function useAppState() {
     }
   };
 
-  const pullFromSupabase = async (): Promise<boolean> => {
-    if (!isSupabaseActive()) {
-      console.log("Supabase not active, skipping pull.");
-      return false;
-    }
+  // nonEmpty: treat an empty array the same as null/undefined — i.e.
+  // "no valid new data, keep what we had". Also guards against a fetch
+  // that came back NON-empty but suspiciously SMALLER than what we
+  // already have locally — e.g. a flaky/partial read during Supabase's
+  // own ongoing incident (per the dashboard status banner) that
+  // returns real data but misses some rows. Without this, an admin
+  // could see a doctor correctly in a dropdown (from a good earlier
+  // fetch), then have a background poll silently swap in an
+  // incomplete list moments later, causing a genuine "User not found"
+  // on submit even though the doctor was right there on screen.
+  const nonEmpty = <T,>(arr: T[] | null | undefined, fallback: T[]): T[] => {
+    if (!arr || arr.length === 0) return fallback;
+    if (arr.length < fallback.length) return fallback;
+    return arr;
+  };
+
+  // TIER 1 — fast poll (45s). Only slots and notifications are genuinely
+  // time-sensitive enough to warrant this frequency (booking/approval
+  // status, a doctor's own notifications). Also refreshes badge_awards
+  // and shift_declarations, which are lightweight single-table fetches
+  // tied to active features.
+  const pullTier1FromSupabase = async (): Promise<boolean> => {
+    if (!isSupabaseActive()) return false;
     try {
-      console.log("Pulling active rosters and metadata from Supabase...");
-      const [
-        sbUsers,
-        sbSlots,
-        sbAnnouncements,
-        sbFbP,
-        sbFbS,
-        sbFbL,
-        sbApps,
-        sbLogs,
-        sbNotifs,
-        sbAlerts,
-      ] = await Promise.all([
-        fetchUsersFromSupabase(),
+      const [sbSlots, sbNotifs] = await Promise.all([
         fetchSlotsFromSupabase(),
-        fetchAnnouncementsFromSupabase(),
-        fetchFeedbacksPatientFromSupabase(),
-        fetchFeedbacksStaffFromSupabase(),
-        fetchFeedbacksLocumFromSupabase(),
-        fetchApplicationsFromSupabase(),
-        fetchActivityLogsFromSupabase(),
         fetchNotificationsFromSupabase(),
-        fetchAdminAlertsFromSupabase(),
       ]);
-
-      console.log("Supabase pull results:", {
-        sbUsers: sbUsers?.length,
-        sbSlots: sbSlots?.length,
-      });
-
       refreshHeartWinnerAwardedIds();
       refreshShiftDeclarations();
-
-      // nonEmpty: treat an empty array the same as null/undefined — i.e.
-      // "no valid new data, keep what we had". Also guards against a fetch
-      // that came back NON-empty but suspiciously SMALLER than what we
-      // already have locally — e.g. a flaky/partial read during Supabase's
-      // own ongoing incident (per the dashboard status banner) that
-      // returns real data but misses some rows. Without this, an admin
-      // could see a doctor correctly in a dropdown (from a good earlier
-      // fetch), then have a background poll silently swap in an
-      // incomplete list moments later, causing a genuine "User not found"
-      // on submit even though the doctor was right there on screen.
-      const nonEmpty = <T,>(arr: T[] | null | undefined, fallback: T[]): T[] => {
-        if (!arr || arr.length === 0) return fallback;
-        if (arr.length < fallback.length) return fallback;
-        return arr;
-      };
-
-      setState((prev) => {
-        return {
-          users: nonEmpty(sbUsers, prev.users),
-          slots: nonEmpty(sbSlots, prev.slots),
-          announcements: nonEmpty(sbAnnouncements, prev.announcements),
-          feedbacksPatient: nonEmpty(sbFbP, prev.feedbacksPatient),
-          feedbacksStaff: nonEmpty(sbFbS, prev.feedbacksStaff),
-          feedbacksLocum: nonEmpty(sbFbL, prev.feedbacksLocum),
-          newApplications: nonEmpty(sbApps, prev.newApplications),
-          activityLogs: nonEmpty(sbLogs, prev.activityLogs),
-          notifications: nonEmpty(sbNotifs, prev.notifications),
-          adminAlerts: nonEmpty(sbAlerts, prev.adminAlerts),
-          currentUser: prev.currentUser
-            ? sbUsers?.find((u) => u.phone === prev.currentUser?.phone) ||
-              prev.currentUser
-            : null,
-        };
-      });
+      setState((prev) => ({
+        ...prev,
+        slots: nonEmpty(sbSlots, prev.slots),
+        notifications: nonEmpty(sbNotifs, prev.notifications),
+      }));
       return true;
     } catch (err) {
-      console.error("Failed to pull from Supabase:", err);
+      console.error("Failed to pull Tier 1 from Supabase:", err);
       return false;
     }
+  };
+
+  // TIER 2 — medium poll (3 min). Points/badges/profile and admin alerts
+  // don't need to feel instantaneous.
+  const pullTier2FromSupabase = async (): Promise<boolean> => {
+    if (!isSupabaseActive()) return false;
+    try {
+      const [sbUsers, sbAlerts] = await Promise.all([
+        fetchUsersFromSupabase(),
+        fetchAdminAlertsFromSupabase(),
+      ]);
+      setState((prev) => ({
+        ...prev,
+        users: nonEmpty(sbUsers, prev.users),
+        adminAlerts: nonEmpty(sbAlerts, prev.adminAlerts),
+        currentUser: prev.currentUser
+          ? sbUsers?.find((u) => u.phone === prev.currentUser?.phone) ||
+            prev.currentUser
+          : null,
+      }));
+      return true;
+    } catch (err) {
+      console.error("Failed to pull Tier 2 from Supabase:", err);
+      return false;
+    }
+  };
+
+  // TIER 3 — slow poll (10 min). Clinic-wide notices rarely change
+  // mid-session.
+  const pullTier3FromSupabase = async (): Promise<boolean> => {
+    if (!isSupabaseActive()) return false;
+    try {
+      const sbAnnouncements = await fetchAnnouncementsFromSupabase();
+      setState((prev) => ({
+        ...prev,
+        announcements: nonEmpty(sbAnnouncements, prev.announcements),
+      }));
+      return true;
+    } catch (err) {
+      console.error("Failed to pull Tier 3 from Supabase:", err);
+      return false;
+    }
+  };
+
+  // NOTE: activity_logs, feedbacks_staff, feedbacks_locum, applications,
+  // and feedbacks_patient were removed from all background polling —
+  // none of them are read by any live UI feature. "Feedback management"
+  // and the recruitment pipeline both fetch fresh directly from Google
+  // Sheets on demand instead, and badge recalculation independently
+  // refetches whatever activity/feedback data it needs at the moment
+  // it's actually triggered, rather than relying on a constantly-polled
+  // copy. This alone was the single biggest driver of egress usage.
+  const pullFromSupabase = async (): Promise<boolean> => {
+    const [t1, t2, t3] = await Promise.all([
+      pullTier1FromSupabase(),
+      pullTier2FromSupabase(),
+      pullTier3FromSupabase(),
+    ]);
+    return t1 || t2 || t3;
   };
 
   const pushToSupabase = async (): Promise<boolean> => {
@@ -469,20 +486,29 @@ export function useAppState() {
     }
   }, []);
 
-  // Poll Supabase database every 10 seconds for real-time changes
+  // Poll Supabase at three different rates depending on how time-sensitive
+  // each group of tables actually is — see pullTier1/2/3FromSupabase above.
+  // This replaces the old single 45-second interval that re-fetched all 10
+  // tables uniformly; most of that data doesn't need anywhere near that
+  // frequency, and several tables didn't need to be polled here at all.
   useEffect(() => {
     if (!isSupabaseEnabled || !isSupabaseActive()) return;
 
-    const interval = setInterval(() => {
-      pullFromSupabase();
-    }, 45000); // 45 seconds — was 10s; the tighter interval was pushing the
-    // Supabase project over its free-tier 5GB/month egress quota (109%
-    // used), which is a plausible contributor to the intermittent fetch
-    // failures/phantom-data issues debugged earlier. 45s is still frequent
-    // enough for near-real-time booking approvals while cutting egress
-    // volume by roughly 4-5x.
+    const tier1Interval = setInterval(() => {
+      pullTier1FromSupabase();
+    }, 45000); // 45 seconds — slots + notifications need to feel live
+    const tier2Interval = setInterval(() => {
+      pullTier2FromSupabase();
+    }, 180000); // 3 minutes — users + admin_alerts
+    const tier3Interval = setInterval(() => {
+      pullTier3FromSupabase();
+    }, 600000); // 10 minutes — announcements
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(tier1Interval);
+      clearInterval(tier2Interval);
+      clearInterval(tier3Interval);
+    };
   }, [isSupabaseEnabled]);
 
   // Check Google Auth on mount
@@ -736,9 +762,8 @@ export function useAppState() {
   };
 
   const logout = () => {
-    if (state.currentUser) {
-      logActivity(`Logged out: ${state.currentUser.name}`);
-    }
+    // Deliberately NOT logged via logActivity — same reasoning as login:
+    // never read/displayed anywhere in the app, just write-only noise.
     setState((prev) => ({ ...prev, currentUser: null }));
   };
 
@@ -915,7 +940,7 @@ export function useAppState() {
         // Someone else claimed it first — refresh local state so this
         // doctor immediately sees the slot is really gone, rather than
         // it lingering as "Available" in their view until the next poll.
-        pullFromSupabase();
+        pullTier1FromSupabase();
         return "Sorry, this slot was just booked by another doctor. Please choose a different slot.";
       }
     }
