@@ -398,26 +398,23 @@ export async function fetchActivityLogsFromSupabase(): Promise<
   if (!client) return null;
 
   // This table only ever gets APPENDED to (never trimmed), and after
-  // months of daily clinic operation it's grown large enough that
-  // fetching the FULL history via queryTableWithFallback's pagination
-  // was requiring 9+ separate 1000-row requests on every single 45-second
-  // poll cycle — by far the single biggest driver of Supabase egress
-  // usage (much bigger than the polling-interval itself). Nothing in the
-  // app actually displays this data or needs more than the current/
-  // recent month for badge-cancellation checks, so bound it to the last
-  // 45 days instead of the entire ever-growing history.
-  const cutoffDate = new Date();
-  cutoffDate.setDate(cutoffDate.getDate() - 45);
-  const cutoffIso = cutoffDate.toISOString();
-
+  // months of daily clinic operation it had grown large enough that
+  // fetching the FULL history on every 45-second background poll was
+  // the single biggest driver of Supabase egress usage. That poll was
+  // removed entirely — this function is now ONLY called by
+  // recalculateBadges (an admin-triggered action, not a constant loop),
+  // so egress impact here is negligible regardless of range. Correctness
+  // matters more: Unstoppable badge cancellation checks need to reliably
+  // see the target month's data even if admin recalculates an older
+  // month, so this fetches full history (ordered newest-first, generous
+  // limit as a sane upper bound) rather than a rolling recent window.
   for (const table of ["activity_logs", "ActivityLogs"]) {
     try {
       const { data, error } = await client
         .from(table)
         .select("timestamp,action")
-        .gte("created_at", cutoffIso)
         .order("created_at", { ascending: false })
-        .limit(2000);
+        .limit(20000);
       if (!error && data) {
         return data.map((row: any) => ({
           timestamp: row.timestamp || "",
