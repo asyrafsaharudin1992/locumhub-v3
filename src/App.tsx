@@ -117,6 +117,7 @@ export default function App() {
     cancelSlotByDoctor,
     adminApproveSlot,
     adminManageSlot,
+    adminEditSlotTiming,
     adminCreateBulkSlots,
     adminLogCMEAttendance,
     publishAnnouncement,
@@ -1204,6 +1205,7 @@ export default function App() {
                         users={state.users}
                         currentUserRole={activeRole || "Admin"}
                         onManageSlot={adminManageSlot}
+                        onEditTiming={adminEditSlotTiming}
                         onBulkCreateSlots={adminCreateBulkSlots}
                         adminAlerts={state.adminAlerts}
                         onDismissAlert={dismissAdminAlert}
