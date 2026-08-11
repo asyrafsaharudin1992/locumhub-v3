@@ -254,6 +254,24 @@ export function useAppState() {
     return arr;
   };
 
+  // freshList: for tables that legitimately SHRINK over time (slots get
+  // cancelled/deleted/cleaned up; notifications get read/dismissed), a
+  // successful fetch is the source of truth even when it returns FEWER
+  // rows than we currently hold. The length-based guard in nonEmpty()
+  // above — meant to ignore an incomplete fetch during a Supabase
+  // incident — would otherwise treat every legitimate shrink as
+  // "incomplete" and permanently reject the fresh data, freezing a stale
+  // localStorage cache that can NEVER catch up (this was the desktop-vs-
+  // mobile "slot shows the wrong/cancelled doctor" bug). We still keep the
+  // previous list on a hard failure: fetchXFromSupabase returns null/throws
+  // (handled by the caller's try/catch) or an empty array, which for a live
+  // clinic almost always means a blocked/failed fetch rather than a real
+  // "zero rows" state.
+  const freshList = <T,>(arr: T[] | null | undefined, fallback: T[]): T[] => {
+    if (!arr || arr.length === 0) return fallback;
+    return arr;
+  };
+
   // TIER 1 — fast poll (45s). Only slots and notifications are genuinely
   // time-sensitive enough to warrant this frequency (booking/approval
   // status, a doctor's own notifications). Also refreshes badge_awards
@@ -270,8 +288,8 @@ export function useAppState() {
       refreshShiftDeclarations();
       setState((prev) => ({
         ...prev,
-        slots: nonEmpty(sbSlots, prev.slots),
-        notifications: nonEmpty(sbNotifs, prev.notifications),
+        slots: freshList(sbSlots, prev.slots),
+        notifications: freshList(sbNotifs, prev.notifications),
       }));
       return true;
     } catch (err) {
