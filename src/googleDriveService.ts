@@ -14,12 +14,13 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 export async function fetchDoctorDocumentLinks(
   doctorName: string,
+  forceRefresh = false,
 ): Promise<DoctorDocumentLinks> {
   const empty: DoctorDocumentLinks = { apc: null, mmc: null, indemnity: null };
   if (!doctorName) return empty;
 
   const cached = cache.get(doctorName);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+  if (!forceRefresh && cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
     return cached.data;
   }
 
@@ -37,7 +38,13 @@ export async function fetchDoctorDocumentLinks(
       mmc: data.mmc || null,
       indemnity: data.indemnity || null,
     };
-    cache.set(doctorName, { data: result, timestamp: Date.now() });
+    // Do not retain a transient API/network failure as a five-minute
+    // "no document" result. Successful responses may still be cached.
+    if (result.apc || result.mmc || result.indemnity) {
+      cache.set(doctorName, { data: result, timestamp: Date.now() });
+    } else {
+      cache.delete(doctorName);
+    }
     return result;
   } catch (err) {
     console.error("fetchDoctorDocumentLinks error:", err);

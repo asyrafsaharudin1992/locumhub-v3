@@ -65,7 +65,11 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
   // The profile URL is the authoritative link for a document that has
   // already been uploaded and saved. Drive matching is only a compatibility
   // fallback for older records that predate the profile URL field.
-  const savedApcUrl = currentUser.apc?.trim() || '';
+  const extractDocumentUrl = (raw: string | undefined): string => {
+    const match = raw?.match(/https?:\/\/[^\s|]+/i);
+    return match ? match[0].replace(/[),.;]+$/, '') : '';
+  };
+  const savedApcUrl = extractDocumentUrl(currentUser.apc);
   const currentApcUrl = apcUploadedUrl || savedApcUrl || matchedApcUrl || '';
 
   // Badge Modal trigger state
@@ -189,6 +193,22 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
       return;
     }
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleViewApc = async () => {
+    if (currentApcUrl) {
+      handleViewFile(currentApcUrl);
+      return;
+    }
+    // Retry on demand so a temporary Drive/API/cache failure never makes an
+    // existing document look permanently missing in the profile screen.
+    const links = await fetchDoctorDocumentLinks(currentUser.name, true);
+    if (links.apc) {
+      setMatchedApcUrl(links.apc);
+      handleViewFile(links.apc);
+      return;
+    }
+    handleViewFile('');
   };
 
   return (
@@ -364,16 +384,16 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
                 )}
               </div>
 
-              {currentApcUrl && (
+              {currentApcUrl || currentUser.name ? (
                 <button
                   type="button"
-                  onClick={() => handleViewFile(currentApcUrl)}
+                  onClick={handleViewApc}
                   className="text-indigo-700 font-bold hover:underline text-[10px] flex items-center gap-1 mt-1.5 cursor-pointer"
                 >
                   <Eye className="w-3 h-3" />
                   View current validated APC
                 </button>
-              )}
+              ) : null}
             </div>
 
             {/* Indemnity options */}
