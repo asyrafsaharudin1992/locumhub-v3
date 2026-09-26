@@ -466,8 +466,10 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
             type="password"
             value={newPassword}
             onChange={e => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            spellCheck={false}
             className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm font-semibold"
-            placeholder="Minimum 6 characters for safety plan"
+            placeholder="Your password (5-digit MMC or 6+ characters)"
           />
           <button
             type="button"

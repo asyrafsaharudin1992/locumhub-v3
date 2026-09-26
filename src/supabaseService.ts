@@ -252,6 +252,14 @@ export async function verifyLogin(
     };
   }
 
+  // A profile exists but its Auth password did not match. Do not fall back
+  // to the legacy RPC here: that RPC can report the old empty public password
+  // column as "no password configured", which is misleading for a wrong
+  // Supabase Auth password.
+  if (profileRow) {
+    return { success: false, message: "Incorrect password.", user: null };
+  }
+
   const { data, error } = await client.rpc("verify_login", {
     p_phone: phone,
     p_password: password,
