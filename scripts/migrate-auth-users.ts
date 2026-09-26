@@ -71,6 +71,16 @@ const byPhone = new Map(
     .map((user) => [normalizePhone(user.phone!), user]),
 );
 
+// Some legacy profiles contain placeholder/shared emails such as
+// `example@gmail.com`. Auth emails must be unique, so only use a profile
+// email when it belongs to exactly one public profile. Duplicate emails get
+// a stable per-phone identity instead; the public profile email is preserved.
+const emailUseCounts = new Map<string, number>();
+for (const row of (rows || []) as AppUser[]) {
+  const email = row.email?.trim().toLowerCase() || "";
+  if (isValidEmail(email)) emailUseCounts.set(email, (emailUseCounts.get(email) || 0) + 1);
+}
+
 let created = 0;
 let updated = 0;
 let skipped = 0;
@@ -100,7 +110,7 @@ for (const row of (rows || []) as AppUser[]) {
     }
 
     const authPhone = normalizePhone(phone);
-    const authEmail = isValidEmail(email)
+    const authEmail = isValidEmail(email) && emailUseCounts.get(email) === 1
       ? email
       : `user-${phone.replace(/\D/g, "")}@auth.aralocum.local`;
     const existingByEmail = byEmail.get(authEmail);

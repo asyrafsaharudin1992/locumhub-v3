@@ -223,20 +223,29 @@ export async function verifyLogin(
     (row) => row.phone.trim() === cleanPhone,
   ) || null;
   const profile: any = profileRow || {};
-  const profileEmail = String(profile.email || profile.Email || "").trim();
-  const identifier = profileEmail || `user-${cleanPhone.replace(/\D/g, "")}@auth.aralocum.local`;
+  const profileEmail = String(profile.email || profile.Email || "").trim().toLowerCase();
+  const syntheticEmail = `user-${cleanPhone.replace(/\D/g, "")}@auth.aralocum.local`;
+  // Migrations use a synthetic identity for duplicate/placeholder emails.
+  // Try both identities so older profiles remain compatible while repaired
+  // profiles can log in without changing their displayed email.
+  const identifiers = profileEmail && profileEmail !== syntheticEmail
+    ? [profileEmail, syntheticEmail]
+    : [syntheticEmail];
   const authPasswords = cleanPassword.length === 5
     ? [cleanPassword, `0${cleanPassword}`]
     : [cleanPassword];
   let authData: any = null;
-  for (const authPassword of authPasswords) {
-    const authResult = await client.auth.signInWithPassword(
-      { email: identifier, password: authPassword },
-    );
-    if (!authResult.error && authResult.data.user) {
-      authData = authResult.data;
-      break;
+  for (const identifier of identifiers) {
+    for (const authPassword of authPasswords) {
+      const authResult = await client.auth.signInWithPassword(
+        { email: identifier, password: authPassword },
+      );
+      if (!authResult.error && authResult.data.user) {
+        authData = authResult.data;
+        break;
+      }
     }
+    if (authData) break;
   }
 
   if (authData?.user) {
