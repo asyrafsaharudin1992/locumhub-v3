@@ -149,7 +149,108 @@ export async function verifyLogin(
   password: string,
 ): Promise<{ success: boolean; message?: string; user?: any }> {
   const client = getSupabaseClient();
-  if (!client) return { success: false, message: "Supabase client not initialized" };
+  if (!client) {
+    if (!import.meta.env.DEV) {
+      return {
+        success: false,
+        message: "Authentication service is unavailable. Please try again shortly.",
+      };
+    }
+
+    const cleanPhone = phone.trim();
+    if (cleanPhone === "admin" || cleanPhone === "0182194256" || cleanPhone === "0123456789" || cleanPhone === "dev") {
+      return {
+        success: true,
+        user: {
+          phone: "0182194256",
+          name: "Dev Admin (Klinik ARA)",
+          role: "Admin",
+          email: "admin@araclinic.com",
+          points: 1000,
+        },
+      };
+    }
+    if (cleanPhone === "doctor" || cleanPhone === "0198765432") {
+      return {
+        success: true,
+        user: {
+          phone: "0198765432",
+          name: "Dr. Dev Locum",
+          role: "Doctor",
+          email: "doctor@araclinic.com",
+          mmc: "12345",
+          apc: "2026/12345",
+          points: 150,
+        },
+      };
+    }
+    if (cleanPhone === "staff" || cleanPhone === "0112233445") {
+      return {
+        success: true,
+        user: {
+          phone: "0112233445",
+          name: "Dev Staff",
+          role: "Staff",
+          email: "staff@araclinic.com",
+        },
+      };
+    }
+    if (cleanPhone.length > 0 && password.trim().length > 0) {
+      return {
+        success: true,
+        user: {
+          phone: cleanPhone,
+          name: `Dev Doctor (${cleanPhone})`,
+          role: "Doctor",
+          email: `${cleanPhone}@araclinic.com`,
+          points: 50,
+        },
+      };
+    }
+    return { success: false, message: "Please input phone number." };
+  }
+
+  // New accounts are authenticated by Supabase Auth. We look up the
+  // existing profile before signing in because the current public policies
+  // were created for the legacy phone-based app flow.
+  const cleanPhone = phone.trim();
+  const cleanPassword = password.trim();
+  const { data: profileRow } = await client
+    .from("users")
+    .select("*")
+    .eq("phone", cleanPhone)
+    .maybeSingle();
+  const profile = profileRow || {};
+  const profileEmail = String(profile.email || profile.Email || "").trim();
+  const identifier = profileEmail || `user-${cleanPhone.replace(/\D/g, "")}@auth.aralocum.local`;
+  const authPasswords = cleanPassword.length === 5
+    ? [cleanPassword, `0${cleanPassword}`]
+    : [cleanPassword];
+  let authData: any = null;
+  for (const authPassword of authPasswords) {
+    const authResult = await client.auth.signInWithPassword(
+      { email: identifier, password: authPassword },
+    );
+    if (!authResult.error && authResult.data.user) {
+      authData = authResult.data;
+      break;
+    }
+  }
+
+  if (authData?.user) {
+    const metadata = authData.user.user_metadata || {};
+    return {
+      success: true,
+      user: {
+        ...profile,
+        phone: profile.phone || metadata.phone || cleanPhone,
+        name: profile.name || profile.nama || metadata.name || "",
+        role: profile.role || metadata.role || "Doctor",
+        email: profile.email || authData.user.email || "",
+        mmc: profile.mmc || metadata.mmc || "",
+      },
+    };
+  }
 
   const { data, error } = await client.rpc("verify_login", {
     p_phone: phone,
@@ -166,7 +267,22 @@ export async function verifyStaffKey(
   keyword: string,
 ): Promise<{ success: boolean; message?: string; user?: any }> {
   const client = getSupabaseClient();
-  if (!client) return { success: false, message: "Supabase client not initialized" };
+  if (!client) {
+    if (!import.meta.env.DEV) {
+      return {
+        success: false,
+        message: "Authentication service is unavailable. Please try again shortly.",
+      };
+    }
+    return {
+      success: true,
+      user: {
+        phone: "0112233445",
+        name: "Dev Staff",
+        role: "Staff",
+      },
+    };
+  }
 
   const { data, error } = await client.rpc("verify_staff_key", {
     p_keyword: keyword,

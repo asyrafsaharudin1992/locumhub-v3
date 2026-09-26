@@ -746,33 +746,63 @@ export default function App() {
                 </p>
               </form>
 
-              {/* Staff quick access — keyword only, view-only Clinical Schedule access */}
-              <div className="border-t border-slate-100/80 pt-4 text-left space-y-2.5">
-                <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase block">
-                  Staff quick access
-                </span>
-                <form onSubmit={handleStaffKeywordLogin} className="flex gap-2">
-                  <input
-                    type="password"
-                    value={staffKeywordInput}
-                    onChange={(e) => setStaffKeywordInput(e.target.value)}
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-slate-400"
-                    placeholder="Enter access keyword"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 rounded-xl text-xs transition cursor-pointer shrink-0"
-                  >
-                    Enter
-                  </button>
-                </form>
-                {staffAuthError && (
-                  <p className="text-xs text-rose-500 font-semibold flex items-center gap-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5" />
-                    {staffAuthError}
-                  </p>
-                )}
-              </div>
+                {/* Local development quick logins only. */}
+                {import.meta.env.DEV && <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2 text-left">
+                  <span className="text-[10px] font-bold text-amber-800 tracking-wider uppercase block">
+                    ⚡ Quick Dev Logins
+                  </span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => loginUser("0182194256", "dev")}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-1.5 px-2 rounded-lg text-[11px] transition"
+                    >
+                      Dev Admin
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loginUser("0198765432", "dev")}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-2 rounded-lg text-[11px] transition"
+                    >
+                      Dev Doctor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => loginUser("0112233445", "dev", "Staff")}
+                      className="bg-slate-700 hover:bg-slate-800 text-white font-bold py-1.5 px-2 rounded-lg text-[11px] transition"
+                    >
+                      Dev Staff
+                    </button>
+                  </div>
+                </div>}
+
+                {/* Staff quick access — keyword only, view-only Clinical Schedule access */}
+                <div className="border-t border-slate-100/80 pt-4 text-left space-y-2.5">
+                  <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase block">
+                    Staff quick access
+                  </span>
+                  <form onSubmit={handleStaffKeywordLogin} className="flex gap-2">
+                    <input
+                      type="password"
+                      value={staffKeywordInput}
+                      onChange={(e) => setStaffKeywordInput(e.target.value)}
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-slate-400"
+                      placeholder="Enter access keyword"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 rounded-xl text-xs transition cursor-pointer shrink-0"
+                    >
+                      Enter
+                    </button>
+                  </form>
+                  {staffAuthError && (
+                    <p className="text-xs text-rose-500 font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      {staffAuthError}
+                    </p>
+                  )}
+                </div>
 
               {/* Recruiter join pipeline onboarding */}
               <div className="border-t border-slate-100 pt-4">

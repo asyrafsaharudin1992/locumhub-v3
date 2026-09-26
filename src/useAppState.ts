@@ -147,7 +147,12 @@ export function useAppState() {
     const savedFl = localStorage.getItem("ara_feedbacks_locum");
     const savedApp = localStorage.getItem("ara_applications");
     const savedLogs = localStorage.getItem("ara_logs");
-    const savedCurrentUser = localStorage.getItem("ara_current_user");
+    // A browser-controlled value is not an authentication session. Keep the
+    // old local restore only for local development; production must require a
+    // fresh server-validated login after a reload.
+    const savedCurrentUser = import.meta.env.DEV
+      ? localStorage.getItem("ara_current_user")
+      : null;
     const savedNotifications = localStorage.getItem("ara_notifications");
     const savedAdminAlerts = localStorage.getItem("ara_admin_alerts");
 
@@ -602,7 +607,7 @@ export function useAppState() {
     localStorage.setItem("ara_logs", JSON.stringify(state.activityLogs));
     localStorage.setItem("ara_notifications", JSON.stringify(state.notifications || []));
     localStorage.setItem("ara_admin_alerts", JSON.stringify(state.adminAlerts || []));
-    if (state.currentUser) {
+    if (import.meta.env.DEV && state.currentUser) {
       localStorage.setItem(
         "ara_current_user",
         JSON.stringify(state.currentUser),

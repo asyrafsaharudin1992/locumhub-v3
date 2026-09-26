@@ -6,16 +6,31 @@ export interface SupabaseConfig {
   isEnabled: boolean;
 }
 
-// 🌟 FIX 1: Paksa hardcode maklumat Supabase Dr dlm config supaya selamat di peranti mobile/desktop
+const isLocalDevelopment = import.meta.env.DEV;
+const defaultSupabaseUrl = "https://duwmuidrarzgrljhmsjm.supabase.co";
+const defaultSupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1d211aWRyYXJ6Z3Jsamhtc2ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDg3NTgsImV4cCI6MjA5ODM4NDc1OH0.FtIZ0vD4wU3WWuWHxftSoXJWYYdcZLaVaX4g9RM_coM";
+
 export function getSupabaseConfig(): SupabaseConfig {
-  // Sila masukkan URL Project dan Anon Key Supabase Dr yang sebenar di dalam pembuka string "" di bawah:
-  const targetUrl = "https://duwmuidrarzgrljhmsjm.supabase.co"; 
-  const targetKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1d211aWRyYXJ6Z3Jsamhtc2ptIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDg3NTgsImV4cCI6MjA5ODM4NDc1OH0.FtIZ0vD4wU3WWuWHxftSoXJWYYdcZLaVaX4g9RM_coM";
+  // Production must use the Vercel-provided public Supabase settings. The
+  // localStorage settings are retained only for local development so a
+  // visitor cannot disable Supabase and trigger the development fallback.
+  const envUrl = import.meta.env.VITE_SUPABASE_URL || "";
+  const envAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+  const localUrl = isLocalDevelopment
+    ? localStorage.getItem('ara_supabase_url') || ""
+    : "";
+  const localAnonKey = isLocalDevelopment
+    ? localStorage.getItem('ara_supabase_anon_key') || ""
+    : "";
+  const localEnabled = isLocalDevelopment && localStorage.getItem('ara_supabase_enabled') === 'true';
+  const url = envUrl || localUrl || defaultSupabaseUrl;
+  const anonKey = envAnonKey || localAnonKey || defaultSupabaseAnonKey;
+  const isEnabled = Boolean(url && anonKey) && (isLocalDevelopment ? localEnabled || Boolean(envUrl && envAnonKey) || (!envUrl && !envAnonKey) : true);
 
   return { 
-    url: targetUrl.trim(), 
-    anonKey: targetKey.trim(), 
-    isEnabled: true // 🔥 PAKSA TRUE: Memotong semua sekatan localStorage browser yang mati kat mobile!
+    url: url.trim(), 
+    anonKey: anonKey.trim(), 
+    isEnabled
   };
 }
 
@@ -23,7 +38,7 @@ export function getSupabaseConfig(): SupabaseConfig {
 export function saveSupabaseConfig(url: string, anonKey: string, isEnabled: boolean) {
   localStorage.setItem('ara_supabase_url', url.trim());
   localStorage.setItem('ara_supabase_anon_key', anonKey.trim());
-  localStorage.setItem('ara_supabase_enabled', 'true');
+  localStorage.setItem('ara_supabase_enabled', isEnabled ? 'true' : 'false');
 }
 
 let cachedClient: SupabaseClient | null = null;
