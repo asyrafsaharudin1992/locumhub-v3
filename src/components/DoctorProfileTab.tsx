@@ -131,8 +131,8 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
   };
 
   const handlePasswordUpdate = async () => {
-    if (newPassword.length < 6) {
-      alert("⚠️ Password must be at least 6 characters.");
+    if (newPassword.length < 6 && !/^\d{5}$/.test(newPassword)) {
+      alert("⚠️ Password must be at least 6 characters, or exactly 5 digits for an MMC password.");
       return;
     }
     setIsSavingPassword(true);

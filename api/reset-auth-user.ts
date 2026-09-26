@@ -34,16 +34,19 @@ export default async function handler(req: any, res: any) {
   }
   const callerPhone = String(callerData.user.user_metadata?.phone || "").trim();
   const { data: callerProfile } = await admin.from("users").select("role").eq("phone", callerPhone).maybeSingle();
-  if ((callerProfile?.role || callerData.user.user_metadata?.role) !== "Admin") {
-    res.status(403).json({ error: "Only an Admin can reset passwords." });
-    return;
-  }
   const phone = String(req.body?.phone || "").trim();
   const newPassword = String(req.body?.newPassword || "").trim();
-  if (!phone || newPassword.length < 6) {
-    res.status(400).json({ error: "A phone number and password of at least 6 characters are required." });
+  const callerRole = callerProfile?.role || callerData.user.user_metadata?.role;
+  const isSelfReset = phone === callerPhone;
+  if (callerRole !== "Admin" && !isSelfReset) {
+    res.status(403).json({ error: "Only an Admin can reset another user's password." });
     return;
   }
+  if (!phone || (newPassword.length < 6 && !/^\d{5}$/.test(newPassword))) {
+    res.status(400).json({ error: "Password must be at least 6 characters, or exactly 5 digits for an MMC password." });
+    return;
+  }
+  const authPassword = /^\d{5}$/.test(newPassword) ? `0${newPassword}` : newPassword;
   const { data: listed, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (listError) {
     res.status(500).json({ error: listError.message });
@@ -57,7 +60,7 @@ export default async function handler(req: any, res: any) {
     res.status(404).json({ error: "No Auth account found for this user. Run the Auth migration first." });
     return;
   }
-  const { error: updateError } = await admin.auth.admin.updateUserById(target.id, { password: newPassword });
+  const { error: updateError } = await admin.auth.admin.updateUserById(target.id, { password: authPassword });
   if (updateError) {
     res.status(500).json({ error: updateError.message });
     return;

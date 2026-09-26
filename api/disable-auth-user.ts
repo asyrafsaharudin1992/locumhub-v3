@@ -76,6 +76,11 @@ export default async function handler(req: any, res: any) {
       String(user.user_metadata?.phone || "").trim() === phone,
   );
   if (!target) {
+    const { error: profileError } = await admin.from("users").delete().eq("phone", phone);
+    if (profileError) {
+      res.status(500).json({ error: profileError.message });
+      return;
+    }
     res.status(200).json({ ok: true, found: false });
     return;
   }
@@ -90,6 +95,12 @@ export default async function handler(req: any, res: any) {
   });
   if (updateError) {
     res.status(500).json({ error: updateError.message });
+    return;
+  }
+
+  const { error: profileError } = await admin.from("users").delete().eq("phone", phone);
+  if (profileError) {
+    res.status(500).json({ error: `Auth was disabled, but the profile could not be deleted: ${profileError.message}` });
     return;
   }
 
