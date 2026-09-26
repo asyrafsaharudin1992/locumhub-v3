@@ -4,6 +4,7 @@ import ws from "ws";
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const serviceRoleKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ROLE_KEY;
+const staffAccessPassword = process.env.STAFF_ACCESS_PASSWORD;
 
 if (!url || !serviceRoleKey) {
   throw new Error(
@@ -85,12 +86,12 @@ for (const row of (rows || []) as AppUser[]) {
     const password = isAdmin
       ? "klinikARA2026"
       : isStaff
-        ? "teamara2024"
+        ? staffAccessPassword || ""
         : mmc
           ? authPassword(mmc)
           : "";
 
-    if (!phone || (!isAdmin && !isStaff && !/^\d{5,6}$/.test(mmc))) {
+    if (!phone || (isStaff && !staffAccessPassword) || (!isAdmin && !isStaff && !/^\d{5,6}$/.test(mmc))) {
       skipped += 1;
       console.log(
         `SKIP ${phone || "<no phone>"}: MMC must be 5 or 6 digits unless role is Admin or Staff`,
