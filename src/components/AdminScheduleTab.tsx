@@ -11,7 +11,7 @@ interface AdminScheduleTabProps {
   currentUserRole: string;
   onManageSlot: (action: 'DELETE' | 'CANCEL' | 'REPLACE', id: string, phone?: string, manualName?: string) => Promise<string>;
   onEditTiming: (id: string, newMasa: string) => Promise<string>;
-  onBulkCreateSlots: (dates: string[], branch: string, time: string, pay: number) => string;
+  onBulkCreateSlots: (dates: string[], branch: string, time: string, pay: number) => string | Promise<string>;
   adminAlerts?: AdminAlert[];
   onDismissAlert?: (id: string) => void;
 }
@@ -84,7 +84,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
 
     try {
       // Set payout to 0 as base payout is removed dlm schema Dr
-      const response = onBulkCreateSlots(bulkDates, bulkBranch, bulkTime, 0);
+      const response = await onBulkCreateSlots(bulkDates, bulkBranch, bulkTime, 0);
       setNotification({ 
         type: 'success', 
         text: response || "✅ Berjaya! Slot jadual baharu telah diterbitkan." 

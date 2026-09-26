@@ -431,9 +431,7 @@ export function useAppState() {
   const cloudSaveSlotsBulk = async (slotsToSave: LocumSlot[]) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
       for (const s of slotsToSave) {
-        await saveSlotToSupabase(s).catch((err) =>
-          console.error("Supabase saveSlot bulk failed:", err),
-        );
+        await saveSlotToSupabase(s);
       }
     }
   };
@@ -1029,7 +1027,10 @@ export function useAppState() {
         // Someone else claimed it first — refresh local state so this
         // doctor immediately sees the slot is really gone, rather than
         // it lingering as "Available" in their view until the next poll.
-        pullTier1FromSupabase();
+        await pullTier1FromSupabase();
+        if (claimResult.error && claimResult.error !== "Slot is no longer available.") {
+          return `Booking could not be saved: ${claimResult.error}`;
+        }
         return "Sorry, this slot was just booked by another doctor. Please choose a different slot.";
       }
     }
@@ -1538,12 +1539,12 @@ export function useAppState() {
     return `✅ Logged ${sessionType} attendance for ${attendees.length} doctor(s): ${attendees.map((a) => a.name).join(", ")}. Run "Recalculate Badges" for this month to award The Diligent Doc.`;
   };
 
-  const adminCreateBulkSlots = (
+  const adminCreateBulkSlots = async (
     dates: string[],
     branch: string,
     time: string,
     basePayRate: number,
-  ): string => {
+  ): Promise<string> => {
     const now = Date.now();
     const newSlots: LocumSlot[] = dates.map((d, index) => {
       // Convert YYYY-MM-DD input to DD/MM/YYYY
@@ -1569,9 +1570,10 @@ export function useAppState() {
       slots: [...prev.slots, ...newSlots],
     }));
 
-    cloudSaveSlotsBulk(newSlots).catch((err) =>
-      console.error("Cloud adminCreateBulkSlots failed:", err),
-    );
+    // Do not report success until every new slot has reached Supabase. This
+    // prevents an activity log entry from implying that a slot was published
+    // when an Auth/RLS policy blocked the actual slot write.
+    await cloudSaveSlotsBulk(newSlots);
 
     logActivity(
       `ADMIN: Bulk created ${dates.length} slots for branch ${branch}`,
