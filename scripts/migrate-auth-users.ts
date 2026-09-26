@@ -96,8 +96,16 @@ for (const row of (rows || []) as AppUser[]) {
     }
 
     const authPhone = normalizePhone(phone);
-    const existingUser =
-      (isValidEmail(email) ? byEmail.get(email) : undefined) || byPhone.get(authPhone);
+    const existingByEmail = isValidEmail(email) ? byEmail.get(email) : undefined;
+    const existingByPhone = byPhone.get(authPhone);
+    // Some legacy Admin rows contain the same phone as a Doctor but with a
+    // 60... prefix instead of 01... . Do not merge those profiles into one
+    // Auth account. An exact email match remains the strongest identity link.
+    const existingUser = existingByEmail ||
+      (existingByPhone &&
+      String(existingByPhone.user_metadata?.phone || "").trim() === phone
+        ? existingByPhone
+        : undefined);
     const userMetadata = {
       phone,
       name: row.nama || "",
@@ -120,12 +128,12 @@ for (const row of (rows || []) as AppUser[]) {
     const authEmail = isValidEmail(email)
       ? email
       : `user-${phone.replace(/\D/g, "")}@auth.aralocum.local`;
+    const canAttachPhone = !existingByPhone || existingByPhone.id === existingUser?.id;
     const payload = {
       email: authEmail,
       password,
       email_confirm: true,
-      phone: authPhone,
-      phone_confirm: true,
+      ...(canAttachPhone ? { phone: authPhone, phone_confirm: true } : {}),
       user_metadata: userMetadata,
     };
 
