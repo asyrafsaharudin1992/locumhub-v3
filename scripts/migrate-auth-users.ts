@@ -47,8 +47,7 @@ function extractMmcCode(value: string | null): string {
 
 const { data: rows, error: rowsError } = await admin
   .from("users")
-  .select("phone,email,mmc,nama,role")
-  .not("mmc", "is", null);
+  .select("phone,email,mmc,nama,role");
 
 if (rowsError) throw rowsError;
 
@@ -81,11 +80,18 @@ for (const row of (rows || []) as AppUser[]) {
     const phone = row.phone?.trim() || "";
     const email = row.email?.trim().toLowerCase() || "";
     const mmc = extractMmcCode(row.mmc);
-    const password = mmc ? authPassword(mmc) : "";
+    const isAdmin = (row.role || "").trim().toLowerCase() === "admin";
+    const password = isAdmin
+      ? "klinikARA2026"
+      : mmc
+        ? authPassword(mmc)
+        : "";
 
-    if (!phone || !/^\d{5,6}$/.test(mmc)) {
+    if (!phone || (!isAdmin && !/^\d{5,6}$/.test(mmc))) {
       skipped += 1;
-      console.log(`SKIP ${phone || "<no phone>"}: MMC must be 5 or 6 digits`);
+      console.log(
+        `SKIP ${phone || "<no phone>"}: MMC must be 5 or 6 digits unless role is Admin`,
+      );
       continue;
     }
 
