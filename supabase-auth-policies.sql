@@ -75,21 +75,3 @@ alter table public.announcements enable row level security;
 drop policy if exists "authenticated can use announcements" on public.announcements;
 create policy "authenticated can use announcements"
   on public.announcements for all to authenticated using (true) with check (true);
-
-grant select, insert, update, delete on table public.feedbacks_patient to authenticated;
-alter table public.feedbacks_patient enable row level security;
-drop policy if exists "authenticated can use patient feedback" on public.feedbacks_patient;
-create policy "authenticated can use patient feedback"
-  on public.feedbacks_patient for all to authenticated using (true) with check (true);
-
-grant select, insert, update, delete on table public.feedbacks_staff to authenticated;
-alter table public.feedbacks_staff enable row level security;
-drop policy if exists "authenticated can use staff feedback" on public.feedbacks_staff;
-create policy "authenticated can use staff feedback"
-  on public.feedbacks_staff for all to authenticated using (true) with check (true);
-
-grant select, insert, update, delete on table public.feedbacks_locum to authenticated;
-alter table public.feedbacks_locum enable row level security;
-drop policy if exists "authenticated can use locum feedback" on public.feedbacks_locum;
-create policy "authenticated can use locum feedback"
-  on public.feedbacks_locum for all to authenticated using (true) with check (true);
