@@ -636,7 +636,31 @@ export function useAppState() {
     phone: string,
     passwordInput?: string,
     role?: string,
+    verifiedUser?: any,
   ): Promise<{ success: boolean; message: string; user: UserProfile | null }> => {
+    // Staff Quick Access is already verified server-side by verify_staff_key.
+    // Keep this restricted view-only path independent of Auth users created
+    // for phone/MMC login, so legacy staff accounts continue to work.
+    if (verifiedUser && role === "Staff") {
+      const rawUser = verifiedUser;
+      const user: UserProfile = {
+        phone: String(rawUser.phone || rawUser.Phone || phone).trim(),
+        password: "",
+        name: rawUser.name || rawUser.nama || rawUser.Nama || "",
+        role: "Staff",
+        email: rawUser.email || rawUser.Email || "",
+        mmc: rawUser.mmc || rawUser.MMC || "",
+        apc: rawUser.apc || rawUser.APC || rawUser.apc_2026 || "",
+        indemnity: rawUser.indemnity || rawUser.Indemnity || "Tiada",
+        workplace: rawUser.workplace || rawUser.tempat_berkhidmat || "",
+        points: Number(rawUser.points || 0),
+        badges: typeof rawUser.badges === "string" ? rawUser.badges : "",
+        locks: typeof rawUser.locks === "string" ? rawUser.locks : "",
+      };
+      setState((prev) => ({ ...prev, currentUser: user }));
+      return { success: true, message: "Login successful", user };
+    }
+
     // The password check now happens entirely server-side (verify_login
     // RPC) — the actual stored password is never fetched to the browser,
     // whether login succeeds or fails. This replaces the old

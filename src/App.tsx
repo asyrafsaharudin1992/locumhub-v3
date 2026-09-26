@@ -376,7 +376,7 @@ export default function App() {
       return;
     }
     const staffPhone = String(staffRes.user.phone || "").trim();
-    const res = await loginUser(staffPhone, keyword, "Staff");
+    const res = await loginUser(staffPhone, undefined, "Staff", staffRes.user);
     if (res.success) {
       setActiveTab("admin-cal");
       setStaffKeywordInput("");
