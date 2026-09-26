@@ -205,7 +205,7 @@ export default function App() {
         setActiveTab("booking");
       }
     }
-  }, [state.currentUser]);
+  }, [state.currentUser?.phone, state.currentUser?.role]);
 
   useEffect(() => {
     setStickyPendingSlots((prev) => {

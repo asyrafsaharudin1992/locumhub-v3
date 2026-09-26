@@ -550,9 +550,14 @@ export function useAppState() {
     };
 
     client.auth.getSession().then(({ data }) => restoreSession(data.session));
-    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = client.auth.onAuthStateChange((event, session) => {
       if (session) void restoreSession(session);
-      else setState((prev) => ({ ...prev, currentUser: null }));
+      // Only an explicit SIGNED_OUT event should clear the app user. A
+      // transient null session during token refresh must not log the user
+      // out of the interface by itself.
+      else if (event === "SIGNED_OUT") {
+        setState((prev) => ({ ...prev, currentUser: null }));
+      }
     });
     return () => {
       cancelled = true;
