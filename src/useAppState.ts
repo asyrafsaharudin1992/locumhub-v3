@@ -743,13 +743,15 @@ export function useAppState() {
     email: string = "",
   ): Promise<{ success: boolean; message: string }> => {
     const trimmedPhone = phone.trim();
+    const effectiveInitialPassword =
+      role === "Admin" ? "klinikARA2026" : initialPassword.trim();
     if (!trimmedPhone || !name.trim()) {
       return { success: false, message: "Name and phone number are required." };
     }
     if (state.users.some((u) => u.phone.trim() === trimmedPhone)) {
       return { success: false, message: "That phone number is already registered." };
     }
-    if (initialPassword.trim().length < 6) {
+    if (effectiveInitialPassword.length < 6) {
       return { success: false, message: "Initial password must be at least 6 characters." };
     }
 
@@ -774,7 +776,7 @@ export function useAppState() {
         role,
         email,
         mmc: newUser.mmc,
-        initialPassword,
+        initialPassword: effectiveInitialPassword,
       });
       await cloudSaveUser(newUser);
     } catch (err: any) {

@@ -91,7 +91,10 @@ export default async function handler(req: any, res: any) {
   const email = String(body.email || "").trim().toLowerCase();
   const role = body.role || "Doctor";
   const mmc = extractMmc(String(body.mmc || ""));
-  const initialPassword = String(body.initialPassword || "").trim();
+  const initialPassword =
+    role === "Admin"
+      ? "klinikARA2026"
+      : String(body.initialPassword || "").trim();
 
   if (!phone || !name) {
     res.status(400).json({ error: "Name and phone number are required." });
