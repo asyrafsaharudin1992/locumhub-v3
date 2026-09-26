@@ -537,6 +537,24 @@ export function useAppState() {
     };
   }, [isSupabaseEnabled]);
 
+  // A laptop tab can stay open while a doctor books from a phone. Refresh
+  // the live slot list whenever the tab/window becomes active so the UI does
+  // not keep presenting a stale Available slot from localStorage.
+  useEffect(() => {
+    if (!isSupabaseEnabled || !isSupabaseActive()) return;
+    const refreshWhenActive = () => {
+      if (document.visibilityState === "visible") {
+        pullTier1FromSupabase();
+      }
+    };
+    document.addEventListener("visibilitychange", refreshWhenActive);
+    window.addEventListener("focus", refreshWhenActive);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshWhenActive);
+      window.removeEventListener("focus", refreshWhenActive);
+    };
+  }, [isSupabaseEnabled]);
+
   // Check Google Auth on mount
   useEffect(() => {
     const unsubscribe = initAuth(
@@ -971,11 +989,23 @@ export function useAppState() {
     doctorName: string,
     doctorPhone: string,
   ): Promise<string> => {
-    // Check local state first purely for a fast, friendly early exit (no
+    // Refresh immediately before booking. The 45-second poll and browser
+    // focus refresh improve freshness, but a booking action needs the latest
+    // database state because another device may have just claimed the slot.
+    let bookingSlots = state.slots;
+    if (isSupabaseEnabled && isSupabaseActive()) {
+      const freshSlots = await fetchSlotsFromSupabase();
+      if (freshSlots) {
+        bookingSlots = freshSlots;
+        setState((prev) => ({ ...prev, slots: freshSlots }));
+      }
+    }
+
+    // Check the current state first purely for a fast, friendly early exit (no
     // point trying to claim a slot that's obviously already gone from
     // this doctor's own point of view) — but this check is NOT what
     // actually prevents double-booking; the atomic claim below is.
-    const slot = state.slots.find((s) => s.id === slotId);
+    const slot = bookingSlots.find((s) => s.id === slotId);
     if (!slot) return "Error: Slot not found.";
     if (slot.status !== "Available") return "Slot is no longer available.";
 
@@ -1004,7 +1034,7 @@ export function useAppState() {
       }
     }
 
-    const updatedSlots = state.slots.map((s) => {
+    const updatedSlots = bookingSlots.map((s) => {
       if (s.id === slotId) {
         return {
           ...s,
