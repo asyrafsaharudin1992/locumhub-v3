@@ -11,6 +11,7 @@ import {
 import { getSupabaseConfig, getSupabaseClient } from "./supabaseClient";
 import { provisionAuthUser } from "./authProvisionService";
 import { disableAuthUser } from "./authDisableService";
+import { resetAuthUserPassword } from "./authResetService";
 import { recalculateBadgesForMonth, normalizeDoctorName } from "./badgeEngine";
 import {
   isSupabaseActive,
@@ -830,7 +831,7 @@ export function useAppState() {
     phone: string,
     newPass: string,
   ): Promise<string> => {
-    const encodedPass = btoa(newPass.trim());
+    const trimmedPassword = newPass.trim();
     const targetPhone = phone.trim();
 
     const existingUser = state.users.find((u) => u.phone.trim() === targetPhone);
@@ -838,9 +839,10 @@ export function useAppState() {
       return "⚠️ Could not find that account — password was not changed.";
     }
 
-    const updatedUser = { ...existingUser, password: encodedPass };
+    const updatedUser = { ...existingUser, password: "" };
 
     try {
+      await resetAuthUserPassword(targetPhone, trimmedPassword);
       await saveUserToSupabase(updatedUser);
     } catch (err) {
       console.error("Cloud changePassword failed:", err);
@@ -850,7 +852,7 @@ export function useAppState() {
     setState((prev) => {
       const updatedUsers = prev.users.map((u) => {
         if (u.phone.trim() === targetPhone) {
-          return { ...u, password: encodedPass };
+          return { ...u, password: "" };
         }
         return u;
       });
