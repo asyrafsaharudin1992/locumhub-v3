@@ -158,6 +158,7 @@ export default function App() {
     toggleAutoSync,
 
     isSupabaseEnabled,
+    authReady,
     setIsSupabaseEnabled,
     pullFromSupabase,
     pushToSupabase,
@@ -673,7 +674,16 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased flex flex-col">
       <AnimatePresence mode="wait">
-        {!state.currentUser ? (
+        {!authReady ? (
+          <motion.div
+            key="auth-loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex-1 flex items-center justify-center p-8 text-sm text-slate-500"
+          >
+            Checking secure session...
+          </motion.div>
+        ) : !state.currentUser ? (
           /* Authentication Screen with one-click quick logins */
           <motion.div
             key="login"

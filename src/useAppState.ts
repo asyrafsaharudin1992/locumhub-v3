@@ -205,6 +205,7 @@ export function useAppState() {
 
   // ✅ KOD BAHARU: PAKSA AKTIF 24 JAM
   const [isSupabaseEnabled, setIsSupabaseEnabled] = useState<boolean>(true);
+  const [authReady, setAuthReady] = useState(false);
 
   // Which Heart Winner review IDs ("HW-<supabase-row-id>") are already
   // recorded in badge_awards. Used to grey out/skip reviews in the Reviews
@@ -513,9 +514,15 @@ export function useAppState() {
   // cache, so without this step Safari/Chrome would show the login screen
   // even though Supabase still had a valid persisted session.
   useEffect(() => {
-    if (!isSupabaseEnabled || !isSupabaseActive()) return;
+    if (!isSupabaseEnabled || !isSupabaseActive()) {
+      setAuthReady(true);
+      return;
+    }
     const client = getSupabaseClient();
-    if (!client) return;
+    if (!client) {
+      setAuthReady(true);
+      return;
+    }
     let cancelled = false;
 
     const restoreSession = async (session: any) => {
@@ -549,7 +556,10 @@ export function useAppState() {
       await pullFromSupabase();
     };
 
-    client.auth.getSession().then(({ data }) => restoreSession(data.session));
+    client.auth
+      .getSession()
+      .then(({ data }) => restoreSession(data.session))
+      .finally(() => setAuthReady(true));
     const { data: authListener } = client.auth.onAuthStateChange((event, session) => {
       if (session) void restoreSession(session);
       // Only an explicit SIGNED_OUT event should clear the app user. A
@@ -3041,6 +3051,7 @@ export function useAppState() {
 
     // Supabase integration properties
     isSupabaseEnabled,
+    authReady,
     setIsSupabaseEnabled,
     pullFromSupabase,
     pushToSupabase,
