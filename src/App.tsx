@@ -205,8 +205,7 @@ export default function App() {
         setActiveTab("booking");
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [state.currentUser]);
 
   useEffect(() => {
     setStickyPendingSlots((prev) => {

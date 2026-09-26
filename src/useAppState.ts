@@ -508,6 +508,58 @@ export function useAppState() {
     }
   }, []);
 
+  // Restore the real Supabase Auth session after a browser refresh. The
+  // production app intentionally does not trust a browser-only currentUser
+  // cache, so without this step Safari/Chrome would show the login screen
+  // even though Supabase still had a valid persisted session.
+  useEffect(() => {
+    if (!isSupabaseEnabled || !isSupabaseActive()) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    let cancelled = false;
+
+    const restoreSession = async (session: any) => {
+      if (!session?.user || cancelled) return;
+      const metadata = session.user.user_metadata || {};
+      const phone = String(metadata.phone || "").trim();
+      const email = String(session.user.email || "").trim().toLowerCase();
+      const profiles = await fetchUsersFromSupabase();
+      if (cancelled) return;
+      const raw = (profiles || []).find(
+        (profile) =>
+          (phone && profile.phone.trim() === phone) ||
+          (email && profile.email.trim().toLowerCase() === email),
+      );
+      if (!raw) return;
+      const user: UserProfile = {
+        phone: String(raw.phone || phone).trim(),
+        password: "",
+        name: raw.name || metadata.name || "",
+        role: (raw.role || metadata.role || "Doctor") as any,
+        email: raw.email || email,
+        mmc: raw.mmc || metadata.mmc || "",
+        apc: raw.apc || "",
+        indemnity: raw.indemnity || "Tiada",
+        workplace: raw.workplace || "",
+        points: Number(raw.points || 0),
+        badges: typeof raw.badges === "string" ? raw.badges : "",
+        locks: typeof raw.locks === "string" ? raw.locks : "",
+      };
+      setState((prev) => ({ ...prev, currentUser: user }));
+      await pullFromSupabase();
+    };
+
+    client.auth.getSession().then(({ data }) => restoreSession(data.session));
+    const { data: authListener } = client.auth.onAuthStateChange((_event, session) => {
+      if (session) void restoreSession(session);
+      else setState((prev) => ({ ...prev, currentUser: null }));
+    });
+    return () => {
+      cancelled = true;
+      authListener.subscription.unsubscribe();
+    };
+  }, [isSupabaseEnabled]);
+
   // Poll Supabase at three different rates depending on how time-sensitive
   // each group of tables actually is — see pullTier1/2/3FromSupabase above.
   // This replaces the old single 45-second interval that re-fetched all 10
@@ -583,7 +635,7 @@ export function useAppState() {
     return () => {
       void client.removeChannel(channel);
     };
-  }, [isSupabaseEnabled]);
+  }, [isSupabaseEnabled, state.currentUser?.phone]);
 
   // A laptop tab can stay open while a doctor books from a phone. Refresh
   // the live slot list whenever the tab/window becomes active so the UI does
