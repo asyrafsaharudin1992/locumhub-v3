@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { BadgeModal } from './BadgeModal';
-import { Trophy, Award, Mail, Key, ShieldCheck, Eye, Upload, FileCheck, CheckCircle2, Loader2 } from 'lucide-react';
+import { Trophy, Award, Mail, Key, ShieldCheck, Eye, EyeOff, Upload, FileCheck, CheckCircle2, Loader2 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { fetchDoctorDocumentLinks } from '../googleDriveService';
 
@@ -36,6 +36,7 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
   const [mmc, setMmc] = useState((currentUser.mmc || '').split('|')[0].trim());
   const [indStatus, setIndStatus] = useState((currentUser.indemnity || '').includes('Ada') ? 'Ada' : 'Tiada');
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(true);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
 
   // Real uploaded file URLs (populated once the upload to storage completes)
@@ -463,14 +464,22 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
 
         <div className="flex flex-col sm:flex-row gap-3">
           <input
-            type="password"
+            type={showNewPassword ? 'text' : 'password'}
             value={newPassword}
             onChange={e => setNewPassword(e.target.value)}
-            autoComplete="new-password"
+            autoComplete="off"
             spellCheck={false}
             className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm font-semibold"
             placeholder="Your password (5-digit MMC or 6+ characters)"
           />
+          <button
+            type="button"
+            onClick={() => setShowNewPassword(prev => !prev)}
+            className="border border-slate-200 rounded-xl px-3 text-slate-500 hover:bg-slate-50"
+            aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+          >
+            {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
           <button
             type="button"
             onClick={handlePasswordUpdate}
