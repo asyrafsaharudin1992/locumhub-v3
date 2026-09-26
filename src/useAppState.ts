@@ -715,6 +715,11 @@ export function useAppState() {
         };
       }
       setState((prev) => ({ ...prev, currentUser: user }));
+      // The first app load can happen before Supabase Auth has a session
+      // (especially in Safari or a fresh browser profile). RLS may then
+      // return an empty slot list. Pull again after the credential-validated
+      // login so every browser receives the authenticated slot snapshot.
+      await pullFromSupabase();
       // Deliberately NOT logged via logActivity — never read/displayed
       // anywhere in the app, so it was just adding write-only noise to
       // activity_logs for no benefit.
