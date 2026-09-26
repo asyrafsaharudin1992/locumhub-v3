@@ -168,7 +168,6 @@ export default async function handler(req: any, res: any) {
       tempat_berkhidmat: "",
       points: 0,
       badges: "",
-      locks: "",
     },
     { onConflict: "phone" },
   );
