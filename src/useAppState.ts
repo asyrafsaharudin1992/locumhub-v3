@@ -422,9 +422,7 @@ export function useAppState() {
 
   const cloudSaveSlot = async (slot: LocumSlot) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
-      await saveSlotToSupabase(slot).catch((err) =>
-        console.error("Supabase saveSlot failed:", err),
-      );
+      await saveSlotToSupabase(slot);
     }
   };
 
@@ -520,7 +518,7 @@ export function useAppState() {
 
     const tier1Interval = setInterval(() => {
       pullTier1FromSupabase();
-    }, 45000); // 45 seconds — slots + notifications need to feel live
+    }, 45000); // fallback poll; Realtime below handles immediate slot changes
     const tier2Interval = setInterval(() => {
       pullTier2FromSupabase();
     }, 180000); // 3 minutes — users + admin_alerts
@@ -532,6 +530,58 @@ export function useAppState() {
       clearInterval(tier1Interval);
       clearInterval(tier2Interval);
       clearInterval(tier3Interval);
+    };
+  }, [isSupabaseEnabled]);
+
+  // Receive slot creates, bookings, approvals and cancellations immediately
+  // across phones and browsers. Only the changed row is applied locally;
+  // do not refetch the whole table here, otherwise Realtime would increase
+  // egress significantly. The 45-second poll remains as a fallback.
+  useEffect(() => {
+    if (!isSupabaseEnabled || !isSupabaseActive()) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    const channel = client
+      .channel("live-slots")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "slots" },
+        (payload) => {
+          const row: any = payload.eventType === "DELETE" ? payload.old : payload.new;
+          if (!row?.id) return;
+          const changed: LocumSlot = {
+            id: String(row.id).trim(),
+            tarikh: row.tarikh || row.Tarikh || "",
+            masa: row.masa || row.Masa || "",
+            cawangan: row.cawangan || row.Cawangan || "",
+            status: row.status || row.Status || "Available",
+            dr: row.nama_locum || row.dr || row.Dr || "",
+            phone: row.no_telefon_locum ?? row.phone ?? row.Phone ?? "",
+            gaji: Number(row.bayaran || row.gaji || row.Gaji || 0),
+            sales: row.sales !== undefined ? Number(row.sales) : undefined,
+            pesakit: row.pesakit !== undefined
+              ? Number(row.pesakit)
+              : row.bilangan_pesakit !== undefined
+                ? Number(row.bilangan_pesakit)
+                : undefined,
+            bookedAt: row.bookedAt || row.booked_at || row.BookedAt || "",
+            performanceRecorded: !!row.performance_recorded || String(row.performance_recorded) === "true",
+          } as LocumSlot;
+          setState((prev) => {
+            if (payload.eventType === "DELETE") {
+              return { ...prev, slots: prev.slots.filter((s) => s.id !== changed.id) };
+            }
+            const index = prev.slots.findIndex((s) => s.id === changed.id);
+            if (index === -1) return { ...prev, slots: [...prev.slots, changed] };
+            const slots = [...prev.slots];
+            slots[index] = changed;
+            return { ...prev, slots };
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      void client.removeChannel(channel);
     };
   }, [isSupabaseEnabled]);
 
@@ -1277,9 +1327,24 @@ export function useAppState() {
 
     const slot = updatedSlots.find((s) => s.id === id);
     if (!slot) return "Error: Slot not found.";
-    await cloudSaveSlot(slot).catch((err) =>
-      console.error("Cloud adminApproveSlot failed:", err),
-    );
+    try {
+      await cloudSaveSlot(slot);
+    } catch (err: any) {
+      console.error("Cloud adminApproveSlot failed:", err);
+      return `Approval could not be saved: ${err?.message || "Supabase rejected the update."}`;
+    }
+
+    // Confirm the write and replace the local snapshot with the database
+    // result. This prevents a slower background pull containing the old
+    // Pending row from restoring the pre-approval UI.
+    const confirmedSlots = await fetchSlotsFromSupabase();
+    if (confirmedSlots) {
+      const confirmed = confirmedSlots.find((s) => s.id === id);
+      if (!confirmed || confirmed.status !== "Approved") {
+        return "Approval could not be confirmed in Supabase. Please try again.";
+      }
+      setState((prev) => ({ ...prev, slots: confirmedSlots }));
+    }
     // Trigger local application notification
     triggerApprovalNotification(slot);
 
