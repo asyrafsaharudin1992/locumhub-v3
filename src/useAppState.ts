@@ -10,6 +10,7 @@ import {
 } from "./types";
 import { getSupabaseConfig, getSupabaseClient } from "./supabaseClient";
 import { provisionAuthUser } from "./authProvisionService";
+import { disableAuthUser } from "./authDisableService";
 import { recalculateBadgesForMonth, normalizeDoctorName } from "./badgeEngine";
 import {
   isSupabaseActive,
@@ -870,6 +871,7 @@ export function useAppState() {
   const deleteUser = async (phone: string): Promise<string> => {
     let result: { success: boolean; error?: string };
     try {
+      await disableAuthUser(phone);
       result = await deleteUserFromSupabase(phone);
     } catch (err: any) {
       console.error("Cloud deleteUser failed:", err);
