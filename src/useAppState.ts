@@ -1073,7 +1073,12 @@ export function useAppState() {
       };
     });
 
-    const user = state.users.find((u) => u.phone === phone);
+    // The signed-in profile can be fresher than the background users list
+    // (the latter is deliberately refreshed less often to save egress). Use
+    // it as a fallback so an existing APC/indemnity URL is never lost when a
+    // doctor edits an unrelated profile field.
+    const user = state.users.find((u) => u.phone === phone) ||
+      (state.currentUser?.phone === phone ? state.currentUser : null);
     if (user) {
       const updatedUser = {
         ...user,

@@ -62,6 +62,12 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
     });
   }, [currentUser.name]);
 
+  // The profile URL is the authoritative link for a document that has
+  // already been uploaded and saved. Drive matching is only a compatibility
+  // fallback for older records that predate the profile URL field.
+  const savedApcUrl = currentUser.apc?.trim() || '';
+  const currentApcUrl = apcUploadedUrl || savedApcUrl || matchedApcUrl || '';
+
   // Badge Modal trigger state
   const [activeBadge, setActiveBadge] = useState<{
     isOpen: boolean;
@@ -117,7 +123,9 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
     }
 
     setIsSavingProfile(true);
-    const apcToSave = apcUploadedUrl || currentUser.apc;
+    // Never replace an existing document link with an empty value when the
+    // profile is edited for an unrelated field.
+    const apcToSave = apcUploadedUrl || savedApcUrl;
     const response = onUpdateProfile(
       currentUser.phone,
       email,
@@ -356,10 +364,10 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
                 )}
               </div>
 
-              {(matchedApcUrl || currentUser.apc) && (
+              {currentApcUrl && (
                 <button
                   type="button"
-                  onClick={() => handleViewFile(matchedApcUrl || apcUploadedUrl || currentUser.apc)}
+                  onClick={() => handleViewFile(currentApcUrl)}
                   className="text-indigo-700 font-bold hover:underline text-[10px] flex items-center gap-1 mt-1.5 cursor-pointer"
                 >
                   <Eye className="w-3 h-3" />
