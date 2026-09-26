@@ -41,6 +41,10 @@ function authPassword(mmc: string): string {
   return mmc.length === 5 ? `0${mmc}` : mmc;
 }
 
+function extractMmcCode(value: string | null): string {
+  return (value || "").split("|")[0].trim();
+}
+
 const { data: rows, error: rowsError } = await admin
   .from("users")
   .select("phone,email,mmc,nama,role")
@@ -76,12 +80,12 @@ for (const row of (rows || []) as AppUser[]) {
   try {
     const phone = row.phone?.trim() || "";
     const email = row.email?.trim().toLowerCase() || "";
-    const mmc = row.mmc?.trim() || "";
+    const mmc = extractMmcCode(row.mmc);
     const password = mmc ? authPassword(mmc) : "";
 
-    if (!phone || !password) {
+    if (!phone || !/^\d{5,6}$/.test(mmc)) {
       skipped += 1;
-      console.log(`SKIP ${phone || "<no phone>"}: missing phone or MMC`);
+      console.log(`SKIP ${phone || "<no phone>"}: MMC must be 5 or 6 digits`);
       continue;
     }
 
@@ -92,7 +96,7 @@ for (const row of (rows || []) as AppUser[]) {
       phone,
       name: row.nama || "",
       role: row.role || "Doctor",
-      mmc: row.mmc || "",
+      mmc,
     };
 
     if (existingUser) {

@@ -9,6 +9,7 @@ import {
   AdminAlert,
 } from "./types";
 import { getSupabaseConfig, getSupabaseClient } from "./supabaseClient";
+import { provisionAuthUser } from "./authProvisionService";
 import { recalculateBadgesForMonth, normalizeDoctorName } from "./badgeEngine";
 import {
   isSupabaseActive,
@@ -754,7 +755,7 @@ export function useAppState() {
 
     const newUser: UserProfile = {
       phone: trimmedPhone,
-      password: btoa(initialPassword.trim()),
+      password: "",
       name: name.trim(),
       role,
       email,
@@ -767,6 +768,14 @@ export function useAppState() {
     };
 
     try {
+      await provisionAuthUser({
+        phone: trimmedPhone,
+        name: newUser.name,
+        role,
+        email,
+        mmc: newUser.mmc,
+        initialPassword,
+      });
       await cloudSaveUser(newUser);
     } catch (err: any) {
       console.error("Cloud adminCreateUser failed:", err);
