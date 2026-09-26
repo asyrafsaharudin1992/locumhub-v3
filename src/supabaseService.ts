@@ -215,12 +215,14 @@ export async function verifyLogin(
   // were created for the legacy phone-based app flow.
   const cleanPhone = phone.trim();
   const cleanPassword = password.trim();
-  const { data: profileRow } = await client
-    .from("users")
-    .select("*")
-    .eq("phone", cleanPhone)
-    .maybeSingle();
-  const profile = profileRow || {};
+  // The base users table no longer exposes SELECT to the browser. Resolve
+  // the profile through users_safe so Auth can use the real email address
+  // when one exists instead of falling back to the synthetic email.
+  const safeProfiles = await fetchUsersFromSupabase();
+  const profileRow = (safeProfiles || []).find(
+    (row) => row.phone.trim() === cleanPhone,
+  ) || null;
+  const profile: any = profileRow || {};
   const profileEmail = String(profile.email || profile.Email || "").trim();
   const identifier = profileEmail || `user-${cleanPhone.replace(/\D/g, "")}@auth.aralocum.local`;
   const authPasswords = cleanPassword.length === 5
