@@ -49,3 +49,23 @@ create policy "authenticated can write activity logs"
   on public.activity_logs for insert
   to authenticated
   with check (true);
+
+-- Authenticated app features also read/write these non-sensitive tables.
+-- Passwords are not stored in any of them.
+grant select, insert, update, delete on table public.notifications to authenticated;
+alter table public.notifications enable row level security;
+drop policy if exists "authenticated can use notifications" on public.notifications;
+create policy "authenticated can use notifications"
+  on public.notifications for all to authenticated using (true) with check (true);
+
+grant select, insert, update, delete on table public.admin_alerts to authenticated;
+alter table public.admin_alerts enable row level security;
+drop policy if exists "authenticated can use admin alerts" on public.admin_alerts;
+create policy "authenticated can use admin alerts"
+  on public.admin_alerts for all to authenticated using (true) with check (true);
+
+grant select, insert, update, delete on table public.badge_awards to authenticated;
+alter table public.badge_awards enable row level security;
+drop policy if exists "authenticated can use badge awards" on public.badge_awards;
+create policy "authenticated can use badge awards"
+  on public.badge_awards for all to authenticated using (true) with check (true);

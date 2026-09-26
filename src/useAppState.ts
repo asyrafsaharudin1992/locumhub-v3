@@ -1828,9 +1828,12 @@ export function useAppState() {
       return { ...prev, users: updatedUsers, currentUser: currentUpdated };
     });
 
-    await cloudSaveUsersBulk(updatedDocList).catch((err) =>
-      console.error("Cloud reconcilePointsFromBadgeAwards failed:", err),
-    );
+    try {
+      await cloudSaveUsersBulk(updatedDocList);
+    } catch (err: any) {
+      console.error("Cloud reconcilePointsFromBadgeAwards failed:", err);
+      return `⚠️ Reconcile calculated correctly but could not save the profile: ${err?.message || "database write failed"}`;
+    }
 
     logActivity(
       `Reconciled users.points/badges from badge_awards for ${updatedDocList.length} doctor(s).`,

@@ -624,6 +624,26 @@ export async function saveUserToSupabase(user: UserProfile) {
   const client = getSupabaseClient();
   if (!client) return;
 
+  // The base users table is intentionally protected from browser reads after
+  // Auth migration. Persist profile edits through the server route instead of
+  // exposing the password-bearing table to the browser.
+  const { data: sessionData } = await client.auth.getSession();
+  if (sessionData.session?.access_token && typeof window !== "undefined") {
+    const response = await fetch("/api/save-user-profile", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${sessionData.session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(user),
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "Profile update failed.");
+    }
+    return;
+  }
+
   const trimmedPhone = user.phone.trim();
 
   // Find existing user row to figure out exact column casing
