@@ -81,16 +81,19 @@ for (const row of (rows || []) as AppUser[]) {
     const email = row.email?.trim().toLowerCase() || "";
     const mmc = extractMmcCode(row.mmc);
     const isAdmin = (row.role || "").trim().toLowerCase() === "admin";
+    const isStaff = (row.role || "").trim().toLowerCase() === "staff";
     const password = isAdmin
       ? "klinikARA2026"
-      : mmc
-        ? authPassword(mmc)
-        : "";
+      : isStaff
+        ? "teamara2024"
+        : mmc
+          ? authPassword(mmc)
+          : "";
 
-    if (!phone || (!isAdmin && !/^\d{5,6}$/.test(mmc))) {
+    if (!phone || (!isAdmin && !isStaff && !/^\d{5,6}$/.test(mmc))) {
       skipped += 1;
       console.log(
-        `SKIP ${phone || "<no phone>"}: MMC must be 5 or 6 digits unless role is Admin`,
+        `SKIP ${phone || "<no phone>"}: MMC must be 5 or 6 digits unless role is Admin or Staff`,
       );
       continue;
     }

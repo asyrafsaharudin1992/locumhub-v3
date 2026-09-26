@@ -287,11 +287,28 @@ export async function verifyStaffKey(
   const { data, error } = await client.rpc("verify_staff_key", {
     p_keyword: keyword,
   });
-  if (error) {
-    console.error("verifyStaffKey RPC failed:", error);
-    return { success: false, message: "Login check failed — please try again." };
+  if (!error && data?.success && data?.user) {
+    return data as { success: boolean; message?: string; user?: any };
   }
-  return data as { success: boolean; message?: string; user?: any };
+
+  // Legacy staff accounts may not have a password column anymore. Once the
+  // account is provisioned in Auth, verify the keyword against each Staff
+  // account's Auth identity without exposing any password to the browser.
+  const staffProfiles = await fetchUsersFromSupabase();
+  for (const profile of (staffProfiles || []).filter((u) => u.role === "Staff")) {
+    const identifier = profile.email?.trim() ||
+      `user-${profile.phone.replace(/\D/g, "")}@auth.aralocum.local`;
+    const authResult = await client.auth.signInWithPassword({
+      email: identifier,
+      password: keyword,
+    });
+    if (!authResult.error && authResult.data.user) {
+      return { success: true, user: profile };
+    }
+  }
+
+  if (error) console.error("verifyStaffKey RPC failed:", error);
+  return data || { success: false, message: "Invalid access keyword." };
 }
 
 export async function fetchUsersFromSupabase(): Promise<UserProfile[] | null> {
