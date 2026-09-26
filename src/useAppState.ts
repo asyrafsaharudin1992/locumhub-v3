@@ -846,7 +846,7 @@ export function useAppState() {
       await saveUserToSupabase(updatedUser);
     } catch (err) {
       console.error("Cloud changePassword failed:", err);
-      return "⚠️ Password change failed to save — please check your connection and try again.";
+      return `⚠️ Password change failed: ${(err as any)?.message || "Please check your connection and try again."}`;
     }
 
     setState((prev) => {
