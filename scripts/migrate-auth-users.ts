@@ -96,7 +96,10 @@ for (const row of (rows || []) as AppUser[]) {
     }
 
     const authPhone = normalizePhone(phone);
-    const existingByEmail = isValidEmail(email) ? byEmail.get(email) : undefined;
+    const authEmail = isValidEmail(email)
+      ? email
+      : `user-${phone.replace(/\D/g, "")}@auth.aralocum.local`;
+    const existingByEmail = byEmail.get(authEmail);
     const existingByPhone = byPhone.get(authPhone);
     // Some legacy Admin rows contain the same phone as a Doctor but with a
     // 60... prefix instead of 01... . Do not merge those profiles into one
@@ -114,9 +117,11 @@ for (const row of (rows || []) as AppUser[]) {
     };
 
     if (existingUser) {
+      const canUpdatePhone =
+        !existingByPhone || existingByPhone.id === existingUser.id;
       const { error } = await admin.auth.admin.updateUserById(existingUser.id, {
         password,
-        ...(authPhone ? { phone: authPhone, phone_confirm: true } : {}),
+        ...(canUpdatePhone ? { phone: authPhone, phone_confirm: true } : {}),
         user_metadata: { ...existingUser.user_metadata, ...userMetadata },
       });
       if (error) throw error;
@@ -125,9 +130,6 @@ for (const row of (rows || []) as AppUser[]) {
       continue;
     }
 
-    const authEmail = isValidEmail(email)
-      ? email
-      : `user-${phone.replace(/\D/g, "")}@auth.aralocum.local`;
     const canAttachPhone = !existingByPhone || existingByPhone.id === existingUser?.id;
     const payload = {
       email: authEmail,
