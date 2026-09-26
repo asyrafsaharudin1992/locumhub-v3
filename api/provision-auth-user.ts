@@ -152,6 +152,33 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  // Write the profile with the server client as part of the same provisioning
+  // flow. This avoids losing a newly-created user when browser-side INSERT
+  // policies or the legacy users table shape reject the public profile write.
+  const { error: profileError } = await admin.from("users").upsert(
+    {
+      phone,
+      password: "",
+      nama: name,
+      role,
+      email,
+      mmc,
+      apc_2026: "",
+      indemnity_insurance: "Tiada",
+      tempat_berkhidmat: "",
+      points: 0,
+      badges: "",
+      locks: "",
+    },
+    { onConflict: "phone" },
+  );
+  if (profileError) {
+    res.status(500).json({
+      error: `Auth account was created, but the user profile could not be saved: ${profileError.message}`,
+    });
+    return;
+  }
+
   res.status(200).json({
     ok: true,
     created: !existing,
