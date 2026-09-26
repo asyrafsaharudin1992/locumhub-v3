@@ -839,11 +839,8 @@ export function useAppState() {
       return "⚠️ Could not find that account — password was not changed.";
     }
 
-    const updatedUser = { ...existingUser, password: "" };
-
     try {
       await resetAuthUserPassword(targetPhone, trimmedPassword);
-      await saveUserToSupabase(updatedUser);
     } catch (err) {
       console.error("Cloud changePassword failed:", err);
       return `⚠️ Password change failed: ${(err as any)?.message || "Please check your connection and try again."}`;
@@ -852,7 +849,7 @@ export function useAppState() {
     setState((prev) => {
       const updatedUsers = prev.users.map((u) => {
         if (u.phone.trim() === targetPhone) {
-          return { ...u, password: "" };
+          return { ...u };
         }
         return u;
       });
