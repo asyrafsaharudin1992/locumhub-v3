@@ -216,7 +216,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       {/* Mobile-only Profile & Medals summary — the full Profile & Medals tab
           isn't reachable from the mobile bottom nav, so a compact version
           lives here above the shift list. */}
-      <div className="md:hidden rounded-2xl bg-gradient-to-br from-slate-900 via-[#011428] to-black border-2 border-[#D4AF37]/30 p-5 text-white shadow-xl relative overflow-hidden">
+      <div className="hidden rounded-2xl bg-gradient-to-br from-slate-900 via-[#011428] to-black border-2 border-[#D4AF37]/30 p-5 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-6 -mt-6 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl" />
         <div className="flex justify-between items-start">
           <div className="space-y-0.5">
