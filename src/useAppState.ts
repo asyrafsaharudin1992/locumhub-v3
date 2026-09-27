@@ -584,14 +584,17 @@ export function useAppState() {
     if (!isSupabaseEnabled || !isSupabaseActive()) return;
 
     const tier1Interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       pullTier1FromSupabase();
-    }, 45000); // fallback poll; Realtime below handles immediate slot changes
+    }, 180000); // 3-minute fallback; Realtime handles immediate slot changes
     const tier2Interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       pullTier2FromSupabase();
-    }, 180000); // 3 minutes — users + admin_alerts
+    }, 300000); // 5 minutes — users + admin_alerts
     const tier3Interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
       pullTier3FromSupabase();
-    }, 600000); // 10 minutes — announcements
+    }, 1800000); // 30 minutes — announcements
 
     return () => {
       clearInterval(tier1Interval);
@@ -603,12 +606,15 @@ export function useAppState() {
   // Receive slot creates, bookings, approvals and cancellations immediately
   // across phones and browsers. Only the changed row is applied locally;
   // do not refetch the whole table here, otherwise Realtime would increase
-  // egress significantly. The 45-second poll remains as a fallback.
+  // egress significantly. The 3-minute poll remains as a fallback.
   useEffect(() => {
     if (!isSupabaseEnabled || !isSupabaseActive()) return;
     const client = getSupabaseClient();
     if (!client) return;
-    const channel = client
+    let channel: any = null;
+    const subscribeRealtime = () => {
+      if (document.visibilityState !== "visible" || channel) return;
+      channel = client
       .channel("live-slots")
       .on(
         "postgres_changes",
@@ -647,8 +653,25 @@ export function useAppState() {
         },
       )
       .subscribe();
-    return () => {
+    };
+    const unsubscribeRealtime = () => {
+      if (!channel) return;
       void client.removeChannel(channel);
+      channel = null;
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        subscribeRealtime();
+        void pullTier1FromSupabase();
+      } else {
+        unsubscribeRealtime();
+      }
+    };
+    subscribeRealtime();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      unsubscribeRealtime();
     };
   }, [isSupabaseEnabled, state.currentUser?.phone]);
 
