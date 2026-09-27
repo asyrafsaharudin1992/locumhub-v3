@@ -1,5 +1,5 @@
-import React from 'react';
-import { Mail, GraduationCap, Phone, FileText, CheckCircle, ExternalLink, BadgeAlert, Send } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Mail, GraduationCap, Phone, FileText, CheckCircle, ExternalLink, BadgeAlert, Send, ChevronLeft, ChevronRight } from 'lucide-react';
 import { NewApplication } from '../types';
 
 interface RecruitmentListProps {
@@ -7,56 +7,89 @@ interface RecruitmentListProps {
 }
 
 export const RecruitmentList: React.FC<RecruitmentListProps> = ({ applications }) => {
+  const PAGE_SIZE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(applications.length / PAGE_SIZE));
+  const visibleApplications = applications.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    setCurrentPage(page => Math.min(page, totalPages));
+  }, [totalPages]);
+
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full space-y-3">
       {applications.length === 0 ? (
         <div className="bg-white rounded-3xl p-8 border border-dashed border-slate-200 text-center text-slate-400">
           <BadgeAlert className="w-8 h-8 text-slate-300 mx-auto mb-2" />
           <p className="text-sm font-semibold">No new applications at the moment.</p>
         </div>
       ) : (
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-slate-200">
-              <th className="py-4 px-4 text-[10px] uppercase tracking-wider text-slate-500 font-bold">Doctor</th>
-              <th className="py-4 px-4 text-[10px] uppercase tracking-wider text-slate-500 font-bold">Details</th>
-              <th className="py-4 px-4 text-[10px] uppercase tracking-wider text-slate-500 font-bold">Action</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {applications.map((app, index) => (
-              <tr key={index} className="hover:bg-slate-50/50 transition">
-                <td className="py-5 px-4">
-                  <div className="flex flex-col gap-1">
-                    <h6 className="font-display font-bold text-slate-900 text-sm">{app.nama}</h6>
-                    <span className="text-[10px] text-slate-400 font-medium uppercase block">{app.timestamp}</span>
-                    <div className="font-mono text-slate-700 font-bold text-xs mt-1">MMC Number: {app.mmc || "N/A"}</div>
-                    {app.skills && <p className="text-xs text-slate-500 italic mt-1 line-clamp-2">Your skills: {app.skills}</p>}
-                  </div>
-                </td>
-                <td className="py-5 px-4 text-xs">
-                  <div className="flex flex-col gap-2">
-                    {app.apc && <a href={app.apc} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100 block w-fit">APC 2026</a>}
-                    {app.ins && <a href={app.ins} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 block w-fit">Indemnity insurance</a>}
-                    {app.cvUrl && <a href={app.cvUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100 block w-fit">Resume</a>}
-                    <div className="text-slate-600">Phone number: {app.phone}</div>
-                  </div>
-                </td>
-                <td className="py-5 px-4">
-                  <a
-                    href={`https://wa.me/${app.phone.replace(/^0/, '60')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] py-2 px-4 rounded-lg transition inline-flex items-center gap-1.5 shadow-sm uppercase tracking-wide"
-                  >
-                    <Phone className="w-3 h-3" />
-                    WhatsApp
-                  </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          {visibleApplications.map((app, index) => (
+            <article key={index} className="rounded-[24px] border border-slate-700/80 bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_8px_24px_rgba(8,47,73,0.14)] transition hover:-translate-y-0.5 hover:shadow-lg">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h6 className="truncate font-display text-base font-bold text-white">{app.nama}</h6>
+                  <span className="mt-1 block text-[10px] font-medium uppercase text-slate-300">{app.timestamp}</span>
+                </div>
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wide text-sky-200">Candidate</span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-2">
+                <div className="rounded-xl bg-white/10 p-2.5">
+                  <span className="block text-[9px] font-bold uppercase tracking-wide text-sky-200">MMC number</span>
+                  <span className="mt-1 block font-mono font-bold text-white">{app.mmc || 'N/A'}</span>
+                </div>
+                <div className="rounded-xl bg-white/10 p-2.5">
+                  <span className="block text-[9px] font-bold uppercase tracking-wide text-sky-200">Phone number</span>
+                  <span className="mt-1 block font-mono font-bold text-white">{app.phone || 'N/A'}</span>
+                </div>
+              </div>
+
+              {app.skills && <p className="mt-3 line-clamp-2 text-xs italic leading-relaxed text-slate-300">Skills: {app.skills}</p>}
+
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+                {app.apc && <a href={app.apc} target="_blank" rel="noopener noreferrer" className="rounded-full border border-sky-200/20 bg-sky-300/10 px-2.5 py-1 text-[10px] font-bold text-sky-100 transition hover:bg-sky-300/20">APC 2026</a>}
+                {app.ins && <a href={app.ins} target="_blank" rel="noopener noreferrer" className="rounded-full border border-indigo-200/20 bg-indigo-300/10 px-2.5 py-1 text-[10px] font-bold text-indigo-100 transition hover:bg-indigo-300/20">Indemnity insurance</a>}
+                {app.cvUrl && <a href={app.cvUrl} target="_blank" rel="noopener noreferrer" className="rounded-full border border-rose-200/20 bg-rose-300/10 px-2.5 py-1 text-[10px] font-bold text-rose-100 transition hover:bg-rose-300/20">Resume</a>}
+                <a
+                  href={`https://wa.me/${app.phone.replace(/^0/, '60')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-500 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm transition hover:bg-emerald-400"
+                >
+                  <Phone className="h-3 w-3" />
+                  WhatsApp
+                </a>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      {applications.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between border-t border-slate-100 bg-white px-3 py-3">
+          <button
+            type="button"
+            onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+            disabled={currentPage === 1}
+            className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </button>
+          <span className="text-xs font-semibold text-slate-500">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+            disabled={currentPage === totalPages}
+            className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       )}
     </div>
   );

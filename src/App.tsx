@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAppState } from "./useAppState";
-import { NewApplication, LocumSurveyEntry, StaffFeedbackEntry, FeedbackRecord } from "./types";
+import { Announcement, NewApplication, LocumSurveyEntry, StaffFeedbackEntry, FeedbackRecord } from "./types";
 import { isSupabaseActive, verifyStaffKey } from "./supabaseService";
 import {
   loadAllDataFromPublicGoogleSheet,
@@ -188,6 +188,7 @@ export default function App() {
     adminCreateBulkSlots,
     adminLogCMEAttendance,
     publishAnnouncement,
+    editAnnouncement,
     deleteAnnouncement,
     adminGivePoints,
     completeSlotAndAwardPoints,
@@ -369,7 +370,7 @@ export default function App() {
   const resolvedSlotIdsRef = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (activeTab === "admin-fb" || activeTab === "feedback") {
+    if (activeTab === "admin-fb" || activeTab === "feedback" || activeTab === "overview") {
       setLoadingFeedback(true);
       Promise.all([
         fetchPatientFeedbackFromSheets(),
@@ -388,6 +389,7 @@ export default function App() {
 
   // Admin announcement state
   const [annText, setAnnText] = useState("");
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
 
   // Admin roster action modals
   const [resetPassDoc, setResetPassDoc] = useState<{
@@ -425,6 +427,9 @@ export default function App() {
   >("patient");
   const [expandedFbRow, setExpandedFbRow] = useState<string | null>(null);
   const [feedbackDoctorFilter, setFeedbackDoctorFilter] = useState<string>("All");
+  const [feedbackPage, setFeedbackPage] = useState(1);
+  const [directoryDoctorSearch, setDirectoryDoctorSearch] = useState("");
+  const [directoryPage, setDirectoryPage] = useState(1);
 
 
   const handleStaffKeywordLogin = async (e: React.FormEvent) => {
@@ -516,6 +521,24 @@ export default function App() {
     const response = publishAnnouncement(annText.trim());
     alert(response);
     setAnnText("");
+  };
+
+  const startEditingAnnouncement = (announcement: Announcement) => {
+    setEditingAnnouncementId(announcement.id);
+    setAnnText(announcement.text);
+  };
+
+  const cancelEditingAnnouncement = () => {
+    setEditingAnnouncementId(null);
+    setAnnText("");
+  };
+
+  const handleSaveAnnouncement = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAnnouncementId || !annText.trim()) return;
+    const response = editAnnouncement(editingAnnouncementId, annText.trim());
+    alert(response);
+    cancelEditingAnnouncement();
   };
 
   const handleManualPointsAward = (e: React.FormEvent) => {
@@ -746,6 +769,70 @@ export default function App() {
     return seen.sort((a, b) => a.display.localeCompare(b.display));
   })();
 
+  const filteredAdminPatientFeedback = patientFeedbackEntries.filter(
+    (feedback) =>
+      feedbackDoctorFilter === "All" ||
+      doctorNamesMatch(feedback.target, feedbackDoctorFilter),
+  );
+  const filteredAdminStaffFeedback = staffFeedbackEntries.filter(
+    (feedback) =>
+      feedbackDoctorFilter === "All" ||
+      doctorNamesMatch(feedback.doctorName, feedbackDoctorFilter),
+  );
+  const activeAdminFeedbackCount =
+    activeInspectorFb === "patient"
+      ? filteredAdminPatientFeedback.length
+      : activeInspectorFb === "staff"
+        ? filteredAdminStaffFeedback.length
+        : locumSurveyEntries.length;
+  const activeAdminFeedbackPageCount = Math.max(
+    1,
+    Math.ceil(activeAdminFeedbackCount / 20),
+  );
+  const adminFeedbackPageStart = (feedbackPage - 1) * 20;
+  const paginatedAdminPatientFeedback = filteredAdminPatientFeedback.slice(
+    adminFeedbackPageStart,
+    adminFeedbackPageStart + 20,
+  );
+  const paginatedAdminStaffFeedback = filteredAdminStaffFeedback.slice(
+    adminFeedbackPageStart,
+    adminFeedbackPageStart + 20,
+  );
+  const paginatedAdminLocumFeedback = locumSurveyEntries.slice(
+    adminFeedbackPageStart,
+    adminFeedbackPageStart + 20,
+  );
+  const directorySearchTerm = directoryDoctorSearch.trim().toLowerCase();
+  const filteredDirectoryDoctors = state.users
+    .filter((user) =>
+      user.role === "Doctor" &&
+      (!directorySearchTerm || user.name.toLowerCase().includes(directorySearchTerm)),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const directoryPageCount = Math.max(1, Math.ceil(filteredDirectoryDoctors.length / 10));
+  const paginatedDirectoryDoctors = filteredDirectoryDoctors.slice(
+    (directoryPage - 1) * 10,
+    directoryPage * 10,
+  );
+
+  useEffect(() => {
+    setFeedbackPage(1);
+  }, [activeInspectorFb, feedbackDoctorFilter]);
+
+  useEffect(() => {
+    if (feedbackPage > activeAdminFeedbackPageCount) {
+      setFeedbackPage(activeAdminFeedbackPageCount);
+    }
+  }, [feedbackPage, activeAdminFeedbackPageCount]);
+
+  useEffect(() => {
+    setDirectoryPage(1);
+  }, [directoryDoctorSearch]);
+
+  useEffect(() => {
+    if (directoryPage > directoryPageCount) setDirectoryPage(directoryPageCount);
+  }, [directoryPage, directoryPageCount]);
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased flex flex-col">
       <AnimatePresence mode="wait">
@@ -765,49 +852,70 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8"
+            className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden bg-white p-3 sm:p-5 md:h-screen md:p-4"
           >
-            <div className="w-full max-w-sm sm:max-w-md overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-xl p-6 sm:p-8 space-y-6 text-center">
+            <div className="relative w-full md:flex md:max-w-5xl md:overflow-hidden md:rounded-[32px] md:shadow-[0_24px_70px_rgba(15,23,42,0.12)] lg:max-w-6xl">
+              <section className="relative hidden min-h-[640px] w-1/2 overflow-hidden bg-gradient-to-br from-[#0d5078] via-[#0a3b5d] to-[#061d2d] p-12 text-white md:flex md:flex-col md:justify-center">
+                <div className="pointer-events-none absolute -left-24 -top-28 h-80 w-80 rounded-full bg-sky-300/15" />
+                <div className="pointer-events-none absolute -bottom-28 -right-20 h-80 w-80 rounded-full bg-[#1591c7]/35" />
+                <div className="pointer-events-none absolute right-16 top-16 h-28 w-28 rounded-full bg-[#37b7d3]/20" />
+                <div className="pointer-events-none absolute bottom-24 left-16 h-32 w-32 rounded-full border-[22px] border-sky-300/10" />
+                <div className="relative z-10 max-w-md">
+                  <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-2xl bg-white/10 p-2.5 shadow-lg ring-1 ring-white/15">
+                    <img src="/logo-ara-white.png" alt="AraLocum Hub" className="h-full w-full object-contain" />
+                  </div>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-sky-300">AraLocum Hub</span>
+                  <h1 className="mt-3 font-display text-5xl font-bold leading-[1.05] tracking-tight text-white">Welcome back!</h1>
+                  <p className="mt-5 max-w-sm text-lg leading-relaxed text-slate-300">Sign in to access your existing profile and continue managing your clinical shifts.</p>
+                  <div className="mt-10 h-1 w-20 rounded-full bg-sky-300" />
+                </div>
+              </section>
+              <div className="relative w-full max-w-sm overflow-hidden rounded-[30px] border border-sky-300/20 bg-gradient-to-br from-[#0b4569] via-[#082f49] to-[#061d2d] p-5 text-center shadow-[0_24px_70px_rgba(0,0,0,0.35)] sm:max-w-md sm:p-6 md:w-1/2 md:max-w-none md:rounded-none md:border-0 md:bg-white md:p-10 md:text-left md:shadow-none lg:p-12">
+              <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#3b82b5] opacity-45 blur-sm md:hidden" />
+              <div className="pointer-events-none absolute -left-28 bottom-[-120px] h-72 w-72 rounded-full bg-[#0a5b86] opacity-80 md:hidden" />
+              <div className="pointer-events-none absolute -right-24 bottom-[-90px] h-56 w-56 rounded-full bg-[#1b79ae] opacity-70 md:hidden" />
+              <div className="pointer-events-none absolute bottom-[-30px] left-1/4 h-48 w-48 rounded-full bg-[#061d2d] opacity-75 md:hidden" />
+              <div className="relative z-10 space-y-5 md:space-y-4 lg:space-y-5">
               {/* Clinic Logo */}
-              <div className="mx-auto flex h-14 w-14 items-center justify-center">
-                <img src="/logo.png" alt="Klinik ARA 24 Jam" className="w-14 h-14 object-contain" />
+              <div className="mx-auto flex h-14 w-14 items-center justify-center md:hidden">
+                <img src="/logo-ara-white.png" alt="Klinik ARA 24 Jam" className="w-16 h-16 object-contain" />
               </div>
 
               <div>
-                <h2 className="font-display text-2xl font-bold text-slate-900 tracking-tight">
-                  ARA CLINIC LOCUM
+                <h2 className="font-display text-2xl font-bold tracking-tight text-white">
+                  AraLocum Hub
                 </h2>
-                <p className="text-xs text-slate-500 font-medium mt-1">
+                <p className="mt-1 text-xs font-medium text-white">
                   Every shift matters, every patient counts
                 </p>
               </div>
 
               <form
                 onSubmit={handleManualLogin}
-                className="space-y-4 text-left"
+                className="space-y-3.5 text-left md:space-y-3"
               >
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-white">
                     Phone validation
                   </label>
                   <input
                     type="text"
                     value={phoneInput}
                     onChange={(e) => setPhoneInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full rounded-full border border-white/20 bg-white px-5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-200 sm:text-sm md:border-slate-200"
                     placeholder="e.g. 0123456789"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-white">
                     Password
                   </label>
                   <input
                     type="password"
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="w-full rounded-full border border-white/20 bg-white px-5 py-2.5 text-xs font-semibold text-slate-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-200 sm:text-sm md:border-slate-200"
                     placeholder="••••••"
                   />
                 </div>
@@ -821,18 +929,18 @@ export default function App() {
 
                 <button
                   type="submit"
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl shadow-md transition outline-none cursor-pointer text-xs tracking-wider uppercase"
+                  className="w-full cursor-pointer rounded-full bg-[#082f49] py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-md transition hover:bg-[#0d5078] outline-none"
                 >
                   Sign In Securely
                 </button>
-                <p className="text-[11px] text-slate-400 text-center font-sans">
+                <p className="text-center font-sans text-[11px] text-sky-200/80 md:text-slate-400">
                   Forgot your password? Please contact your clinic admin to have it reset.
                 </p>
               </form>
 
                 {/* Local development quick logins only. */}
-                {import.meta.env.DEV && <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2 text-left">
-                  <span className="text-[10px] font-bold text-amber-800 tracking-wider uppercase block">
+                {import.meta.env.DEV && <div className="space-y-2 rounded-2xl border border-sky-200/20 bg-slate-950/25 p-2.5 text-left md:border-slate-200 md:bg-slate-50">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-white">
                     ⚡ Quick Dev Logins
                   </span>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -861,8 +969,8 @@ export default function App() {
                 </div>}
 
                 {/* Staff quick access — keyword only, view-only Clinical Schedule access */}
-                <div className="border-t border-slate-100/80 pt-4 text-left space-y-2.5">
-                  <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase block">
+                <div className="space-y-2 border-t border-white/15 pt-3 text-left md:border-slate-200">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-white">
                     Staff quick access
                   </span>
                   <form onSubmit={handleStaffKeywordLogin} className="flex gap-2">
@@ -870,12 +978,12 @@ export default function App() {
                       type="password"
                       value={staffKeywordInput}
                       onChange={(e) => setStaffKeywordInput(e.target.value)}
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs font-semibold outline-none focus:ring-2 focus:ring-slate-400"
+                      className="flex-1 rounded-full border border-white/20 bg-white px-4 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-sky-300 focus:ring-2 focus:ring-sky-200 md:border-slate-200"
                       placeholder="Enter access keyword"
                     />
                     <button
                       type="submit"
-                      className="bg-slate-800 hover:bg-slate-900 text-white font-bold px-4 rounded-xl text-xs transition cursor-pointer shrink-0"
+                      className="shrink-0 cursor-pointer rounded-full bg-[#082f49] px-4 text-xs font-bold text-white transition hover:bg-[#0d5078]"
                     >
                       Enter
                     </button>
@@ -889,19 +997,21 @@ export default function App() {
                 </div>
 
               {/* Recruiter join pipeline onboarding */}
-              <div className="border-t border-slate-100 pt-4">
-                <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
+              <div className="rounded-2xl border border-white/20 bg-white/10 p-2.5 text-left shadow-sm backdrop-blur-sm md:border-slate-200 md:bg-slate-50">
+                <p className="text-[11px] font-medium leading-relaxed text-sky-100 md:text-slate-600">
                   Interested in joining our medical team at Klinik ARA 24 Jam?
                 </p>
                 <a
                   href="https://forms.gle/RKDNR6Q7b28gQ5v3A"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 text-xs font-bold text-sky-600 hover:text-sky-800 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-full bg-[#082f49] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#0d5078]"
                 >
                   <PlusCircle className="w-3.5 h-3.5" />
                   Begin Application Request
                 </a>
+              </div>
+              </div>
               </div>
             </div>
           </motion.div>
@@ -916,7 +1026,7 @@ export default function App() {
             {/* Desktop Left Sidebar */}
             <aside className="hidden md:flex flex-col w-64 bg-[#082f49] text-slate-200 border-r border-[#0b4569] shrink-0 p-5 space-y-6">
               <div className="flex items-center gap-3 pb-5 border-b border-white/10">
-                <img src="/logo.png" alt="Klinik ARA 24 Jam" className="w-8 h-8 object-contain" />
+                <img src="/logo-ara-white.png" alt="Klinik ARA 24 Jam" className="w-8 h-8 object-contain" />
                 <span className="font-display font-bold text-white tracking-tight text-sm">
                   ARA LOCUM HUB
                 </span>
@@ -1008,7 +1118,9 @@ export default function App() {
             {/* Mobile Actions Topbar Header */}
             <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 z-10 sticky top-0 backdrop-blur-md bg-white/95">
               <div className="flex items-center gap-2">
-                <img src="/logo.png" alt="Klinik ARA 24 Jam" className="w-6 h-6 object-contain" />
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#082f49]">
+                  <img src="/logo-ara-white.png" alt="Klinik ARA 24 Jam" className="h-5 w-5 object-contain" />
+                </span>
                 <span className="font-display font-semibold text-slate-800 text-[13px] tracking-widest">
                   ARA LOCUM HUB
                 </span>
@@ -1059,12 +1171,12 @@ export default function App() {
                 </div>
               )}
               {/* User Dynamic Greeting Banner */}
-              <div className="flex flex-col items-start gap-5 rounded-[28px] bg-white px-6 py-7 shadow-[0_8px_30px_rgba(15,23,42,0.04)] ring-1 ring-slate-200/70 sm:flex-row sm:justify-between sm:px-8 sm:py-8">
+              <div className="flex flex-col items-start gap-5 rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] px-6 py-7 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] ring-1 ring-sky-300/20 sm:flex-row sm:justify-between sm:px-8 sm:py-8">
                 <div className="min-w-0 space-y-1 text-left">
-                  <span className="block text-[11px] font-semibold tracking-[0.16em] text-slate-400 uppercase">
+                  <span className="block text-[11px] font-semibold tracking-[0.16em] text-sky-300 uppercase">
                     Klinik ARA 24 Jam
                   </span>
-                  <h3 className="font-display text-2xl font-semibold tracking-[-0.045em] text-slate-950 sm:text-3xl">
+                  <h3 className="font-display text-2xl font-semibold tracking-[-0.045em] text-white sm:text-3xl">
                     Welcome,{" "}
                     {state.currentUser.role === "Admin"
                       ? "HQ Operations Office"
@@ -1072,7 +1184,7 @@ export default function App() {
                         ? "CA ARA"
                         : `Dr. ${state.currentUser.name}`}
                   </h3>
-                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-300">
                     {state.currentUser.role === "Admin"
                       ? "Roster database and clinical slots synchronized safely."
                       : "Thank you for being part of Klinik ARA 24 Jam."}
@@ -1080,16 +1192,16 @@ export default function App() {
                 </div>
 
                 <div className="flex w-full shrink-0 flex-col items-start gap-3 sm:w-auto sm:max-w-none sm:items-end">
-                  <span className="rounded-full bg-slate-50 px-3.5 py-2 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200/70">
+                  <span className="rounded-full bg-white/10 px-3.5 py-2 text-[11px] font-medium text-slate-200 ring-1 ring-white/15">
                     {new Date().toLocaleDateString("en-GB", {
                       weekday: "long",
                       day: "2-digit",
                       month: "short",
                     })}
                   </span>
-                  <div className="border-l-2 border-indigo-100 pl-3 text-left sm:border-l-0 sm:border-r-2 sm:pr-3 sm:text-right">
+                  <div className="border-l-2 border-sky-300/40 pl-3 text-left sm:border-l-0 sm:border-r-2 sm:pr-3 sm:text-right">
                     <div>
-                      <p className="whitespace-normal text-[11px] italic leading-relaxed text-slate-500 sm:whitespace-nowrap">
+                      <p className="whitespace-normal text-[11px] italic leading-relaxed text-slate-300 sm:whitespace-nowrap">
                         “{dailyQuote}”
                       </p>
                     </div>
@@ -1116,6 +1228,7 @@ export default function App() {
                       slots={state.slots}
                       currentUser={state.currentUser}
                       notifications={state.notifications}
+                      feedbacks={patientFeedbackEntries}
                       onNavigate={setActiveTab}
                     />
                   )}
@@ -1352,7 +1465,12 @@ export default function App() {
                   {activeTab === "admin-tasks" && activeRole === "Admin" && (
                     <div className="space-y-6">
                       <div className="space-y-3">
-                        <h5 className="font-display font-bold text-slate-900 tracking-tight text-sm uppercase">
+                        <div className="rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] sm:p-6">
+                          <span className="text-[10px] font-bold tracking-[0.2em] text-sky-300 uppercase">Admin workspace</span>
+                          <h5 className="mt-1 font-display text-2xl font-semibold tracking-tight text-white">Booking Approvals</h5>
+                          <p className="mt-1 text-xs text-slate-300">Review pending shift requests and recruitment candidates.</p>
+                        </div>
+                        <h5 className="px-1 font-display font-bold text-slate-900 tracking-tight text-sm uppercase">
                           Pending Slots Registrations
                         </h5>
 
@@ -1366,7 +1484,7 @@ export default function App() {
                               return (
                                 <div
                                   key={slot.id}
-                                  className="bg-white rounded-3xl border border-slate-100 p-5 shadow-sm space-y-4"
+                                  className="bg-white rounded-3xl border border-sky-100 p-5 shadow-[0_6px_22px_rgba(15,23,42,0.04)] space-y-4"
                                 >
                                   <div className="space-y-1">
                                     <h6 className="font-display font-medium text-xs text-sky-800 block uppercase">
@@ -1485,7 +1603,10 @@ export default function App() {
                         </p>
                       </div>
 
-                      <form onSubmit={handePublishAnn} className="space-y-4">
+                      <form
+                        onSubmit={editingAnnouncementId ? handleSaveAnnouncement : handePublishAnn}
+                        className="space-y-4"
+                      >
                         <textarea
                           rows={4}
                           required
@@ -1494,12 +1615,23 @@ export default function App() {
                           className="w-full bg-slate-50 border border-slate-200 font-semibold p-4 rounded-2xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-[#001F3F] text-slate-800"
                           placeholder="Type announcements instructions..."
                         />
-                        <button
-                          type="submit"
-                          className="bg-[#001F3F] font-bold hover:bg-[#001226] text-white py-3 px-6 rounded-xl text-xs shadow-md shadow-[#001F3F]/10 transition cursor-pointer"
-                        >
-                          ✓ Publish Announcements
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="submit"
+                            className="bg-[#001F3F] font-bold hover:bg-[#001226] text-white py-3 px-6 rounded-xl text-xs shadow-md shadow-[#001F3F]/10 transition cursor-pointer"
+                          >
+                            {editingAnnouncementId ? "✓ Save Announcement" : "✓ Publish Announcements"}
+                          </button>
+                          {editingAnnouncementId && (
+                            <button
+                              type="button"
+                              onClick={cancelEditingAnnouncement}
+                              className="border border-slate-200 bg-white font-bold text-slate-600 hover:bg-slate-50 py-3 px-5 rounded-xl text-xs transition cursor-pointer"
+                            >
+                              Cancel Edit
+                            </button>
+                          )}
+                        </div>
                       </form>
 
                       {/* Deletable News List */}
@@ -1520,12 +1652,22 @@ export default function App() {
                                 {ann.text}
                               </p>
                             </div>
-                            <button
-                              onClick={() => deleteAnnouncement(ann.id)}
-                              className="text-rose-500 hover:text-rose-700 font-bold rounded-lg p-1.5 hover:bg-rose-50 hover:underline text-xs"
-                            >
-                              Purge
-                            </button>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => startEditingAnnouncement(ann)}
+                                className="text-[#001F3F] hover:text-[#001226] font-bold rounded-lg px-2 py-1.5 hover:bg-blue-50 text-xs"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteAnnouncement(ann.id)}
+                                className="text-rose-500 hover:text-rose-700 font-bold rounded-lg px-2 py-1.5 hover:bg-rose-50 hover:underline text-xs"
+                              >
+                                Purge
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -2348,27 +2490,47 @@ export default function App() {
                   )}
 
                   {activeTab === "admin-fb" && activeRole === "Admin" && (
-                    <div className="rounded-3xl bg-white border border-slate-100 p-6 shadow-sm space-y-6">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                        <div>
-                          <h5 className="font-display font-medium text-slate-900 tracking-tight text-sm uppercase flex items-center gap-1.5">
-                            <MessageSquare className="w-4 h-4 text-emerald-500" />
-                            Roster reviews & reviews database
-                          </h5>
-                          <p className="text-xs text-slate-500">
+                    <div className="space-y-5">
+                      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] sm:p-7">
+                        <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-sky-300/10 blur-2xl" />
+                        <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300">Feedback intelligence</span>
+                            <h5 className="mt-1 flex items-center gap-2 font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                              <MessageSquare className="h-6 w-6 text-sky-300" />
+                              Feedback Management
+                            </h5>
+                            <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-300 sm:text-sm">
                             {loadingFeedback
                               ? "Loading feedback from Google Sheets..."
-                              : "Inspect clinic evaluations compiled across sectors"}
-                          </p>
+                              : "Review patient, staff and doctor feedback in one clear workspace."}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 sm:min-w-[310px]">
+                            <div className="rounded-2xl border border-white/10 bg-white/10 p-3">
+                              <span className="block text-[10px] uppercase tracking-wider text-sky-200">Patients</span>
+                              <strong className="mt-1 block text-2xl font-semibold">{patientFeedbackEntries.length}</strong>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-white/10 p-3">
+                              <span className="block text-[10px] uppercase tracking-wider text-sky-200">Staff</span>
+                              <strong className="mt-1 block text-2xl font-semibold">{staffFeedbackEntries.length}</strong>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-white/10 p-3">
+                              <span className="block text-[10px] uppercase tracking-wider text-sky-200">Doctor</span>
+                              <strong className="mt-1 block text-2xl font-semibold">{locumSurveyEntries.length}</strong>
+                            </div>
+                          </div>
                         </div>
+                      </div>
 
+                      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                         {/* Dropdown database index selector */}
-                        <div className="flex flex-wrap gap-2 self-end items-center">
+                        <div className="flex flex-wrap items-center gap-2">
                           {activeInspectorFb !== "locum" && feedbackDoctorOptions.length > 0 && (
                             <select
                               value={feedbackDoctorFilter}
                               onChange={(e) => setFeedbackDoctorFilter(e.target.value)}
-                              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 outline-none cursor-pointer"
+                              className="cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-sky-400"
                             >
                               <option value="All">All Doctors</option>
                               {feedbackDoctorOptions.map((opt) => (
@@ -2378,13 +2540,13 @@ export default function App() {
                               ))}
                             </select>
                           )}
-                          <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl">
+                          <div className="flex gap-1.5 overflow-x-auto rounded-xl bg-slate-100 p-1">
                             {(["patient", "staff", "locum"] as const).map(
                               (fType) => (
                                 <button
                                   key={fType}
                                   onClick={() => setActiveInspectorFb(fType)}
-                                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
+                                  className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold transition ${
                                     activeInspectorFb === fType
                                       ? "bg-[#001F3F] text-white shadow-sm"
                                       : "text-slate-600 hover:text-slate-800"
@@ -2400,6 +2562,9 @@ export default function App() {
                             )}
                           </div>
                         </div>
+                        <span className="text-xs font-semibold text-slate-400">
+                          {activeAdminFeedbackCount} records · Page {feedbackPage} of {activeAdminFeedbackPageCount}
+                        </span>
                       </div>
 
                       {/* Patients -> Doctor: star-rated table */}
@@ -2417,13 +2582,7 @@ export default function App() {
                               </tr>
                             </thead>
                             <tbody>
-                              {patientFeedbackEntries
-                                .filter(
-                                  (f) =>
-                                    feedbackDoctorFilter === "All" ||
-                                    doctorNamesMatch(f.target, feedbackDoctorFilter),
-                                )
-                                .map((f, i) => (
+                              {paginatedAdminPatientFeedback.map((f, i) => (
                                 <tr key={i} className="hover:bg-slate-50/50 border-b border-slate-100">
                                   <td className="p-3 font-mono text-[10px]">{f.tarikh}</td>
                                   <td className="p-3 font-bold text-slate-900">{f.reviewer}</td>
@@ -2452,57 +2611,58 @@ export default function App() {
 
                       {/* Staff -> Doctor: categorical, no star rating */}
                       {activeInspectorFb === "staff" && (
-                        <div className="overflow-x-auto rounded-2xl border border-slate-100">
-                          <table className="w-full text-xs text-left text-slate-500 leading-normal">
-                            <thead className="text-[10px] uppercase bg-slate-50 text-slate-400 font-black tracking-wider border-b border-slate-150">
+                        <div className="overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-sm">
+                          <table className="w-full min-w-[820px] text-left text-xs leading-normal">
+                            <thead className="bg-[#082f49] text-[10px] font-black uppercase tracking-wider text-sky-100">
                               <tr>
-                                <th className="p-3">Ref timestamp</th>
-                                <th className="p-3">Staff</th>
-                                <th className="p-3">Doctor</th>
-                                <th className="p-3">Branch</th>
-                                <th className="p-3">Category</th>
-                                <th className="p-3">Details</th>
+                                <th className="px-4 py-3.5">Submitted</th>
+                                <th className="px-4 py-3.5">Staff member</th>
+                                <th className="px-4 py-3.5">Doctor</th>
+                                <th className="px-4 py-3.5">Branch</th>
+                                <th className="px-4 py-3.5">Category</th>
+                                <th className="px-4 py-3.5">Details</th>
                               </tr>
                             </thead>
-                            <tbody>
-                              {staffFeedbackEntries
-                                .filter(
-                                  (f) =>
-                                    feedbackDoctorFilter === "All" ||
-                                    doctorNamesMatch(f.doctorName, feedbackDoctorFilter),
-                                )
-                                .map((f, i) => {
-                                const catLower = f.category.toLowerCase();
-                                const catStyle = catLower.includes("aduan serius")
-                                  ? "bg-rose-50 text-rose-700 border-rose-100"
-                                  : catLower.includes("isu kecil")
-                                    ? "bg-amber-50 text-amber-700 border-amber-100"
-                                    : catLower.includes("positif")
-                                      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                                      : "bg-slate-50 text-slate-600 border-slate-150";
-                                return (
-                                  <tr key={i} className="hover:bg-slate-50/50 border-b border-slate-100">
-                                    <td className="p-3 font-mono text-[10px]">{f.timestamp}</td>
-                                    <td className="p-3 font-bold text-slate-900">{f.staffName}</td>
-                                    <td className="p-3 text-[#001f3f] font-semibold">{f.doctorName}</td>
-                                    <td className="p-3">{f.cawangan}</td>
-                                    <td className="p-3">
-                                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full border ${catStyle}`}>
-                                        {f.category}
-                                      </span>
-                                    </td>
-                                    <td
-                                      onClick={() => setExpandedFbRow(expandedFbRow === `s-${i}` ? null : `s-${i}`)}
-                                      title="Click to expand"
-                                      className={`p-3 italic text-slate-650 cursor-pointer hover:bg-slate-100/70 transition ${
-                                        expandedFbRow === `s-${i}` ? "" : "max-w-xs truncate"
-                                      }`}
-                                    >
-                                      "{f.details}"
-                                    </td>
-                                  </tr>
-                                );
-                              })}
+                            <tbody className="divide-y divide-slate-100">
+                          {paginatedAdminStaffFeedback.map((f, i) => {
+                            const catLower = f.category.toLowerCase();
+                            const isSerious = catLower.includes("aduan serius");
+                            const isMinor = catLower.includes("isu kecil");
+                            const isPositive = catLower.includes("positif");
+                            const catStyle = isSerious
+                              ? "border-rose-200 bg-rose-50 text-rose-700"
+                              : isMinor
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : isPositive
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-slate-200 bg-slate-50 text-slate-600";
+                            const categoryIcon = isSerious ? <AlertTriangle className="h-3.5 w-3.5" /> : isPositive ? <CheckCircle className="h-3.5 w-3.5" /> : <Info className="h-3.5 w-3.5" />;
+                            const rowId = `s-${i}`;
+                            return (
+                              <tr key={i} className="align-top transition hover:bg-sky-50/40">
+                                <td className="whitespace-nowrap px-4 py-4 font-mono text-[10px] text-slate-400">{f.timestamp || "—"}</td>
+                                <td className="px-4 py-4 font-bold text-slate-900">{f.staffName || "Staff member"}</td>
+                                <td className="px-4 py-4 font-semibold text-[#0d5078]">{f.doctorName || "Doctor not specified"}</td>
+                                <td className="px-4 py-4 font-medium text-slate-600">{f.cawangan || "—"}</td>
+                                <td className="px-4 py-4">
+                                  <span className={`inline-flex max-w-[180px] items-center gap-1.5 rounded-xl border px-2.5 py-2 text-[10px] font-black uppercase tracking-wide ${catStyle}`}>
+                                    {categoryIcon}
+                                    <span className="leading-tight">{f.category || "Uncategorised"}</span>
+                                  </span>
+                                </td>
+                                <td className="max-w-[280px] px-4 py-4">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedFbRow(expandedFbRow === rowId ? null : rowId)}
+                                    title="Click to expand"
+                                    className={`text-left italic leading-relaxed text-slate-600 transition hover:text-[#0d5078] ${expandedFbRow === rowId ? "" : "line-clamp-2"}`}
+                                  >
+                                    “{f.details || "No additional details provided."}”
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                             </tbody>
                           </table>
                         </div>
@@ -2514,7 +2674,7 @@ export default function App() {
                           {locumSurveyEntries.length === 0 ? (
                             <p className="text-xs text-slate-400 italic p-4">No survey responses yet.</p>
                           ) : (
-                            locumSurveyEntries.map((s, i) => (
+                            paginatedAdminLocumFeedback.map((s, i) => (
                               <div key={i} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 space-y-2">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span className="text-[10px] font-mono text-slate-400">{s.timestamp}</span>
@@ -2536,6 +2696,30 @@ export default function App() {
                               </div>
                             ))
                           )}
+                        </div>
+                      )}
+
+                      {activeAdminFeedbackCount > 20 && (
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                          <button
+                            type="button"
+                            disabled={feedbackPage === 1}
+                            onClick={() => setFeedbackPage((page) => Math.max(1, page - 1))}
+                            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-sky-300 hover:text-[#082f49] disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            ← Previous
+                          </button>
+                          <span className="text-xs font-bold text-slate-500">
+                            Page {feedbackPage} of {activeAdminFeedbackPageCount}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={feedbackPage === activeAdminFeedbackPageCount}
+                            onClick={() => setFeedbackPage((page) => Math.min(activeAdminFeedbackPageCount, page + 1))}
+                            className="rounded-xl bg-[#082f49] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#0d5078] disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Next →
+                          </button>
                         </div>
                       )}
                     </div>
@@ -2574,6 +2758,18 @@ export default function App() {
                         )}
                       </div>
 
+                      <div className="relative max-w-md">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="search"
+                          value={directoryDoctorSearch}
+                          onChange={(e) => setDirectoryDoctorSearch(e.target.value)}
+                          placeholder="Search doctor name..."
+                          aria-label="Search doctor name"
+                          className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-xs font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
+                        />
+                      </div>
+
                       <div className="overflow-x-auto rounded-2xl border border-slate-100">
                         <table className="w-full text-xs text-left leading-normal text-slate-500">
                           <thead className="bg-slate-50 border-b border-slate-150 uppercase text-[10px] text-slate-400 font-black tracking-widest text-left">
@@ -2588,9 +2784,13 @@ export default function App() {
                             </tr>
                           </thead>
                           <tbody>
-                            {state.users
-                              .filter((u) => u.role === "Doctor")
-                              .map((doc) => {
+                            {filteredDirectoryDoctors.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="p-8 text-center text-xs font-semibold text-slate-400">
+                                  No doctors found matching “{directoryDoctorSearch}”.
+                                </td>
+                              </tr>
+                            ) : paginatedDirectoryDoctors.map((doc) => {
                                 // Verify APC and Email status fields
                                 const hasEmail = doc.email?.includes("@");
                                 const hasMmc =
@@ -2681,6 +2881,32 @@ export default function App() {
                           </tbody>
                         </table>
                       </div>
+
+                      {filteredDirectoryDoctors.length > 10 && (
+                        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <span className="text-xs font-semibold text-slate-400">
+                            {filteredDirectoryDoctors.length} doctors · Page {directoryPage} of {directoryPageCount}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={directoryPage === 1}
+                              onClick={() => setDirectoryPage((page) => Math.max(1, page - 1))}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-sky-300 hover:text-[#082f49] disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              ← Previous
+                            </button>
+                            <button
+                              type="button"
+                              disabled={directoryPage === directoryPageCount}
+                              onClick={() => setDirectoryPage((page) => Math.min(directoryPageCount, page + 1))}
+                              className="rounded-xl bg-[#082f49] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#0d5078] disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Next →
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Staff Accounts — their password IS the "keyword" used on the login screen's Staff quick access */}
                       <div className="pt-2">

@@ -202,10 +202,10 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Date Filters Card */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+      <div className="rounded-[28px] border border-slate-700/80 bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)]">
         <div>
-          <h5 className="font-display font-bold text-slate-900 tracking-tight text-sm">Clinical Insights Filter</h5>
-          <p className="text-xs text-slate-500">Filter parameters determine chart scopes and leaderboards</p>
+          <h5 className="font-display font-bold text-white tracking-tight text-sm">Clinical Insights Filter</h5>
+          <p className="text-xs text-slate-300">Filter parameters determine chart scopes and leaderboards</p>
         </div>
 
         <div className="flex gap-2.5 items-center flex-wrap">
@@ -238,7 +238,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
             value={month}
             disabled={viewMode === 'cumulative'}
             onChange={e => setMonth(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-sky-300 focus:border-sky-300 outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'].map(m => (
               <option key={m} value={m}>
@@ -251,7 +251,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
             value={year}
             disabled={viewMode === 'cumulative'}
             onChange={e => setYear(e.target.value)}
-            className="bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-sky-300 focus:border-sky-300 outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {['2025', '2026', '2027'].map(y => (
               <option key={y} value={y}>
@@ -310,21 +310,21 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
 
       {/* Statistics Counter Bento */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-sm text-center">
-          <span className="text-[10px] tracking-wider text-slate-400 font-bold block uppercase font-sans">Total active slots</span>
-          <h2 className="font-display text-2xl font-extrabold text-indigo-950 pt-1">{totalShiftsCount}</h2>
+        <div className="bg-[#082f49] border border-slate-700/80 p-5 rounded-2xl shadow-[0_8px_24px_rgba(8,47,73,0.12)] text-center">
+          <span className="text-[10px] tracking-wider text-sky-200 font-bold block uppercase font-sans">Total active slots</span>
+          <h2 className="font-display text-2xl font-extrabold text-white pt-1">{totalShiftsCount}</h2>
         </div>
-        <div className="bg-white border border-slate-200 p-5 rounded-xl shadow-sm text-center">
-          <span className="text-[10px] tracking-wider text-amber-600 font-bold block uppercase font-sans">Pending Approval</span>
-          <h2 className="font-display text-2xl font-extrabold text-amber-500 pt-1">{pendingCount}</h2>
+        <div className="bg-[#082f49] border border-slate-700/80 p-5 rounded-2xl shadow-[0_8px_24px_rgba(8,47,73,0.12)] text-center">
+          <span className="text-[10px] tracking-wider text-amber-200 font-bold block uppercase font-sans">Pending Approval</span>
+          <h2 className="font-display text-2xl font-extrabold text-amber-300 pt-1">{pendingCount}</h2>
         </div>
-        <div className="bg-emerald-50/35 border border-emerald-250 p-5 rounded-xl shadow-sm text-center">
-          <span className="text-[10px] tracking-wider text-emerald-700 font-bold block uppercase font-sans">Approved shifts</span>
-          <h2 className="font-display text-2xl font-extrabold text-emerald-700 pt-1">{approvedCount}</h2>
+        <div className="bg-[#082f49] border border-slate-700/80 p-5 rounded-2xl shadow-[0_8px_24px_rgba(8,47,73,0.12)] text-center">
+          <span className="text-[10px] tracking-wider text-emerald-200 font-bold block uppercase font-sans">Approved shifts</span>
+          <h2 className="font-display text-2xl font-extrabold text-emerald-300 pt-1">{approvedCount}</h2>
         </div>
-        <div className="bg-slate-50/50 border border-slate-250 p-5 rounded-xl shadow-sm text-center">
-          <span className="text-[10px] tracking-wider text-slate-500 font-bold block uppercase font-sans">Unfilled hours</span>
-          <h2 className="font-display text-2xl font-extrabold text-slate-900 pt-1">{availableCount}</h2>
+        <div className="bg-[#082f49] border border-slate-700/80 p-5 rounded-2xl shadow-[0_8px_24px_rgba(8,47,73,0.12)] text-center">
+          <span className="text-[10px] tracking-wider text-slate-300 font-bold block uppercase font-sans">Unfilled hours</span>
+          <h2 className="font-display text-2xl font-extrabold text-white pt-1">{availableCount}</h2>
         </div>
       </div>
 

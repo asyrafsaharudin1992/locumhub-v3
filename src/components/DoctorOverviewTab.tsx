@@ -1,11 +1,12 @@
 import React from 'react';
-import { ArrowRight, Award, Bell, CalendarDays, ClipboardList, Clock, BookOpen, Heart } from 'lucide-react';
-import { AppNotification, LocumSlot, UserProfile } from '../types';
+import { ArrowRight, Award, Bell, CalendarDays, ClipboardList, Clock, BookOpen, ExternalLink, Heart, MessageSquare } from 'lucide-react';
+import { AppNotification, FeedbackRecord, LocumSlot, UserProfile } from '../types';
 
 interface DoctorOverviewTabProps {
   slots: LocumSlot[];
   currentUser: UserProfile;
   notifications: AppNotification[];
+  feedbacks: FeedbackRecord[];
   onNavigate: (tab: string) => void;
 }
 
@@ -57,6 +58,7 @@ export const DoctorOverviewTab: React.FC<DoctorOverviewTabProps> = ({
   slots,
   currentUser,
   notifications,
+  feedbacks,
   onNavigate,
 }) => {
   const today = new Date();
@@ -73,6 +75,10 @@ export const DoctorOverviewTab: React.FC<DoctorOverviewTabProps> = ({
   const badgeCounts = getBadgeCounts(currentUser.badges || '');
   const nextShiftDate = nextShift ? parseShiftDate(nextShift.tarikh) : null;
   const isToday = nextShiftDate?.getTime() === today.getTime();
+  const hasFeedback = feedbacks.some((feedback) => doctorMatches(
+    { dr: feedback.target, phone: '', id: '', tarikh: '', masa: '', cawangan: '', status: 'Available', gaji: 0 },
+    currentUser,
+  ));
 
   const quickActions = [
     { label: 'Book Slot', icon: CalendarDays, color: 'text-white', tab: 'booking' },
@@ -157,6 +163,28 @@ export const DoctorOverviewTab: React.FC<DoctorOverviewTabProps> = ({
           ))}
         </div>
       </section>
+
+      {hasFeedback && (
+        <section className="flex flex-col gap-4 rounded-[24px] border border-sky-200 bg-sky-50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#082f49] text-sky-200">
+              <MessageSquare className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-bold text-[#082f49]">Do you have a feedback for us?</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">We would love to hear your feedback so we can continue improving.</p>
+            </div>
+          </div>
+          <a
+            href="https://docs.google.com/forms/d/e/1FAIpQLSeQ2Q2T2X2MwNxMRPgHsJ-KOiXZRiMsySqEjmpugl7BdM7-vQ/viewform?usp=sharing&ouid=116024380302904367898"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#082f49] px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#0d5078]"
+          >
+            Give feedback <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        </section>
+      )}
 
       <section className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-[0_8px_28px_rgba(15,23,42,0.05)]">
         <div className="bg-gradient-to-r from-[#082f49] to-[#123f61] p-5 text-white sm:p-7">

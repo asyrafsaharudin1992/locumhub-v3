@@ -276,14 +276,14 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
           </p>
         </div>
       ) : (
-      <div className="xl:col-span-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+      <div className="xl:col-span-4 rounded-[28px] border border-slate-700/80 bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-6 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] space-y-5">
         <div className="flex items-center gap-2">
           <Key className="w-4 h-4 text-indigo-600" />
-          <h5 className="font-display font-bold text-slate-900 tracking-tight text-sm uppercase">
+          <h5 className="font-display font-bold text-white tracking-tight text-sm uppercase">
             Bulk planners & publishers
           </h5>
         </div>
-        <p className="text-xs text-slate-500 leading-relaxed font-sans">
+        <p className="text-xs text-slate-300 leading-relaxed font-sans">
           Select multiple dates and publish open locum slots instantly across all doctor workspaces.
         </p>
 
@@ -329,7 +329,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
                 >
                   ‹
                 </button>
-                <span className="text-xs font-bold text-slate-700">{pickerMonthLabel}</span>
+                <span className="text-xs font-bold text-white">{pickerMonthLabel}</span>
                 <button
                   type="button"
                   onClick={() => setPickerMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}

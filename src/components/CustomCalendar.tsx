@@ -124,18 +124,21 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
   };
 
   const getSlotText = (slot: LocumSlot) => {
-    const timeLabel = slot.masa || '';
+    const displayName = (slot.dr || '')
+      .replace(/\s*\(\s*external\s*\)\s*/ig, '')
+      .replace(/\s+external\b/ig, '')
+      .trim();
     if (slot.status === 'Approved') {
-      const name = slot.dr ? slot.dr.toUpperCase().trim() : 'APPROVED';
+      const name = displayName ? displayName.toUpperCase() : 'APPROVED';
       const cleanName = name.startsWith('DR') ? name : `DR ${name}`;
-      return `${cleanName} [${timeLabel}]`;
+      return cleanName;
     }
     if (slot.status === 'Pending') {
-      const name = slot.dr ? slot.dr.toUpperCase().trim() : 'PENDING';
+      const name = displayName ? displayName.toUpperCase() : 'PENDING';
       const cleanName = name.startsWith('DR') ? name : `DR ${name}`;
-      return `⏳ ${cleanName} [${timeLabel}]`;
+      return `⏳ ${cleanName}`;
     }
-    return `OPEN [${timeLabel}]`;
+    return 'OPEN';
   };
 
   // Generate full grid cells (35 or 42 grid cells)
@@ -221,17 +224,17 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
           ========================================================================= */}
       <div className={desktopSlotPanel ? "hidden md:grid w-full grid-cols-[minmax(0,1fr)_290px] items-start gap-4" : "hidden md:block w-full space-y-4"}>
         {/* Calendar control header bar */}
-        <div className="bg-white rounded-3xl border border-slate-150 p-6 shadow-sm space-y-5">
+        <div className="rounded-[28px] border border-slate-700/80 bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-6 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-indigo-600" />
-              <h4 className="font-display font-bold text-slate-800 text-lg">
+              <CalendarDays className="w-5 h-5 text-sky-300" />
+              <h4 className="font-display font-bold text-white text-lg">
                 {monthNames[month]} {year}
               </h4>
             </div>
 
             {/* Custom Branch Color-coding Legend */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-500">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-bold text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-emerald-500 inline-block" />
                 Seri Kembangan
@@ -281,7 +284,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
               <span
                 key={dayName}
                 className={`text-xs font-bold tracking-wider uppercase py-1 ${
-                  idx === 0 || idx === 6 ? 'text-rose-600' : 'text-slate-500'
+                    idx === 0 || idx === 6 ? 'text-rose-200' : 'text-slate-300'
                 }`}
               >
                 {dayName}
@@ -330,8 +333,8 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                               e.stopPropagation();
                               if (onSlotClick) onSlotClick(slot);
                             }}
-                            className={`w-full text-[10px] font-bold py-1 px-1.5 rounded-lg border text-left transition truncate cursor-pointer ${bgClasses}`}
-                            title={`${slot.cawangan} | ${slot.masa} | ${slot.dr || 'Open'}`}
+                            className={`w-full min-h-[28px] whitespace-normal break-words text-[8px] font-bold leading-tight py-1 px-1.5 rounded-lg border text-left transition cursor-pointer ${bgClasses}`}
+                            title={`${slot.cawangan} | ${slot.masa} | ${/external/i.test(slot.dr || '') ? 'External doctor' : slot.dr || 'Open'}`}
                           >
                             {labelText}
                           </button>
@@ -404,11 +407,11 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
           ========================================================================= */}
       <div className="block md:hidden w-full space-y-4">
         {/* Calendar month selector header card */}
-        <div className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="rounded-[28px] border border-slate-700/80 bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)]">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-1.5">
-              <CalendarDays className="w-4 h-4 text-sky-600" />
-              <h5 className="font-display font-bold text-slate-900 tracking-tight text-sm">
+              <CalendarDays className="w-4 h-4 text-sky-300" />
+              <h5 className="font-display font-bold text-white tracking-tight text-sm">
                 {monthNames[month]} {year}
               </h5>
             </div>
@@ -436,7 +439,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
               <span
                 key={dayName}
                 className={`text-[10px] font-bold tracking-wider uppercase py-1 ${
-                  idx === 0 || idx === 6 ? 'text-rose-500/80' : 'text-slate-400'
+                  idx === 0 || idx === 6 ? 'text-rose-200' : 'text-slate-300'
                 }`}
               >
                 {dayName}
@@ -576,7 +579,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                                       className="w-full text-left text-xs font-bold text-purple-800 bg-white py-1.5 px-2.5 rounded-xl flex items-center gap-1.5 cursor-pointer hover:bg-purple-50 transition"
                                     >
                                       <span>👨‍⚕️</span>
-                                      <span>Dr. {(s.dr || 'Unknown').toUpperCase().trim().replace(/^DR\s+/i, '')}</span>
+                                      <span>{`Dr. ${(s.dr || 'Unknown').replace(/\s*\(\s*external\s*\)\s*/ig, '').replace(/\s+external\b/ig, '').toUpperCase().trim().replace(/^DR\s+/i, '')}`}</span>
                                     </button>
                                   ))}
                                 </div>
@@ -636,7 +639,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                               className="mt-2.5 text-xs font-bold text-indigo-700 bg-indigo-550/10 py-1 px-2.5 rounded-xl w-fit flex items-center gap-1.5 cursor-pointer hover:bg-indigo-100 transition"
                             >
                               <span>👨‍⚕️</span>
-                              <span>Dr. {slot.dr.toUpperCase().trim().replace(/^DR\s+/i, '')}</span>
+                              <span>{`Dr. ${slot.dr.replace(/\s*\(\s*external\s*\)\s*/ig, '').replace(/\s+external\b/ig, '').toUpperCase().trim().replace(/^DR\s+/i, '')}`}</span>
                             </button>
                           ) : (
                             <div className="mt-2.5 text-xs font-bold text-red-700 bg-red-50 py-1 px-2.5 rounded-xl w-fit flex items-center gap-1.5">

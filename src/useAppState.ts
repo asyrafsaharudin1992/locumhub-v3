@@ -1007,6 +1007,9 @@ export function useAppState() {
   const logout = () => {
     // Deliberately NOT logged via logActivity — same reasoning as login:
     // never read/displayed anywhere in the app, just write-only noise.
+    if (localDemoMode) {
+      localStorage.removeItem("ara_current_user");
+    }
     setState((prev) => ({ ...prev, currentUser: null }));
   };
 
@@ -1807,6 +1810,33 @@ export function useAppState() {
     );
     logActivity(`ADMIN: Published announcement: "${text.substring(0, 30)}..."`);
     return "Announcement updated!";
+  };
+
+  const editAnnouncement = (id: string, text: string): string => {
+    const trimmedText = text.trim();
+    if (!trimmedText) return "⚠️ Announcement text cannot be empty.";
+
+    const existing = state.announcements.find((announcement) => announcement.id === id);
+    if (!existing) return "⚠️ Announcement not found.";
+
+    const updatedAnnouncement = { ...existing, text: trimmedText };
+    setState((prev) => ({
+      ...prev,
+      announcements: prev.announcements.map((announcement) =>
+        announcement.id === id ? updatedAnnouncement : announcement,
+      ),
+    }));
+
+    if (!localDemoMode) {
+      cloudSaveAnnouncement(updatedAnnouncement).catch((err) =>
+        console.error("Cloud editAnnouncement failed:", err),
+      );
+      logActivity(`ADMIN: Edited announcement ID ${id}`);
+    }
+
+    return localDemoMode
+      ? "✅ Demo: announcement updated locally."
+      : "✅ Announcement updated!";
   };
 
   const deleteAnnouncement = (id: string) => {
@@ -3092,6 +3122,7 @@ export function useAppState() {
     adminCreateBulkSlots,
     adminLogCMEAttendance,
     publishAnnouncement,
+    editAnnouncement,
     deleteAnnouncement,
     adminGivePoints,
     completeSlotAndAwardPoints,
