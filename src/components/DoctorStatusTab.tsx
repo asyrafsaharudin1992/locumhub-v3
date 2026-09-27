@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2, Trophy, Award, Heart, Zap, ShieldCheck, Flame, BookOpen, Users } from 'lucide-react';
+import { ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2, Trophy, Award, Heart, Zap, ShieldCheck, Flame, BookOpen, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LocumSlot, UserProfile } from '../types';
 
 interface DoctorStatusTabProps {
@@ -14,8 +14,10 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
   currentUser,
   onCancelSlot
 }) => {
-  const [filterType, setFilterType] = useState<'All' | 'Approved' | 'Pending'>('All');
+  const [shiftPeriod, setShiftPeriod] = useState<'All' | 'Past' | 'Upcoming'>('All');
   const [monthFilter, setMonthFilter] = useState<string>('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 20;
   const [pendingCancelSlot, setPendingCancelSlot] = useState<LocumSlot | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
@@ -41,7 +43,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
   // admin. Match by phone when present, but fall back to name matching since
   // a lot of historical/manually-entered slots never captured a phone number
   // at all (leaving that field blank), which would otherwise hide real
-  // approved shifts from the doctor's own My Status view.
+  // approved shifts from the doctor's own My Shifts view.
   // Slots reset back to "Available" (cancelled by admin or withdrawn by the
   // doctor) should never appear here, even if a stale phone/name lingers.
   const mySlots = slots.filter((s) => {
@@ -67,9 +69,20 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
     (a, b) => parseBookedAt(b.bookedAt) - parseBookedAt(a.bookedAt)
   );
 
+  const isPastSlot = (tarikhStr: string): boolean => {
+    const parts = (tarikhStr || '').split('/');
+    if (parts.length !== 3) return false;
+    const [d, m, y] = parts.map((p) => parseInt(p, 10));
+    if (!d || !m || !y) return false;
+    const slotDate = new Date(y, m - 1, d);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return slotDate < today;
+  };
+
   const filteredSlots = sortedMySlots.filter(s => {
-    if (filterType === 'Approved' && s.status !== 'Approved') return false;
-    if (filterType === 'Pending' && s.status !== 'Pending') return false;
+    if (shiftPeriod === 'Past' && !isPastSlot(s.tarikh)) return false;
+    if (shiftPeriod === 'Upcoming' && isPastSlot(s.tarikh)) return false;
     if (monthFilter !== 'All') {
       const parts = (s.tarikh || '').split('/');
       const slotMonthYear = parts.length === 3 ? `${parts[1].padStart(2, '0')}/${parts[2]}` : '';
@@ -77,6 +90,20 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
     }
     return true;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredSlots.length / PAGE_SIZE));
+  const paginatedSlots = filteredSlots.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [monthFilter, shiftPeriod]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   // Unique month/year combos present in this doctor's slots, newest first —
   // powers the "filter by month" dropdown so past shifts can be found easily.
@@ -165,16 +192,6 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
 
   // Doctors can only withdraw upcoming shifts — past shifts can only be
   // adjusted by admin (e.g. via the Clinical Schedule / performance tools).
-  const isPastSlot = (tarikhStr: string): boolean => {
-    const parts = (tarikhStr || '').split('/');
-    if (parts.length !== 3) return false;
-    const [d, m, y] = parts.map((p) => parseInt(p, 10));
-    if (!d || !m || !y) return false;
-    const slotDate = new Date(y, m - 1, d);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return slotDate < today;
-  };
 
   const handleCancelClick = (slot: LocumSlot) => {
     setPendingCancelSlot(slot);
@@ -319,18 +336,19 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
         );
       })()}
       <div className="flex flex-wrap gap-2 items-center">
-        <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200">
-          {(['All', 'Approved', 'Pending'] as const).map(fType => (
+        <div className="flex gap-1 bg-white p-1 rounded-xl w-fit border border-slate-200 shadow-sm">
+          {(['All', 'Past', 'Upcoming'] as const).map((period) => (
             <button
-              key={fType}
-              onClick={() => setFilterType(fType)}
+              key={period}
+              type="button"
+              onClick={() => setShiftPeriod(period)}
               className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
-                filterType === fType
-                  ? 'bg-[#001F3F] text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-800'
+                shiftPeriod === period
+                  ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
               }`}
             >
-              {fType === 'All' ? `All Shifts (${mySlots.length})` : fType === 'Approved' ? 'Approved' : 'Pending'}
+              {period === 'All' ? 'All dates' : period === 'Past' ? 'Past shifts' : 'Upcoming shifts'}
             </button>
           ))}
         </div>
@@ -378,7 +396,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
               <p className="text-xs">Once you select and book available dates they will compile here.</p>
             </motion.div>
           ) : (
-            filteredSlots.map(slot => {
+            paginatedSlots.map(slot => {
               const isApproved = slot.status === 'Approved';
               const isSK = slot.cawangan.toLowerCase().includes('sk') || slot.cawangan.toLowerCase().includes('seri');
 
@@ -447,6 +465,32 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
           )}
         </AnimatePresence>
       </div>
+
+      {filteredSlots.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-3 py-2.5 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={currentPage === 1}
+            className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </button>
+          <span className="text-xs font-semibold text-slate-500">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            disabled={currentPage === totalPages}
+            className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* ===================== Confirm Withdraw Dialog ===================== */}
       <AnimatePresence>

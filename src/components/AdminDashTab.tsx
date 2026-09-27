@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DashboardCharts } from './DashboardCharts';
 import { LocumSlot, UserProfile } from '../types';
-import { ClipboardCheck, Sparkles, Filter, CheckCircle2, UserCheck, BarChart2, MessageSquare, Coins, Loader2 } from 'lucide-react';
+import { ClipboardCheck, Sparkles, Filter, CheckCircle2, UserCheck, BarChart2, MessageSquare, Coins, Loader2, BellRing, ArrowRight } from 'lucide-react';
 
 interface BadgeAwardRow {
   doctor_phone: string;
@@ -88,6 +88,50 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
     return false;
   });
 
+  const parseCalendarDate = (dateValue: string) => {
+    const match = String(dateValue || '').match(/(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})/);
+    if (!match) return null;
+
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    const third = Number(match[3]);
+    const day = first > 31 ? third : first;
+    const month = first > 31 ? second : second;
+    const year = first > 31 ? first : third;
+    return new Date(year, month - 1, day);
+  };
+
+  const formatReminderDate = (date: Date | null) => {
+    if (!date) return '';
+    return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+  };
+
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const pendingHistoricalCloseOuts = slots.filter(s => {
+    const parsedDate = parseCalendarDate(s.tarikh);
+    const isApproved = String(s.status || '').toLowerCase() === 'approved';
+    const hasRecordedData = s.performanceRecorded || (
+      s.sales !== undefined &&
+      s.pesakit !== undefined &&
+      (s.sales > 0 || s.pesakit > 0)
+    );
+
+    return isApproved && !!parsedDate && parsedDate < todayStart && !!s.dr && !hasRecordedData;
+  });
+
+  const latestPendingDate = pendingHistoricalCloseOuts.reduce((latest: Date | null, slot) => {
+    const parsedDate = parseCalendarDate(slot.tarikh);
+    if (!parsedDate) return latest;
+    return !latest || parsedDate > latest ? parsedDate : latest;
+  }, null);
+
+  const reminderDateKey = formatReminderDate(latestPendingDate);
+  const previousDayPendingCloseOuts = pendingHistoricalCloseOuts.filter(s => {
+    const parsedDate = parseCalendarDate(s.tarikh);
+    return !!parsedDate && !!latestPendingDate
+      && parsedDate.getTime() === latestPendingDate.getTime();
+  });
+
   // Slot dr values are free-text and can carry inconsistent casing across
   // different records for the SAME real doctor (e.g. "HAKIM" on some
   // slots, "Hakim" on others) — a plain Set on the raw string produces
@@ -127,6 +171,11 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
       setPtsVal(slot.pesakit || 0);
       setPayVal(slot.gaji);
     }
+  };
+
+  const handleReminderSelect = (slot: LocumSlot) => {
+    setSelectedDoctorFilter(slot.dr);
+    handleActiveSlotSelect(slot.id);
   };
 
   const handleSavePerformance = async (e: React.FormEvent) => {
@@ -289,6 +338,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
       />
 
       {/* Clinical Close-out Data Form Panel - PRESERVED HYBRID LOGIC */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.8fr)] gap-4 items-start">
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
         <div>
           <h5 className="font-display font-medium text-slate-900 tracking-tight text-sm uppercase flex items-center gap-1.5 font-bold">
@@ -456,6 +506,55 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
             )}
           </AnimatePresence>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-amber-200 bg-gradient-to-b from-amber-50 to-white p-5 shadow-sm space-y-4 xl:sticky xl:top-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+            <BellRing className="w-4.5 h-4.5" />
+          </div>
+          <div>
+            <h5 className="font-display font-bold text-slate-900 text-sm">Close-Out Reminder</h5>
+            <p className="text-[11px] text-slate-500 mt-0.5">Previous day clinical details</p>
+          </div>
+        </div>
+
+        {previousDayPendingCloseOuts.length === 0 ? (
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3.5">
+            <p className="text-xs font-semibold text-emerald-800">All clear</p>
+            <p className="text-[11px] leading-relaxed text-emerald-700 mt-1">
+              No previous-day doctor close-outs are waiting for details.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-xl border border-amber-200 bg-white/80 p-3.5">
+              <p className="text-xs font-bold text-amber-900">
+                {previousDayPendingCloseOuts.length} shift{previousDayPendingCloseOuts.length === 1 ? '' : 's'} need{previousDayPendingCloseOuts.length === 1 ? 's' : ''} attention
+              </p>
+              <p className="text-[11px] leading-relaxed text-amber-700 mt-1">
+                Please complete the sales and patient details for {reminderDateKey}.
+              </p>
+            </div>
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {previousDayPendingCloseOuts.map(slot => (
+                <button
+                  key={slot.id}
+                  type="button"
+                  onClick={() => handleReminderSelect(slot)}
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-amber-300 hover:bg-amber-50/50 flex items-center gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-800 truncate">{slot.dr}</p>
+                    <p className="text-[10px] text-slate-500 mt-1">{slot.masa} · {slot.cawangan}</p>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
       </div>
     </div>
   );

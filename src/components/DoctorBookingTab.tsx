@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CustomCalendar } from './CustomCalendar';
 import { LocumSlot, UserProfile } from '../types';
-import { MapPin, Info, AlertTriangle, Clock, X, CheckCircle2 } from 'lucide-react';
+import { MapPin, Info, AlertTriangle, Clock, X, CheckCircle2, CalendarDays, Hourglass, Check } from 'lucide-react';
 
 interface DoctorBookingTabProps {
   slots: LocumSlot[];
@@ -34,8 +34,30 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
   ].filter(Boolean) as string[];
   const isProfileComplete = hasApc;
 
-  // Doctors should only ever see genuinely open/unbooked slots on this tab
-  const availableSlots = slots.filter((s) => s.status === 'Available');
+  // CME/Briefing entries are not locum shifts and stay out of this page.
+  const locumSlots = slots.filter((s) => {
+    const branch = s.cawangan.toLowerCase();
+    return !branch.includes('cme') && !branch.includes('briefing');
+  });
+  // Doctors should only ever see genuinely open/unbooked locum slots here.
+  const availableSlots = locumSlots.filter((s) => s.status === 'Available');
+  const normalizePhone = (value: string) => value.replace(/\D/g, '').replace(/^60/, '0');
+  const mySlots = locumSlots.filter((s) => normalizePhone(String(s.phone || '')) === normalizePhone(currentUser.phone));
+  const parseSlotDate = (value: string) => {
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    return match ? new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1])) : null;
+  };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const upcomingSlots = mySlots.filter((s) => {
+    const date = parseSlotDate(s.tarikh);
+    return date && date >= today && (s.status === 'Approved' || s.status === 'Pending');
+  });
+  const completedSlots = mySlots.filter((s) => {
+    const date = parseSlotDate(s.tarikh);
+    return date && date < today && s.status === 'Approved';
+  });
+  const pendingSlots = mySlots.filter((s) => s.status === 'Pending');
 
   const handleSlotClicked = (slot: LocumSlot) => {
     if (slot.status !== 'Available') return;
@@ -64,6 +86,44 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600">Clinical scheduling</p>
+          <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Book a Shift</h2>
+          <p className="mt-1 text-sm text-slate-500">Find and request available locum slots.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5">
+          <div className="min-w-[86px] rounded-[20px] border border-slate-200/80 bg-white px-3.5 py-3 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold tracking-tight text-slate-500">My shifts</p>
+              <CalendarDays className="h-3.5 w-3.5 text-indigo-500" />
+            </div>
+            <p className="mt-1 text-2xl font-semibold tracking-[-0.06em] text-slate-950">{mySlots.length}</p>
+          </div>
+          <div className="min-w-[86px] rounded-[20px] border border-slate-200/80 bg-white px-3.5 py-3 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold tracking-tight text-slate-500">Upcoming</p>
+              <CalendarDays className="h-3.5 w-3.5 text-emerald-500" />
+            </div>
+            <p className="mt-1 text-2xl font-semibold tracking-[-0.06em] text-slate-950">{upcomingSlots.length}</p>
+          </div>
+          <div className="min-w-[86px] rounded-[20px] border border-slate-200/80 bg-white px-3.5 py-3 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold tracking-tight text-slate-500">Completed</p>
+              <Check className="h-3.5 w-3.5 text-slate-400" />
+            </div>
+            <p className="mt-1 text-2xl font-semibold tracking-[-0.06em] text-slate-950">{completedSlots.length}</p>
+          </div>
+          <div className="min-w-[86px] rounded-[20px] border border-slate-200/80 bg-white px-3.5 py-3 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold tracking-tight text-slate-500">Pending</p>
+              <Hourglass className="h-3.5 w-3.5 text-amber-500" />
+            </div>
+            <p className="mt-1 text-2xl font-semibold tracking-[-0.06em] text-slate-950">{pendingSlots.length}</p>
+          </div>
+        </div>
+      </div>
+
       {/* Profile check banner */}
       {currentUser.role === 'Doctor' && missingProfileFields.length > 0 && (
         <div className={`rounded-xl border p-4 flex items-start gap-3 shadow-sm ${
@@ -113,6 +173,7 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
         currentUserPhone={currentUser.phone}
         selectedBranch={selectedBranch}
         openSlotColorMode="branch"
+        desktopSlotPanel
       />
 
       {/* ===================== Confirm Booking Dialog ===================== */}

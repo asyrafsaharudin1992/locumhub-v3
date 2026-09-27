@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, ChevronRight, ChevronDown, CalendarDays, Clock, MapPin, Plus, Info, Users } from 'lucide-react';
 import { LocumSlot } from '../types';
@@ -10,13 +10,15 @@ interface CustomCalendarProps {
   currentUserPhone?: string;
   selectedBranch?: string; // "Seri Kembangan" | "Kajang" | "All"
   openSlotColorMode?: 'red' | 'branch'; // how to colour Available/open slots — defaults to red (admin view)
+  desktopSlotPanel?: boolean;
 }
 
 export const CustomCalendar: React.FC<CustomCalendarProps> = ({
   slots,
   onSlotClick,
   selectedBranch = 'All',
-  openSlotColorMode = 'red'
+  openSlotColorMode = 'red',
+  desktopSlotPanel = false
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
@@ -182,6 +184,32 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
   const gridCells = getFullGridCells();
   const selectedDateSlots = getSlotsForDate(selectedDay);
 
+  // Give the side panel a useful starting point when today has no open slot.
+  // Users can still select any other date directly from the calendar.
+  useEffect(() => {
+    if (!desktopSlotPanel || selectedDateSlots.length > 0) return;
+
+    const firstSlotDay = slots
+      .filter((slot) => {
+        if (slot.status !== 'Available') return false;
+        const [day, monthValue, yearValue] = slot.tarikh.split('/').map(Number);
+        if (monthValue !== month + 1 || yearValue !== year) return false;
+        if (selectedBranch !== 'All' && !slot.cawangan.toLowerCase().includes(selectedBranch.toLowerCase())) {
+          return false;
+        }
+        return Number.isFinite(day);
+      })
+      .sort((a, b) => {
+        const dayA = Number(a.tarikh.split('/')[0]);
+        const dayB = Number(b.tarikh.split('/')[0]);
+        return dayA - dayB;
+      })[0];
+
+    if (firstSlotDay) {
+      setSelectedDay(Number(firstSlotDay.tarikh.split('/')[0]));
+    }
+  }, [desktopSlotPanel, month, selectedBranch, selectedDateSlots.length, slots, year]);
+
   // Mobile layout helpers
   const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   const blankCells = Array.from({ length: firstDayIndex }, (_, i) => i);
@@ -191,7 +219,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
       {/* =========================================================================
           DESKTOP CALENDAR VIEW (Direct Scheduler Table)
           ========================================================================= */}
-      <div className="hidden md:block w-full space-y-4">
+      <div className={desktopSlotPanel ? "hidden md:grid w-full grid-cols-[minmax(0,1fr)_290px] items-start gap-4" : "hidden md:block w-full space-y-4"}>
         {/* Calendar control header bar */}
         <div className="bg-white rounded-3xl border border-slate-150 p-6 shadow-sm space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -269,7 +297,8 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
               return (
                 <div
                   key={`cell-${idx}`}
-                  className={`min-h-[120px] p-2 flex flex-col justify-between transition ${
+                  onClick={() => desktopSlotPanel && cell.isCurrentMonth && setSelectedDay(cell.day)}
+                  className={`min-h-[120px] p-2 flex flex-col justify-between transition ${desktopSlotPanel ? 'cursor-pointer' : ''} ${
                     cell.isCurrentMonth ? 'bg-white' : 'bg-slate-50/50'
                   }`}
                 >
@@ -317,6 +346,57 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
             })}
           </div>
         </div>
+
+        {desktopSlotPanel && (
+          <aside className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Available slots</p>
+                <h5 className="mt-1 font-display text-sm font-extrabold text-slate-900">
+                  {monthNames[month]} {selectedDay}, {year}
+                </h5>
+              </div>
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500">
+                {selectedDateSlots.length} slots
+              </span>
+            </div>
+            <div className="space-y-2.5">
+              {selectedDateSlots.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center">
+                  <Info className="mx-auto h-5 w-5 text-slate-300" />
+                  <p className="mt-2 text-[11px] leading-relaxed text-slate-400">Click a date with a slot indicator to view shifts.</p>
+                </div>
+              ) : selectedDateSlots.map((slot) => {
+                const branch = slot.cawangan.toLowerCase();
+                const isSK = branch.includes('seri') || branch.includes('kembangan') || branch.includes('sk');
+                return (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    onClick={() => onSlotClick?.(slot)}
+                    className="w-full rounded-2xl border border-slate-100 bg-slate-50/60 p-3 text-left transition hover:-translate-y-0.5 hover:border-indigo-200 hover:bg-white hover:shadow-md"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wide text-slate-700">
+                        <span className={`h-2.5 w-2.5 rounded-full ${isSK ? 'bg-emerald-500' : 'bg-sky-500'}`} />
+                        Klinik ARA {slot.cawangan}
+                      </span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">Open</span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" />
+                      {slot.masa}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between border-t border-slate-200/70 pt-2 text-[10px] text-slate-500">
+                      <span>{slot.gaji ? `RM ${slot.gaji}` : 'Open shift'}</span>
+                      <span className="font-bold text-indigo-600">Request →</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+        )}
       </div>
 
       {/* =========================================================================

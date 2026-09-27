@@ -31,7 +31,8 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
 
   // Bulk creation planning states
   const [bulkDates, setBulkDates] = useState<string[]>([]);
-  const [dateInput, setDateInput] = useState('');
+  const [pendingDates, setPendingDates] = useState<string[]>([]);
+  const [pickerMonth, setPickerMonth] = useState(() => new Date());
   const [bulkBranch, setBulkBranch] = useState('Seri Kembangan');
   const [bulkTime, setBulkTime] = useState('9am-5pm');
 
@@ -52,20 +53,49 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
 
   const handleAddBulkDate = () => {
     setNotification(null);
-    if (!dateInput) return;
-    if (bulkDates.includes(dateInput)) {
-      setNotification({ type: 'error', text: '⚠️ Tarikh ini sudah ada dalam senarai.' });
+    if (pendingDates.length === 0) {
+      setNotification({ type: 'error', text: '⚠️ Sila pilih sekurang-kurangnya satu tarikh.' });
       return;
     }
-    setBulkDates(prev => [...prev, dateInput].sort());
-    setDateInput('');
+    setBulkDates(prev => Array.from(new Set([...prev, ...pendingDates])).sort());
+    setPendingDates([]);
   };
 
   const handleResetBulk = () => {
     setNotification(null);
     setBulkDates([]);
+    setPendingDates([]);
     setBulkBranch('Seri Kembangan');
     setBulkTime('9am-5pm');
+  };
+
+  const formatPickerDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const pickerDaysInMonth = new Date(
+    pickerMonth.getFullYear(),
+    pickerMonth.getMonth() + 1,
+    0,
+  ).getDate();
+  const pickerStartDay = new Date(
+    pickerMonth.getFullYear(),
+    pickerMonth.getMonth(),
+    1,
+  ).getDay();
+  const pickerMonthLabel = pickerMonth.toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const togglePendingDate = (date: Date) => {
+    const value = formatPickerDate(date);
+    setPendingDates(prev =>
+      prev.includes(value) ? prev.filter(item => item !== value) : [...prev, value].sort(),
+    );
   };
 
   const handleCreateBulkShift = async (e: React.FormEvent | React.MouseEvent) => {
@@ -90,6 +120,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         text: response || "✅ Berjaya! Slot jadual baharu telah diterbitkan." 
       });
       setBulkDates([]);
+      setPendingDates([]);
     } catch (err: any) {
       setNotification({ 
         type: 'error', 
@@ -288,22 +319,65 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
             <label className="text-xs font-bold text-slate-500 tracking-wider uppercase block">
               Choose Dates
             </label>
-            <div className="flex gap-1.5">
-              <input
-                type="date"
-                value={dateInput}
-                onChange={e => setDateInput(e.target.value)}
-                className="flex-1 bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={handleAddBulkDate}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-3 rounded-xl transition flex items-center gap-1 shrink-0 cursor-pointer shadow-sm"
-              >
-                <Plus className="w-4 h-4" />
-                Add Date
-              </button>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setPickerMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-slate-700"
+                  aria-label="Previous month"
+                >
+                  ‹
+                </button>
+                <span className="text-xs font-bold text-slate-700">{pickerMonthLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => setPickerMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white hover:text-slate-700"
+                  aria-label="Next month"
+                >
+                  ›
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                  <span key={`${day}-${index}`} className="py-1 text-[9px] font-bold text-slate-400">{day}</span>
+                ))}
+                {Array.from({ length: pickerStartDay }).map((_, index) => (
+                  <span key={`empty-${index}`} />
+                ))}
+                {Array.from({ length: pickerDaysInMonth }, (_, index) => {
+                  const date = new Date(pickerMonth.getFullYear(), pickerMonth.getMonth(), index + 1);
+                  const dateValue = formatPickerDate(date);
+                  const isPending = pendingDates.includes(dateValue);
+                  const isAdded = bulkDates.includes(dateValue);
+                  return (
+                    <button
+                      key={dateValue}
+                      type="button"
+                      onClick={() => togglePendingDate(date)}
+                      className={`rounded-lg py-1.5 text-[10px] font-bold transition ${
+                        isPending
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : isAdded
+                            ? 'bg-sky-100 text-sky-700 ring-1 ring-sky-200'
+                            : 'text-slate-600 hover:bg-white hover:text-indigo-700'
+                      }`}
+                    >
+                      {index + 1}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={handleAddBulkDate}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-3 rounded-xl transition flex items-center justify-center gap-1 cursor-pointer shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add Dates ({pendingDates.length})
+            </button>
 
             {/* Display queued dates tags drawer */}
             <div className="flex flex-wrap gap-1.5 pt-2">

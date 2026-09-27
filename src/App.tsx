@@ -15,6 +15,7 @@ import { DoctorStatusTab } from "./components/DoctorStatusTab";
 import { DoctorProfileTab } from "./components/DoctorProfileTab";
 import { DoctorFeedbackView } from "./components/DoctorFeedbackView";
 import { DoctorNotificationsTab } from "./components/DoctorNotificationsTab";
+import { DoctorOverviewTab } from "./components/DoctorOverviewTab";
 import { PediatricCalculator } from "./components/PediatricCalculator";
 import { AdminDashTab } from "./components/AdminDashTab";
 import { AdminScheduleTab } from "./components/AdminScheduleTab";
@@ -92,6 +93,19 @@ function doctorNamesMatch(a: string, b: string): boolean {
   return shortWords.every((w) => longWords.includes(w));
 }
 
+const HADITH_QUOTES = [
+  "Behind every diagnosis is a person who wants to be heard.",
+  "A good consultation can change more than a prescription.",
+  "Making a difference, one patient at a time.",
+  "Every patient is an opportunity to make a difference.",
+  "Care with purpose. Practice with compassion.",
+  "Better care starts with every consultation.",
+  "Small moments of care can make a lasting difference.",
+  "Every consultation matters. Every patient matters.",
+  "Here to care. Here to make a difference.",
+  "Another day to make someone feel better.",
+];
+
 export default function App() {
   // Public pre-shift declaration form — reached by scanning the static
   // per-branch QR code at the clinic counter. Deliberately checked here,
@@ -163,9 +177,12 @@ export default function App() {
     pullFromSupabase,
     pushToSupabase,
   } = useAppState();
+  const [dailyQuote] = useState(
+    () => HADITH_QUOTES[Math.floor(Math.random() * HADITH_QUOTES.length)],
+  );
 
   // Navigation states
-  const [activeTab, setActiveTab] = useState<string>("booking");
+  const [activeTab, setActiveTab] = useState<string>("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cloudSyncTab, setCloudSyncTab] = useState<"sheets" | "supabase">(
     "supabase",
@@ -203,7 +220,7 @@ export default function App() {
       } else if (state.currentUser.role === "Staff") {
         setActiveTab("admin-cal");
       } else {
-        setActiveTab("booking");
+        setActiveTab("overview");
       }
     }
   }, [state.currentUser?.phone, state.currentUser?.role]);
@@ -550,13 +567,18 @@ export default function App() {
 
   const DOCTOR_TABS = [
     {
+      id: "overview",
+      label: "Overview",
+      icon: <Activity className="w-4 h-4" />,
+    },
+    {
       id: "booking",
       label: "Book Slot",
       icon: <CalendarDays className="w-4 h-4" />,
     },
     {
       id: "status",
-      label: "MyStatus",
+      label: "My Shifts",
       icon: <ClipboardList className="w-4 h-4" />,
     },
     {
@@ -566,7 +588,7 @@ export default function App() {
     },
     {
       id: "announcements",
-      label: "Noticeboard",
+      label: "Medical Toolkits",
       icon: <Bell className="w-4 h-4 text-sky-400" />,
     },
     {
@@ -623,9 +645,9 @@ export default function App() {
       icon: <Users className="w-4 h-4" />,
     },
     {
-      id: "peds-calc",
-      label: "Dosage calculator",
-      icon: <Calculator className="w-4 h-4" />,
+      id: "announcements",
+      label: "Medical Toolkits",
+      icon: <BookOpen className="w-4 h-4 text-sky-400" />,
     },
   ];
 
@@ -839,10 +861,10 @@ export default function App() {
             className="flex-1 flex flex-col md:flex-row relative"
           >
             {/* Desktop Left Sidebar */}
-            <aside className="hidden md:flex flex-col w-64 bg-white text-slate-700 border-r border-slate-200 shrink-0 p-5 space-y-6">
-              <div className="flex items-center gap-3 pb-5 border-b border-slate-100">
+            <aside className="hidden md:flex flex-col w-64 bg-[#082f49] text-slate-200 border-r border-[#0b4569] shrink-0 p-5 space-y-6">
+              <div className="flex items-center gap-3 pb-5 border-b border-white/10">
                 <img src="/logo.png" alt="Klinik ARA 24 Jam" className="w-8 h-8 object-contain" />
-                <span className="font-display font-bold text-slate-900 tracking-tight text-sm">
+                <span className="font-display font-bold text-white tracking-tight text-sm">
                   ARA LOCUM HUB
                 </span>
               </div>
@@ -866,10 +888,10 @@ export default function App() {
                         isCur
                           ? showRedBadge
                             ? "bg-rose-50 text-rose-700 shadow-sm border border-rose-100"
-                            : "bg-indigo-50 text-indigo-700 shadow-sm"
+                            : "bg-white text-[#082f49] shadow-sm"
                           : showRedBadge
                             ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 hover:text-rose-700 border border-rose-200/50"
-                            : "hover:bg-slate-50 text-slate-600 hover:text-slate-900"
+                            : "hover:bg-white/10 text-slate-300 hover:text-white"
                       }`}
                     >
                       <div className="flex items-center gap-3 font-sans">
@@ -881,7 +903,7 @@ export default function App() {
                                 : "text-indigo-600"
                               : showRedBadge
                                 ? "text-rose-500"
-                                : "text-slate-400"
+                              : "text-slate-400"
                           }`}
                         >
                           {tab.icon}
@@ -901,7 +923,7 @@ export default function App() {
                             ? showRedBadge
                               ? "translate-x-0.5 text-rose-500"
                               : "translate-x-0.5 text-indigo-500"
-                            : "text-slate-300"
+                            : "text-slate-500"
                         }`}
                       />
                     </button>
@@ -910,32 +932,24 @@ export default function App() {
               </div>
 
               {/* User profile brief card */}
-              <div className="p-3 bg-slate-50/50 rounded-xl border border-slate-100/80 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center font-bold text-xs text-indigo-700 font-display shrink-0">
+              <div className="p-3 bg-white/10 rounded-xl border border-white/10 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-sky-400/20 border border-sky-300/30 flex items-center justify-center font-bold text-xs text-sky-100 font-display shrink-0">
                   {state.currentUser.role === "Admin" ? "HQ" : state.currentUser.role === "Staff" ? "CA" : "DR"}
                 </div>
                 <div className="truncate flex-1">
-                  <p className="text-[11px] font-bold text-slate-800 truncate">
+                  <p className="text-[11px] font-bold text-white truncate">
                     {state.currentUser.role === "Admin"
                       ? "Operations Admin"
                       : state.currentUser.role === "Staff"
                         ? "CA ARA"
                         : `Dr. ${state.currentUser.name}`}
                   </p>
-                  <p className="text-[9px] text-[#4f46e5]/80 font-semibold tracking-wider uppercase">
+                  <p className="text-[9px] text-sky-200/80 font-semibold tracking-wider uppercase">
                     {state.currentUser.role}
                   </p>
                 </div>
               </div>
 
-              {/* Desktop signout */}
-              <button
-                onClick={logout}
-                className="w-full flex items-center justify-center gap-2.5 text-xs font-bold text-rose-600 hover:text-white hover:bg-rose-600 py-2.5 px-2 rounded-xl transition border border-rose-200"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out Account</span>
-              </button>
             </aside>
 
             {/* Mobile Actions Topbar Header */}
@@ -975,13 +989,29 @@ export default function App() {
 
             {/* Content main stage container */}
             <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6 overflow-y-auto pb-24 md:pb-8">
+              <div className="hidden md:flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="flex items-center gap-1.5 rounded-2xl border border-rose-100 bg-white px-3 py-2.5 text-[11px] font-semibold text-rose-600 shadow-sm transition hover:border-rose-200 hover:bg-rose-50"
+                  aria-label="Sign out"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span>Sign out</span>
+                </button>
+              </div>
+              {import.meta.env.DEV && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] font-semibold text-amber-800">
+                  Local preview mode — live data is view-only. Booking, edits and uploads are disabled.
+                </div>
+              )}
               {/* User Dynamic Greeting Banner */}
-              <div className="flex justify-between items-center bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex-col xs:flex-row gap-3">
-                <div className="space-y-0.5 text-center xs:text-left">
-                  <span className="text-[10px] font-black text-indigo-600 block tracking-widest uppercase">
+              <div className="flex flex-col items-start gap-5 rounded-[28px] bg-white px-6 py-7 shadow-[0_8px_30px_rgba(15,23,42,0.04)] ring-1 ring-slate-200/70 sm:flex-row sm:justify-between sm:px-8 sm:py-8">
+                <div className="min-w-0 space-y-1 text-left">
+                  <span className="block text-[11px] font-semibold tracking-[0.16em] text-slate-400 uppercase">
                     Klinik ARA 24 Jam
                   </span>
-                  <h3 className="font-display text-lg font-bold text-slate-900 tracking-tight">
+                  <h3 className="font-display text-2xl font-semibold tracking-[-0.045em] text-slate-950 sm:text-3xl">
                     Welcome,{" "}
                     {state.currentUser.role === "Admin"
                       ? "HQ Operations Office"
@@ -989,21 +1019,28 @@ export default function App() {
                         ? "CA ARA"
                         : `Dr. ${state.currentUser.name}`}
                   </h3>
-                  <p className="text-xs text-slate-500 font-sans">
+                  <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-500">
                     {state.currentUser.role === "Admin"
                       ? "Roster database and clinical slots synchronized safely."
                       : "Thank you for being part of Klinik ARA 24 Jam."}
                   </p>
                 </div>
 
-                <div className="flex flex-col items-end gap-1.5">
-                  <span className="text-[10px] text-slate-500 font-bold font-mono uppercase">
+                <div className="flex w-full shrink-0 flex-col items-start gap-3 sm:w-auto sm:max-w-none sm:items-end">
+                  <span className="rounded-full bg-slate-50 px-3.5 py-2 text-[11px] font-medium text-slate-500 ring-1 ring-slate-200/70">
                     {new Date().toLocaleDateString("en-GB", {
                       weekday: "long",
                       day: "2-digit",
                       month: "short",
                     })}
                   </span>
+                  <div className="border-l-2 border-indigo-100 pl-3 text-left sm:border-l-0 sm:border-r-2 sm:pr-3 sm:text-right">
+                    <div>
+                      <p className="whitespace-normal text-[11px] italic leading-relaxed text-slate-500 sm:whitespace-nowrap">
+                        “{dailyQuote}”
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1017,6 +1054,15 @@ export default function App() {
                   transition={{ duration: 0.3 }}
                 >
                   {/* --- DOCTOR PORTALS --- */}
+                  {activeTab === "overview" && activeRole === "Doctor" && state.currentUser && (
+                    <DoctorOverviewTab
+                      slots={state.slots}
+                      currentUser={state.currentUser}
+                      notifications={state.notifications}
+                      onNavigate={setActiveTab}
+                    />
+                  )}
+
                   {activeTab === "booking" && activeRole === "Doctor" && (
                     <DoctorBookingTab
                       slots={state.slots}
@@ -1037,112 +1083,89 @@ export default function App() {
                   {activeTab === "notifications" && activeRole === "Doctor" && state.currentUser && (
                     <DoctorNotificationsTab
                       notifications={state.notifications}
+                      announcements={state.announcements}
                       currentUser={state.currentUser}
                       onDeleteNotification={deleteNotification}
                       onMarkRead={markNotificationsAsRead}
                     />
                   )}
 
-                  {activeTab === "announcements" && activeRole === "Doctor" && (
+                  {activeTab === "announcements" && (activeRole === "Doctor" || activeRole === "Admin") && (
                     <div className="space-y-6">
-                      <div className="rounded-3xl border border-slate-100 bg-[#001F3F] p-4 text-white space-y-1">
-                        <span className="text-[9px] font-bold tracking-widest text-[#007AFF] uppercase block">
-                          Operations desk
-                        </span>
-                        <h4 className="font-display font-medium text-sm sm:text-base">
-                          Medical Toolkits
-                        </h4>
+                      <div className="relative overflow-hidden rounded-[28px] bg-[#082f49] p-6 text-white shadow-[0_12px_32px_rgba(8,47,73,0.18)]">
+                        <div className="absolute -right-10 -top-12 h-36 w-36 rounded-full bg-sky-300/10 blur-2xl" />
+                        <div className="relative flex items-start justify-between gap-4">
+                          <div>
+                            <span className="text-[10px] font-bold tracking-[0.2em] text-sky-300 uppercase block">
+                              Clinical reference desk
+                            </span>
+                            <h4 className="mt-1 font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+                              Medical Toolkits
+                            </h4>
+                            <p className="mt-2 max-w-xl text-xs leading-relaxed text-slate-300 sm:text-sm">
+                              Quick access to helpful resources when you need them most.
+                            </p>
+                          </div>
+                          <div className="hidden rounded-2xl border border-white/10 bg-white/10 p-3 sm:block">
+                            <BookOpen className="h-6 w-6 text-sky-200" />
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Scientific tools links grid matching specs strictly */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <a
                           href="https://sites.google.com/moh.gov.my/nag/contents/section-c-clinical-pathways-in-primary-care?authuser=0"
                           target="_blank"
                           rel="noopener"
-                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between"
+                          className="group flex min-h-[112px] flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-4 text-xs font-semibold text-slate-700 shadow-[0_4px_18px_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
                         >
-                          <span>
-                            📁 National Antibiotic Guidelines (NAG) 2024
-                          </span>
-                          <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="mb-4 flex items-center justify-between text-sky-600"><BookOpen className="h-5 w-5" /><ExternalLink className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-sky-500" /></span>
+                          <span>National Antibiotic Guidelines (NAG) 2024</span>
                         </a>
                         <a
                           href="https://www.acadmed.org.my/index.cfm?&menuid=67"
                           target="_blank"
                           rel="noopener"
-                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between"
+                          className="group flex min-h-[112px] flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-4 text-xs font-semibold text-slate-700 shadow-[0_4px_18px_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
                         >
-                          <span>
-                            📁 Malaysia Clinical Practice Guidelines (CPG)
-                          </span>
-                          <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="mb-4 flex items-center justify-between text-indigo-500"><FileText className="h-5 w-5" /><ExternalLink className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-indigo-500" /></span>
+                          <span>Malaysia Clinical Practice Guidelines (CPG)</span>
                         </a>
                         <a
                           href="https://www.mdcalc.com/"
                           target="_blank"
                           rel="noopener"
-                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between"
+                          className="group flex min-h-[112px] flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-4 text-xs font-semibold text-slate-700 shadow-[0_4px_18px_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
                         >
-                          <span>📁 MDCalc Medical calculators</span>
-                          <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="mb-4 flex items-center justify-between text-emerald-500"><Calculator className="h-5 w-5" /><ExternalLink className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-emerald-500" /></span>
+                          <span>MDCalc Medical Calculators</span>
                         </a>
                         <a
                           href="https://drive.google.com/file/d/1GQnsrxuF-lbyFJ5U28ZGpfjJgp5fD5Rh/view?usp=sharing"
                           target="_blank"
                           rel="noopener"
-                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between"
+                          className="group flex min-h-[112px] flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-4 text-xs font-semibold text-slate-700 shadow-[0_4px_18px_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
                         >
-                          <span>📁 PLATO Guide for Doctors</span>
-                          <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="mb-4 flex items-center justify-between text-violet-500"><HelpCircle className="h-5 w-5" /><ExternalLink className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-violet-500" /></span>
+                          <span>PLATO Guide for Doctors</span>
                         </a>
                         <a
                           href="https://mpaeds.my/wp-content/uploads/2026/03/Paediatric-Protocols-for-Malaysia-Hospital-1.pdf"
                           target="_blank"
                           rel="noopener"
-                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between"
+                          className="group flex min-h-[112px] flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-4 text-xs font-semibold text-slate-700 shadow-[0_4px_18px_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
                         >
-                          <span>📁 Paediatric Protocols for Malaysia Hospitals</span>
-                          <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="mb-4 flex items-center justify-between text-rose-500"><Heart className="h-5 w-5" /><ExternalLink className="h-3.5 w-3.5 text-slate-300 transition group-hover:text-rose-500" /></span>
+                          <span>Paediatric Protocols for Malaysia Hospitals</span>
                         </a>
                         <button
                           type="button"
                           onClick={() => setActiveTab("peds-calc")}
-                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between cursor-pointer"
+                          className="group flex min-h-[112px] cursor-pointer flex-col justify-between rounded-2xl border border-slate-200/80 bg-white p-4 text-xs font-semibold text-slate-700 shadow-[0_4px_18px_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
                         >
-                          <span>🧮 Paeds Calculator</span>
-                          <Calculator className="w-3.5 h-3.5 text-slate-300" />
+                          <span className="mb-4 flex items-center justify-between text-amber-500"><Calculator className="h-5 w-5" /><ChevronRight className="h-4 w-4 text-slate-300 transition group-hover:text-amber-500" /></span>
+                          <span>Paeds Calculator</span>
                         </button>
-                      </div>
-
-                      <div className="rounded-3xl bg-white border border-slate-150 p-6 space-y-4">
-                        <h5 className="font-display font-bold text-slate-800 tracking-tight flex items-center gap-1.5 text-sm uppercase">
-                          <Bell className="w-4 h-4 text-sky-600" />
-                          Pinboard Announcements
-                        </h5>
-
-                        {state.announcements.length === 0 ? (
-                          <p className="text-xs text-slate-400 italic">
-                            No news published at this moment.
-                          </p>
-                        ) : (
-                          <div className="space-y-3">
-                            {state.announcements.map((ann) => (
-                              <div
-                                key={ann.id}
-                                className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-1 relative pl-6"
-                              >
-                                <div className="absolute top-4 left-2 w-1.5 h-1.5 rounded-full bg-[#001F3F]" />
-                                <span className="text-[10px] text-slate-400 font-bold block">
-                                  {ann.date}
-                                </span>
-                                <p className="text-xs sm:text-sm text-slate-700 font-sans leading-relaxed whitespace-pre-line">
-                                  {ann.text}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     </div>
                   )}
@@ -2824,7 +2847,7 @@ export default function App() {
                             .replace("booking", "Book")
                             .replace("status", "Status")
                             .replace("peds-calc", "Calc")
-                            .replace("announcements", "Notice")
+                            .replace("announcements", "Tools")
                             .replace("fb", "Review")}
                     </span>
                   </button>

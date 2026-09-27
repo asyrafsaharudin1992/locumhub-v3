@@ -140,6 +140,9 @@ function getBadgeCountForMonth(
 }
 
 export function useAppState() {
+  // Localhost may read live Supabase data for realistic previews, but demo
+  // actions stay local so UI flows can be tested without touching production.
+  const localDemoMode = import.meta.env.DEV;
   const [state, setState] = useState<AppState>(() => {
     // Attempt to load from localStorage
     const savedUsers = localStorage.getItem("ara_users");
@@ -796,6 +799,25 @@ export function useAppState() {
     role?: string,
     verifiedUser?: any,
   ): Promise<{ success: boolean; message: string; user: UserProfile | null }> => {
+    // Local preview accounts only. This branch is never used by production
+    // because Vite sets import.meta.env.DEV to false in production builds.
+    if (import.meta.env.DEV && passwordInput === "dev") {
+      const cleanPhone = phone.trim();
+      const localUsers: Record<string, UserProfile> = {
+        admin: { phone: "0182194256", password: "", name: "Dev Admin (Klinik ARA)", role: "Admin", email: "admin@araclinic.com", mmc: "", apc: "", indemnity: "Tiada", workplace: "Klinik ARA 24 Jam", points: 1000, badges: "", locks: "" },
+        "0182194256": { phone: "0182194256", password: "", name: "Dev Admin (Klinik ARA)", role: "Admin", email: "admin@araclinic.com", mmc: "", apc: "", indemnity: "Tiada", workplace: "Klinik ARA 24 Jam", points: 1000, badges: "", locks: "" },
+        doctor: { phone: "0198765432", password: "", name: "Dr. Dev Locum", role: "Doctor", email: "doctor@araclinic.com", mmc: "12345", apc: "2026/12345", indemnity: "Ada", workplace: "Klinik ARA 24 Jam", points: 150, badges: "", locks: "" },
+        "0198765432": { phone: "0198765432", password: "", name: "Dr. Dev Locum", role: "Doctor", email: "doctor@araclinic.com", mmc: "12345", apc: "2026/12345", indemnity: "Ada", workplace: "Klinik ARA 24 Jam", points: 150, badges: "", locks: "" },
+        staff: { phone: "0112233445", password: "", name: "Dev Staff", role: "Staff", email: "staff@araclinic.com", mmc: "", apc: "", indemnity: "Tiada", workplace: "Klinik ARA 24 Jam", points: 0, badges: "", locks: "" },
+        "0112233445": { phone: "0112233445", password: "", name: "Dev Staff", role: "Staff", email: "staff@araclinic.com", mmc: "", apc: "", indemnity: "Tiada", workplace: "Klinik ARA 24 Jam", points: 0, badges: "", locks: "" },
+      };
+      const localUser = localUsers[cleanPhone];
+      if (localUser) {
+        setState((prev) => ({ ...prev, currentUser: localUser }));
+        return { success: true, message: "Local dev login successful", user: localUser };
+      }
+    }
+
     // Staff Quick Access is already verified server-side by verify_staff_key.
     // Keep this restricted view-only path independent of Auth users created
     // for phone/MMC login, so legacy staff accounts continue to work.
@@ -992,6 +1014,7 @@ export function useAppState() {
     phone: string,
     newPass: string,
   ): Promise<string> => {
+    if (localDemoMode) return "ℹ️ Local demo mode: password changes are disabled.";
     const trimmedPassword = newPass.trim();
     const targetPhone = phone.trim();
 
@@ -1029,6 +1052,7 @@ export function useAppState() {
   };
 
   const deleteUser = async (phone: string): Promise<string> => {
+    if (localDemoMode) return "ℹ️ Local demo mode: deleting users is disabled.";
     let result: { success: boolean; error?: string };
     try {
       await disableAuthUser(phone);
@@ -1061,6 +1085,7 @@ export function useAppState() {
     indemnityFile: string,
     workplace: string,
   ): string => {
+    if (localDemoMode) return "ℹ️ Local demo mode: profile changes are disabled.";
     const buildIndemnityString = (previousIndemnity: string): string => {
       if (indStatus !== "Ada") return "Tiada";
       if (indemnityFile) return `Ada | ${indemnityFile}`;
@@ -1125,6 +1150,9 @@ export function useAppState() {
     phone: string,
     kind: "apc" | "indemnity" | "mmc",
   ): Promise<{ url: string | null; error?: string }> => {
+    if (localDemoMode) {
+      return { url: null, error: "Local demo mode: file uploads are disabled." };
+    }
     // Google Drive's service-account upload path hit a hard wall (service
     // accounts have zero storage quota, and this Drive isn't a Shared
     // Drive), so new uploads go to Supabase Storage instead. Viewing files
@@ -1137,6 +1165,7 @@ export function useAppState() {
     doctorName: string,
     doctorPhone: string,
   ): Promise<string> => {
+    if (localDemoMode) return "ℹ️ Local demo mode: booking is disabled to protect live data.";
     // Refresh immediately before booking. The 45-second poll and browser
     // focus refresh improve freshness, but a booking action needs the latest
     // database state because another device may have just claimed the slot.
@@ -1257,6 +1286,7 @@ export function useAppState() {
   };
 
   const dismissAdminAlert = (id: string) => {
+    if (localDemoMode) return;
     setState((prev) => ({
       ...prev,
       adminAlerts: (prev.adminAlerts || []).filter((a) => a.id !== id),
@@ -1271,6 +1301,7 @@ export function useAppState() {
     statusAsal: string,
     doctorPhone: string,
   ): Promise<string> => {
+    if (localDemoMode) return "ℹ️ Local demo mode: cancellations are disabled.";
     let resultMessage = "Error: Slot cancellation failed.";
 
     const slot = state.slots.find((s) => s.id === slotId);
@@ -1378,6 +1409,15 @@ export function useAppState() {
   };
 
   const deleteNotification = (id: string) => {
+    if (localDemoMode) {
+      // Local preview only: remove it from the in-memory preview state,
+      // without touching Supabase or any live notification data.
+      setState((prev) => ({
+        ...prev,
+        notifications: (prev.notifications || []).filter((n) => n.id !== id),
+      }));
+      return;
+    }
     setState((prev) => {
       const updated = (prev.notifications || []).filter((n) => n.id !== id);
       return { ...prev, notifications: updated };
@@ -1389,6 +1429,7 @@ export function useAppState() {
   };
 
   const adminApproveSlot = async (id: string): Promise<string> => {
+    if (localDemoMode) return "ℹ️ Local demo mode: slot approvals are disabled.";
     // Refresh from Supabase first — acting on a possibly-stale in-memory
     // state.slots snapshot was causing genuine pending bookings to
     // incorrectly report as gone/not-found, only for them to reappear
@@ -1735,6 +1776,13 @@ export function useAppState() {
       slots: [...prev.slots, ...newSlots],
     }));
 
+    if (localDemoMode) {
+      logActivity(
+        `ADMIN: Local demo bulk created ${dates.length} slots for branch ${branch}`,
+      );
+      return `✅ Demo: berjaya tambah ${dates.length} slot secara local.`;
+    }
+
     // Do not report success until every new slot has reached Supabase. This
     // prevents an activity log entry from implying that a slot was published
     // when an Auth/RLS policy blocked the actual slot write.
@@ -1747,6 +1795,7 @@ export function useAppState() {
   };
 
   const publishAnnouncement = (text: string): string => {
+    if (localDemoMode) return "ℹ️ Local demo mode: publishing announcements is disabled.";
     const id = "ann-" + Date.now();
     const date = new Date().toLocaleDateString("en-GB");
     setState((prev) => ({
