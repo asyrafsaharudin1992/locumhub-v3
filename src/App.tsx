@@ -1113,6 +1113,15 @@ export default function App() {
                 </div>
               </div>
 
+              <button
+                type="button"
+                onClick={logout}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold text-rose-300 transition hover:bg-rose-500/10 hover:text-rose-200"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
+              </button>
+
             </aside>
 
             {/* Mobile Actions Topbar Header */}
@@ -1154,17 +1163,6 @@ export default function App() {
 
             {/* Content main stage container */}
             <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6 overflow-y-auto pb-24 md:pb-8">
-              <div className="hidden md:flex items-center justify-end">
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="flex items-center gap-1.5 rounded-2xl border border-rose-100 bg-white px-3 py-2.5 text-[11px] font-semibold text-rose-600 shadow-sm transition hover:border-rose-200 hover:bg-rose-50"
-                  aria-label="Sign out"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  <span>Sign out</span>
-                </button>
-              </div>
               {import.meta.env.DEV && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] font-semibold text-amber-800">
                   Local preview mode — live data is view-only. Booking, edits and uploads are disabled.

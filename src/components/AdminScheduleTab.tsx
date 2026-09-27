@@ -416,7 +416,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
               <select
                 value={bulkBranch}
                 onChange={e => setBulkBranch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+                className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#0d5078] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
               >
                 <option value="Seri Kembangan">Seri Kembangan</option>
                 <option value="Kajang">Kajang</option>
