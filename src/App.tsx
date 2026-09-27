@@ -1050,7 +1050,7 @@ export default function App() {
                           Operations desk
                         </span>
                         <h4 className="font-display font-medium text-sm sm:text-base">
-                          Malaysian Medical Toolkits
+                          Medical Toolkits
                         </h4>
                       </div>
 
@@ -1085,6 +1085,24 @@ export default function App() {
                           className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between"
                         >
                           <span>📁 MDCalc Medical calculators</span>
+                          <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                        </a>
+                        <a
+                          href="https://drive.google.com/file/d/1GQnsrxuF-lbyFJ5U28ZGpfjJgp5fD5Rh/view?usp=sharing"
+                          target="_blank"
+                          rel="noopener"
+                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between"
+                        >
+                          <span>📁 PLATO Guide for Doctors</span>
+                          <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
+                        </a>
+                        <a
+                          href="https://mpaeds.my/wp-content/uploads/2026/03/Paediatric-Protocols-for-Malaysia-Hospital-1.pdf"
+                          target="_blank"
+                          rel="noopener"
+                          className="bg-white rounded-2xl border border-slate-100 p-4 font-semibold text-slate-700 hover:text-[#001F3F] text-xs transition flex items-center justify-between"
+                        >
+                          <span>📁 Paediatric Protocols for Malaysia Hospitals</span>
                           <ExternalLink className="w-3.5 h-3.5 text-slate-300" />
                         </a>
                         <button
