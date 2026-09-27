@@ -22,8 +22,17 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [profileWarning, setProfileWarning] = useState(false);
 
-  // Verify the doc's profile checklist (The 3 Pillars verification)
-  const isProfileComplete = currentUser.apc && currentUser.apc.length > 2;
+  // APC remains the only booking gate. Other missing profile details are
+  // shown as a reminder so a doctor can still log in and view the schedule.
+  const hasApc = Boolean(currentUser.apc && currentUser.apc.trim().length > 2);
+  const isSyntheticAuthEmail = currentUser.email.endsWith('@auth.aralocum.local');
+  const missingProfileFields = [
+    (!currentUser.email.trim() || isSyntheticAuthEmail) ? 'profile email' : '',
+    !currentUser.mmc.trim() ? 'MMC number' : '',
+    !currentUser.workplace.trim() ? 'workplace' : '',
+    !hasApc ? 'APC certificate' : '',
+  ].filter(Boolean) as string[];
+  const isProfileComplete = hasApc;
 
   // Doctors should only ever see genuinely open/unbooked slots on this tab
   const availableSlots = slots.filter((s) => s.status === 'Available');
@@ -56,13 +65,16 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Profile check banner */}
-      {!isProfileComplete && currentUser.role === 'Doctor' && (
-        <div className="rounded-xl bg-rose-50 border border-rose-100 p-4 text-rose-800 flex items-start gap-3 shadow-sm">
-          <AlertTriangle className="w-5 h-5 text-rose-500 flex-shrink-0 mt-0.5" />
+      {currentUser.role === 'Doctor' && missingProfileFields.length > 0 && (
+        <div className={`rounded-xl border p-4 flex items-start gap-3 shadow-sm ${
+          !hasApc ? 'bg-rose-50 border-rose-100 text-rose-800' : 'bg-amber-50 border-amber-100 text-amber-800'
+        }`}>
+          <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${!hasApc ? 'text-rose-500' : 'text-amber-500'}`} />
           <div className="space-y-1 font-sans">
-            <h6 className="text-xs font-bold uppercase tracking-wider">Credential Checklist Pending</h6>
-            <p className="text-xs text-rose-600 leading-normal">
-              Locum booking privileges are locked. Please complete your APC certificate upload under the <strong>My Profile</strong> tab first.
+            <h6 className="text-xs font-bold uppercase tracking-wider">Profile details to complete</h6>
+            <p className={`text-xs leading-normal ${!hasApc ? 'text-rose-600' : 'text-amber-700'}`}>
+              Please update: <strong>{missingProfileFields.join(', ')}</strong> under <strong>My Profile</strong>.
+              {!hasApc && <> Booking clinical shifts remains locked until your APC certificate is uploaded.</>}
             </p>
           </div>
         </div>
