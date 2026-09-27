@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAppState } from "./useAppState";
 import { Announcement, NewApplication, LocumSurveyEntry, StaffFeedbackEntry, FeedbackRecord } from "./types";
@@ -280,8 +280,17 @@ export default function App() {
     }
   }, [state.currentUser?.phone, state.currentUser?.role]);
 
-  useEffect(() => {
-    mainContentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  useLayoutEffect(() => {
+    const resetScroll = () => {
+      if (mainContentRef.current) {
+        mainContentRef.current.scrollTop = 0;
+        mainContentRef.current.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    };
+
+    resetScroll();
+    requestAnimationFrame(resetScroll);
   }, [activeTab]);
 
   useEffect(() => {
