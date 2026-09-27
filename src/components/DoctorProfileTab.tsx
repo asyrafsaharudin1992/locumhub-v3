@@ -101,8 +101,10 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
         namePart = trimmed.substring(0, lastColon).trim();
         count = parseInt(trimmed.substring(lastColon + 1).trim()) || 1;
       }
-      const cleanName = namePart.split('(')[0].trim();
-      badgeMap[cleanName] = Math.max(badgeMap[cleanName] || 0, count);
+      // badges are stored one row per month; the profile card must show the
+      // all-time total, not the largest single month's count.
+      const cleanName = namePart.split('(')[0].trim().replace('Saviour', 'Savior');
+      badgeMap[cleanName] = (badgeMap[cleanName] || 0) + count;
     });
   }
 

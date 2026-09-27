@@ -116,7 +116,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       }
       const monthMatch = namePart.match(/\(([^)]+)\)\s*$/);
       const monthLabel = monthMatch ? monthMatch[1] : '';
-      const cleanName = namePart.split('(')[0].trim();
+      const cleanName = namePart.split('(')[0].trim().replace('Saviour', 'Savior');
       cumulativeBadgeMap[cleanName] = (cumulativeBadgeMap[cleanName] || 0) + count;
       if (!monthlyBreakdown[cleanName]) monthlyBreakdown[cleanName] = [];
       if (monthLabel) monthlyBreakdown[cleanName].push({ month: monthLabel, count });
