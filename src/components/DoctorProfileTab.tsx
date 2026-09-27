@@ -216,7 +216,7 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Premium dark Aracoins card wallet */}
-      <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-[#011428] to-black border-2 border-[#D4AF37]/30 p-6 text-white shadow-xl relative overflow-hidden">
+      <div className="rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] border border-sky-300/20 p-6 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-6 -mt-6 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl" />
         <div className="flex justify-between items-start">
           <div className="space-y-1">

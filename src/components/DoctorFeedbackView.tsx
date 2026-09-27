@@ -95,7 +95,7 @@ export const DoctorFeedbackView: React.FC<DoctorFeedbackViewProps> = ({ feedback
   return (
     <div className="space-y-4">
       {/* Dynamic Summary banner */}
-      <div className="rounded-3xl bg-gradient-to-br from-indigo-900 to-[#001F3F] p-5 text-white shadow-sm flex items-center justify-between">
+      <div className="rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] flex items-center justify-between">
         <div className="space-y-1">
           <span className="text-[10px] tracking-widest text-sky-300 font-bold uppercase block">
             CONFIDENTIAL EVALUATIONS

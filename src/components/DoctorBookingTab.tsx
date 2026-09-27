@@ -86,11 +86,11 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] lg:flex-row lg:items-end lg:justify-between sm:p-6">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600">Clinical scheduling</p>
-          <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Book a Shift</h2>
-          <p className="mt-1 text-sm text-slate-500">Find and request available locum slots.</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-sky-300">Clinical scheduling</p>
+          <h2 className="mt-1 font-display text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Book a Shift</h2>
+          <p className="mt-1 text-sm text-slate-300">Find and request available locum slots.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5">
           <div className="min-w-[86px] rounded-[20px] border border-slate-200/80 bg-white px-3.5 py-3 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
@@ -156,8 +156,8 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
             onClick={() => setSelectedBranch(branch)}
             className={`text-xs font-bold px-3.5 py-1.5 rounded-lg transition cursor-pointer ${
               selectedBranch === branch
-                ? 'bg-indigo-600 text-white shadow-sm'
-                : 'text-slate-600 hover:text-indigo-900'
+                ? 'bg-[#082f49] text-white shadow-sm'
+                : 'text-slate-600 hover:text-[#082f49]'
             }`}
           >
             {branch === 'All' ? 'All Clinics' : branch === 'Seri Kembangan' ? 'SK Branch' : 'Kajang Branch'}

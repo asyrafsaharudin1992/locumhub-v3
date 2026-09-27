@@ -106,6 +106,59 @@ const HADITH_QUOTES = [
   "Another day to make someone feel better.",
 ];
 
+const DOCTOR_TAB_META: Record<string, { eyebrow: string; title: string; description: string }> = {
+  booking: {
+    eyebrow: "Clinical scheduling",
+    title: "Book a Shift",
+    description: "Find and request available locum slots.",
+  },
+  status: {
+    eyebrow: "Your schedule",
+    title: "My Shifts",
+    description: "Keep track of upcoming, pending and completed shifts.",
+  },
+  notifications: {
+    eyebrow: "Stay up to date",
+    title: "Inbox",
+    description: "Shift approvals and important updates in one place.",
+  },
+  announcements: {
+    eyebrow: "Clinical reference desk",
+    title: "Medical Toolkits",
+    description: "Quick access to helpful resources when you need them most.",
+  },
+  feedback: {
+    eyebrow: "Patient experience",
+    title: "Patient Reviews",
+    description: "See how patients experienced the care you provided.",
+  },
+  profile: {
+    eyebrow: "Your account",
+    title: "My Profile & Medals",
+    description: "Manage credentials and view your clinical achievements.",
+  },
+  "peds-calc": {
+    eyebrow: "Clinical calculator",
+    title: "Dosage Calculator",
+    description: "A quick reference tool for paediatric dosing checks.",
+  },
+};
+
+const DoctorTabHeader: React.FC<{ tab: string }> = ({ tab }) => {
+  const meta = DOCTOR_TAB_META[tab];
+  if (!meta) return null;
+  return (
+    <div className="relative mb-5 overflow-hidden rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] px-5 py-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] sm:px-7 sm:py-6">
+      <div className="pointer-events-none absolute -right-10 -top-14 h-36 w-36 rounded-full bg-sky-300/10 blur-3xl" />
+      <div className="relative">
+        <span className="block text-[10px] font-bold tracking-[0.2em] text-sky-300 uppercase">{meta.eyebrow}</span>
+        <h3 className="mt-1 font-display text-2xl font-semibold tracking-tight sm:text-3xl">{meta.title}</h3>
+        <p className="mt-1 text-xs leading-relaxed text-slate-300 sm:text-sm">{meta.description}</p>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   // Public pre-shift declaration form — reached by scanning the static
   // per-branch QR code at the clinic counter. Deliberately checked here,
@@ -1054,6 +1107,10 @@ export default function App() {
                   transition={{ duration: 0.3 }}
                 >
                   {/* --- DOCTOR PORTALS --- */}
+                  {activeRole === "Doctor" && (activeTab === "status" || activeTab === "peds-calc") && (
+                    <DoctorTabHeader tab={activeTab} />
+                  )}
+
                   {activeTab === "overview" && activeRole === "Doctor" && state.currentUser && (
                     <DoctorOverviewTab
                       slots={state.slots}

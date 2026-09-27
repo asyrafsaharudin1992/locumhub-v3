@@ -344,7 +344,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
               onClick={() => setShiftPeriod(period)}
               className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
                 shiftPeriod === period
-                  ? 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100'
+                  ? 'bg-[#082f49] text-white shadow-sm'
                   : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
               }`}
             >

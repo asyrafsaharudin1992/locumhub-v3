@@ -53,11 +53,11 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Inbox Header */}
-      <div className="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] sm:p-6">
+      <div className="rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] sm:p-6">
         <div>
           <span className="text-[10px] font-bold tracking-[0.18em] text-indigo-500 uppercase block">Inbox</span>
-          <h4 className="mt-1 font-display text-2xl font-semibold tracking-tight text-slate-950">Doctor Notifications</h4>
-          <p className="mt-1 text-sm text-slate-500">Shift approvals and important updates.</p>
+          <h4 className="mt-1 font-display text-2xl font-semibold tracking-tight text-white">Doctor Notifications</h4>
+          <p className="mt-1 text-sm text-slate-300">Shift approvals and important updates.</p>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-xl bg-slate-100 p-1">
