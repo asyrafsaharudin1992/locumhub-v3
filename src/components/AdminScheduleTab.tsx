@@ -35,6 +35,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
   const [pickerMonth, setPickerMonth] = useState(() => new Date());
   const [bulkBranch, setBulkBranch] = useState('Seri Kembangan');
   const [bulkTime, setBulkTime] = useState('9am-5pm');
+  const [selectedScheduleDate, setSelectedScheduleDate] = useState<string | null>(null);
 
   // New non-blocking notification state to replace blocked browser alert()
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -50,6 +51,12 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
     const roleStr = (u.role || (u as any).Role || '').toLowerCase().trim();
     return roleStr === 'doctor';
   });
+  const selectedDateSlots = selectedScheduleDate
+    ? slots.filter((slot) =>
+        slot.tarikh === selectedScheduleDate &&
+        (selectedBranch === 'All' || slot.cawangan.toLowerCase().includes(selectedBranch.toLowerCase())),
+      )
+    : [];
 
   const handleAddBulkDate = () => {
     setNotification(null);
@@ -261,6 +268,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
           onSlotClick={handleAdminSlotAct}
           currentUserRole="Admin"
           selectedBranch={selectedBranch}
+          onDateSelect={setSelectedScheduleDate}
         />
       </div>
 
@@ -463,6 +471,36 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
             </button>
           </div>
         </form>
+        {selectedScheduleDate && (
+          <div className="rounded-2xl border border-white/10 bg-white/10 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-sky-300">Selected date</p>
+                <h6 className="mt-1 text-sm font-bold text-white">Doctors on {selectedScheduleDate}</h6>
+              </div>
+              <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-sky-100">
+                {selectedDateSlots.length} shifts
+              </span>
+            </div>
+            {selectedDateSlots.length === 0 ? (
+              <p className="rounded-xl bg-white/10 p-3 text-xs text-slate-300">No doctors scheduled for this date.</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedDateSlots.map((slot) => (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    onClick={() => handleAdminSlotAct(slot)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl bg-white px-3 py-2.5 text-left transition hover:bg-sky-50"
+                  >
+                    <span className="min-w-0 truncate text-xs font-bold text-[#082f49]">{slot.dr || 'Open shift'}</span>
+                    <span className="shrink-0 text-[11px] font-semibold text-slate-500">{slot.masa}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       )}
 

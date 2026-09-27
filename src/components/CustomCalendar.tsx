@@ -11,6 +11,7 @@ interface CustomCalendarProps {
   selectedBranch?: string; // "Seri Kembangan" | "Kajang" | "All"
   openSlotColorMode?: 'red' | 'branch'; // how to colour Available/open slots — defaults to red (admin view)
   desktopSlotPanel?: boolean;
+  onDateSelect?: (date: string) => void;
 }
 
 export const CustomCalendar: React.FC<CustomCalendarProps> = ({
@@ -18,7 +19,8 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
   onSlotClick,
   selectedBranch = 'All',
   openSlotColorMode = 'red',
-  desktopSlotPanel = false
+  desktopSlotPanel = false,
+  onDateSelect,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate());
@@ -123,19 +125,33 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
     return 'bg-red-500 hover:bg-red-600 text-white border-red-600 shadow-sm font-bold';
   };
 
+  const getSlotDotClass = (slot: LocumSlot) => {
+    const branchLower = slot.cawangan.toLowerCase();
+    const isSK = branchLower.includes('seri') || branchLower.includes('kembangan') || branchLower.includes('sk');
+    const isKajang = branchLower.includes('kajang') || branchLower.includes('kj');
+    const isCME = branchLower.includes('cme') || branchLower.includes('briefing');
+    if (slot.status === 'Pending') return 'bg-amber-500';
+    if (slot.status === 'Available') return 'bg-red-500';
+    if (isSK) return 'bg-emerald-500';
+    if (isKajang) return 'bg-sky-500';
+    if (isCME) return 'bg-purple-500';
+    return 'bg-indigo-500';
+  };
+
   const getSlotText = (slot: LocumSlot) => {
     const displayName = (slot.dr || '')
       .replace(/\s*\(\s*external\s*\)\s*/ig, '')
       .replace(/\s+external\b/ig, '')
       .trim();
+    const titleCaseName = displayName
+      ? displayName.toLowerCase().replace(/\b\w/g, char => char.toUpperCase())
+      : '';
     if (slot.status === 'Approved') {
-      const name = displayName ? displayName.toUpperCase() : 'APPROVED';
-      const cleanName = name.startsWith('DR') ? name : `DR ${name}`;
+      const cleanName = titleCaseName ? (titleCaseName.toLowerCase().startsWith('dr ') ? titleCaseName : `Dr ${titleCaseName}`) : 'Approved';
       return cleanName;
     }
     if (slot.status === 'Pending') {
-      const name = displayName ? displayName.toUpperCase() : 'PENDING';
-      const cleanName = name.startsWith('DR') ? name : `DR ${name}`;
+      const cleanName = titleCaseName ? (titleCaseName.toLowerCase().startsWith('dr ') ? titleCaseName : `Dr ${titleCaseName}`) : 'Pending';
       return `⏳ ${cleanName}`;
     }
     return 'OPEN';
@@ -300,7 +316,11 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
               return (
                 <div
                   key={`cell-${idx}`}
-                  onClick={() => desktopSlotPanel && cell.isCurrentMonth && setSelectedDay(cell.day)}
+                  onClick={() => {
+                    if (!cell.isCurrentMonth) return;
+                    setSelectedDay(cell.day);
+                    onDateSelect?.(`${String(cell.day).padStart(2, '0')}/${String(cell.month + 1).padStart(2, '0')}/${cell.year}`);
+                  }}
                   className={`min-h-[120px] p-2 flex flex-col justify-between transition ${desktopSlotPanel ? 'cursor-pointer' : ''} ${
                     cell.isCurrentMonth ? 'bg-white' : 'bg-slate-50/50'
                   }`}
@@ -318,10 +338,9 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                   </div>
 
                   {/* Vertical badge list */}
-                  <div className="flex-1 flex flex-col gap-1 mt-1.5 overflow-y-auto max-h-[100px] scrollbar-thin">
+                  <div className="mt-1 flex flex-1 flex-col gap-0 overflow-visible pb-1">
                     {cellSlots.length > 0 ? (
                       cellSlots.map(slot => {
-                        const bgClasses = getSlotStyles(slot);
                         const labelText = getSlotText(slot);
 
                         return (
@@ -333,13 +352,14 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                               e.stopPropagation();
                               if (onSlotClick) onSlotClick(slot);
                             }}
-                            className={`w-full min-h-[28px] whitespace-normal break-words text-[8px] font-bold leading-tight py-1 px-1.5 rounded-lg border text-left transition cursor-pointer ${bgClasses}`}
+                            className="flex min-h-[20px] w-full items-center gap-1.5 border-0 bg-transparent px-1 py-0.5 text-left text-[9px] font-semibold leading-tight text-slate-700 transition hover:text-[#0d5078] cursor-pointer"
                             title={`${slot.cawangan} | ${slot.masa} | ${/external/i.test(slot.dr || '') ? 'External doctor' : slot.dr || 'Open'}`}
                           >
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${getSlotDotClass(slot)}`} />
                             {labelText}
                           </button>
                         );
-                      })
+                        })
                     ) : (
                       <span className="text-[9px] text-slate-300 font-medium italic mt-1 select-none">No slots</span>
                     )}
@@ -385,6 +405,10 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                         Klinik ARA {slot.cawangan}
                       </span>
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-700">Open</span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                      <Users className="h-3.5 w-3.5 text-slate-400" />
+                      <span>{slot.dr ? getSlotText(slot).replace(/^⏳\s*/, '') : 'Open shift'}</span>
                     </div>
                     <div className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
                       <Clock className="h-3.5 w-3.5 text-slate-400" />
@@ -475,7 +499,10 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                   whileTap={{ scale: 0.95 }}
                   key={`day-${day}`}
                   onFocus={() => setSelectedDay(day)}
-                  onClick={() => setSelectedDay(day)}
+                  onClick={() => {
+                    setSelectedDay(day);
+                    onDateSelect?.(`${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`);
+                  }}
                   className={`relative aspect-square flex flex-col justify-between items-center p-1.5 rounded-2xl border text-xs transition-all ${
                     isSelected
                       ? 'bg-[#001F3F] text-white border-[#001F3F] font-bold shadow-md'
