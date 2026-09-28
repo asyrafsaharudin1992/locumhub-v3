@@ -81,13 +81,20 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
     return shortWords.every(w => longWords.includes(w));
   };
 
-  const completedApprovedShifts = slots.filter(s => {
+  const completedApprovedShifts = displaySlots
+    .filter(s => {
     if (s.status !== 'Approved') return false;
     if (selectedDoctorFilter) {
       return doctorNameWordMatch(s.dr || '', selectedDoctorFilter);
     }
     return false;
-  });
+    })
+    .sort((a, b) => {
+      const dateA = parseCalendarDate(a.tarikh)?.getTime() || Number.MAX_SAFE_INTEGER;
+      const dateB = parseCalendarDate(b.tarikh)?.getTime() || Number.MAX_SAFE_INTEGER;
+      if (dateA !== dateB) return dateA - dateB;
+      return a.masa.localeCompare(b.masa);
+    });
 
   const parseCalendarDate = (dateValue: string) => {
     const match = String(dateValue || '').match(/(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})/);
@@ -463,8 +470,8 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                           onSubmit={handleSavePerformance}
                           className="bg-slate-50 border border-slate-200 rounded-xl p-5 space-y-4"
                         >
-                          <span className="text-[10px] tracking-wider text-indigo-900 font-bold block uppercase">
-                            Enter shift output parameters
+                          <span className="text-[10px] tracking-wider text-slate-700 font-bold block uppercase">
+                            Shift Closing Parameters
                           </span>
 
                           <div className="grid grid-cols-3 gap-3">
@@ -508,7 +515,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
 
                           <button
                             type="submit"
-                            className="bg-indigo-650 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs w-full shadow-sm mt-3 transition cursor-pointer uppercase tracking-wider"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs w-full shadow-sm mt-3 transition cursor-pointer uppercase tracking-wider"
                           >
                             Save Shift Closing Parameters
                           </button>
