@@ -162,7 +162,7 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
                 : 'text-slate-600 hover:text-[#082f49]'
             }`}
           >
-              {branch === 'All' ? 'All Clinics' : branch === 'Seri Kembangan' ? 'SK Branch' : branch}
+              {branch === 'All' ? 'All Clinics' : branch}
           </button>
         ))}
       </div>
