@@ -576,7 +576,7 @@ export async function fetchAdminAlertsFromSupabase(): Promise<
     "AdminAlerts",
   ]);
   if (error) return null;
-  return (data || []).map((row) => ({
+  const alerts = (data || []).map((row) => ({
     id: row.id || "",
     slotId: row.slot_id || row.slotId || "",
     drName: row.dr_name || row.drName || "",
@@ -586,6 +586,18 @@ export async function fetchAdminAlertsFromSupabase(): Promise<
     message: row.message || "",
     timestamp: row.timestamp || "",
   }));
+
+  // Older cancellation flows used random IDs, so the same event may exist
+  // more than once in Supabase. Keep one visible copy per slot/timestamp;
+  // dismissing it uses the event key to remove all stored duplicates.
+  const uniqueAlerts = new Map<string, AdminAlert>();
+  alerts.forEach((alert) => {
+    const key = alert.slotId && alert.timestamp
+      ? `${alert.slotId}|${alert.timestamp}`
+      : alert.id;
+    if (!uniqueAlerts.has(key)) uniqueAlerts.set(key, alert);
+  });
+  return Array.from(uniqueAlerts.values());
 }
 
 // SAVE & WRITE OPERATIONS
@@ -877,21 +889,7 @@ export async function saveSlotToSupabase(slot: LocumSlot) {
   const client = getSupabaseClient();
   if (!client) return;
 
-  // Membina rekod yang mengandungi kedua-dua variasi kolum (Supabase vs Sheet) supaya selamat dua-dua arah!
-  const record = {
-    id: slot.id,
-    tarikh: slot.tarikh,
-    masa: slot.masa,
-    cawangan: slot.cawangan,
-    status: slot.status,
-    nama_locum: slot.dr,
-    no_telefon_locum: slot.phone,
-    bayaran: Number(slot.gaji || 0),
-    sales: slot.sales !== undefined ? Number(slot.sales) : null,
-    bilangan_pesakit: slot.pesakit !== undefined ? Number(slot.pesakit) : null,
-    booked_at: slot.bookedAt || null,
-    performance_recorded: slot.performanceRecorded || false,
-  };
+  const record = slotToSupabaseRecord(slot);
 
   console.log("Supabase saveSlot record:", record);
   const { success, error } = await upsertTableWithFallback(
@@ -907,6 +905,40 @@ export async function saveSlotToSupabase(slot: LocumSlot) {
       JSON.stringify(error, null, 2),
     );
     throw error || new Error("Failed to save slot to Supabase");
+  }
+}
+
+const slotToSupabaseRecord = (slot: LocumSlot) => ({
+    id: slot.id,
+    tarikh: slot.tarikh,
+    masa: slot.masa,
+    cawangan: slot.cawangan,
+    status: slot.status,
+    nama_locum: slot.dr,
+    no_telefon_locum: slot.phone,
+    bayaran: Number(slot.gaji || 0),
+    sales: slot.sales !== undefined ? Number(slot.sales) : null,
+    bilangan_pesakit: slot.pesakit !== undefined ? Number(slot.pesakit) : null,
+    booked_at: slot.bookedAt || null,
+    performance_recorded: slot.performanceRecorded || false,
+  });
+
+export async function updateSlotToSupabase(slot: LocumSlot) {
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  const { data, error } = await client
+    .from("slots")
+    .update(slotToSupabaseRecord(slot))
+    .eq("id", slot.id)
+    .select("id");
+
+  if (error) {
+    console.error("Supabase updateSlot failed:", error);
+    throw error;
+  }
+  if (!data || data.length === 0) {
+    throw new Error(`Slot ${slot.id} could not be updated in Supabase.`);
   }
 }
 

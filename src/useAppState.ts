@@ -22,6 +22,7 @@ import {
   saveUserToSupabase,
   deleteUserFromSupabase,
   saveSlotToSupabase,
+  updateSlotToSupabase,
   releaseSlotByDoctor,
   deleteSlotFromSupabase,
   saveAnnouncementToSupabase,
@@ -428,7 +429,10 @@ export function useAppState() {
 
   const cloudSaveSlot = async (slot: LocumSlot) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
-      await saveSlotToSupabase(slot);
+      // Existing slot actions (approval, timing edits, admin cancel/replace)
+      // must use UPDATE. Upsert also requires INSERT permission and can be
+      // rejected by the slot RLS policy even when the admin may update it.
+      await updateSlotToSupabase(slot);
     }
   };
 
