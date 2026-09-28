@@ -1292,7 +1292,6 @@ export function useAppState() {
 
     const updatedSlots = state.slots.map((s) => {
       if (s.id === slotId) {
-        resultMessage = "✅ Success! Slot is now Available again.";
         return {
           ...s,
           status: "Available",
@@ -1304,8 +1303,6 @@ export function useAppState() {
       return s;
     });
 
-    setState((prev) => ({ ...prev, slots: updatedSlots }));
-
     const updatedSlot: LocumSlot = {
       ...slot,
       status: "Available",
@@ -1313,9 +1310,22 @@ export function useAppState() {
       phone: "",
       bookedAt: undefined,
     };
-    await cloudSaveSlot(updatedSlot).catch((err) =>
-      console.error("Cloud cancelSlotByDoctor failed:", err),
-    );
+
+    // Treat the cloud write as the source of truth. Previously the local UI
+    // was cleared first and a failed Supabase upsert was swallowed, so the
+    // doctor saw a successful cancellation while the slot remained booked in
+    // the database. Only update local state after the cloud write succeeds.
+    try {
+      await cloudSaveSlot(updatedSlot);
+    } catch (err) {
+      console.error("Cloud cancelSlotByDoctor failed:", err);
+      throw new Error(
+        "❌ Cancellation could not be saved. The slot is still unchanged; please try again or contact admin.",
+      );
+    }
+
+    resultMessage = "✅ Success! Slot is now Available again.";
+    setState((prev) => ({ ...prev, slots: updatedSlots }));
 
     // Heads-up alert for admins so they know to find a replacement
     triggerCancellationAlert(slot, statusAsal);

@@ -205,7 +205,11 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       setPendingCancelSlot(null);
       setResultMessage(response);
     } catch (err) {
-      setResultMessage('⚠️ Something went wrong while withdrawing. Please try again.');
+      setResultMessage(
+        err instanceof Error
+          ? err.message
+          : '⚠️ Something went wrong while withdrawing. Please try again.',
+      );
     } finally {
       setIsCancelling(false);
     }
@@ -452,6 +456,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
                     ) : (
                       <button
                         onClick={() => handleCancelClick(slot)}
+                        disabled={isCancelling}
                         className="text-xs hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold p-2.5 rounded-xl transition flex items-center gap-1"
                       >
                         <Trash className="w-3.5 h-3.5" />
