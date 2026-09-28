@@ -81,6 +81,19 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
     return shortWords.every(w => longWords.includes(w));
   };
 
+  const parseCalendarDate = (dateValue: string) => {
+    const match = String(dateValue || '').match(/(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})/);
+    if (!match) return null;
+
+    const first = Number(match[1]);
+    const second = Number(match[2]);
+    const third = Number(match[3]);
+    const day = first > 31 ? third : first;
+    const month = second;
+    const year = first > 31 ? first : third;
+    return new Date(year, month - 1, day);
+  };
+
   const completedApprovedShifts = displaySlots
     .filter(s => {
     if (s.status !== 'Approved') return false;
@@ -95,19 +108,6 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
       if (dateA !== dateB) return dateA - dateB;
       return a.masa.localeCompare(b.masa);
     });
-
-  const parseCalendarDate = (dateValue: string) => {
-    const match = String(dateValue || '').match(/(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})/);
-    if (!match) return null;
-
-    const first = Number(match[1]);
-    const second = Number(match[2]);
-    const third = Number(match[3]);
-    const day = first > 31 ? third : first;
-    const month = first > 31 ? second : second;
-    const year = first > 31 ? first : third;
-    return new Date(year, month - 1, day);
-  };
 
   const formatReminderDate = (date: Date | null) => {
     if (!date) return '';

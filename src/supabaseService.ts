@@ -1193,6 +1193,24 @@ export async function deleteAdminAlertFromSupabase(alertId: string) {
   }
 }
 
+export async function deleteAdminAlertsByEventFromSupabase(
+  slotId: string,
+  timestamp: string,
+) {
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  for (const table of ["admin_alerts", "AdminAlerts"]) {
+    const { error } = await client
+      .from(table)
+      .delete()
+      .eq("slot_id", slotId)
+      .eq("timestamp", timestamp);
+    if (!error) return;
+  }
+  throw new Error("Failed to delete duplicate cancellation alerts.");
+}
+
 // BULK EXPORTS (Used during initial connection/sync migration)
 export async function pushAllLocalStateToSupabase(state: {
   users: UserProfile[];

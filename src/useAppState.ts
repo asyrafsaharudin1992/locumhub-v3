@@ -39,6 +39,7 @@ import {
   fetchAdminAlertsFromSupabase,
   saveAdminAlertToSupabase,
   deleteAdminAlertFromSupabase,
+  deleteAdminAlertsByEventFromSupabase,
   uploadUserFileToSupabase,
   saveBadgeAwardToSupabase,
   deleteBadgeAwardFromSupabase,
@@ -1246,8 +1247,15 @@ export function useAppState() {
         ? "Please find a replacement."
         : "The shift is now back to Open.";
 
+    // Keep one alert per cancellation event. The old random ID created a new
+    // database row every time the same cancellation was retried or replayed.
+    const eventKey = [
+      slot.id,
+      slot.phone || slot.dr || "unknown",
+      slot.bookedAt || `${slot.tarikh}_${slot.masa}`,
+    ].join("_").replace(/[^a-zA-Z0-9_-]/g, "_");
     const newAlert: AdminAlert = {
-      id: "alert_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9),
+      id: `alert_cancel_${eventKey}`,
       slotId: slot.id,
       drName: drLabel,
       cawangan: slot.cawangan,
@@ -1271,13 +1279,20 @@ export function useAppState() {
 
   const dismissAdminAlert = (id: string) => {
     if (localDemoMode) return;
+    const alert = state.adminAlerts.find((item) => item.id === id);
     setState((prev) => ({
       ...prev,
-      adminAlerts: (prev.adminAlerts || []).filter((a) => a.id !== id),
+      // Remove duplicate copies of the same cancellation event together.
+      adminAlerts: (prev.adminAlerts || []).filter((a) =>
+        alert?.slotId && alert?.timestamp
+          ? !(a.slotId === alert.slotId && a.timestamp === alert.timestamp)
+          : a.id !== id,
+      ),
     }));
-    deleteAdminAlertFromSupabase(id).catch((err) =>
-      console.error("Cloud deleteAdminAlert failed:", err),
-    );
+    const deleteRequest = alert?.slotId && alert?.timestamp
+      ? deleteAdminAlertsByEventFromSupabase(alert.slotId, alert.timestamp)
+      : deleteAdminAlertFromSupabase(id);
+    deleteRequest.catch((err) => console.error("Cloud deleteAdminAlert failed:", err));
   };
 
   const cancelSlotByDoctor = async (
