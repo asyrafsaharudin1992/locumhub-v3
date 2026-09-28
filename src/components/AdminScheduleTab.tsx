@@ -265,7 +265,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
                   : 'text-slate-600 hover:text-slate-850'
               }`}
             >
-              {branch === 'All' ? 'All Branches' : branch === 'Seri Kembangan' ? 'SK branch' : branch}
+              {branch === 'All' ? 'All Branches' : branch}
             </button>
           ))}
         </div>
@@ -486,10 +486,10 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
               <select
                 value={bulkBranch}
                 onChange={e => setBulkBranch(e.target.value)}
-                className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#0d5078] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
+                className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#0d5078] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200 [font-family:inherit]"
               >
                 {branchOptions.map((branch) => (
-                  <option key={branch} value={branch}>{branch}</option>
+                  <option key={branch} value={branch} className="font-sans text-xs font-semibold text-[#0d5078]">{branch}</option>
                 ))}
               </select>
             </div>
