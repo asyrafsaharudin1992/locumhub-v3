@@ -2196,173 +2196,89 @@ export function useAppState() {
     payment: number,
     period: string,
   ): Promise<string> => {
-    let resultText = "✅ Performance saved.";
+    const slot = state.slots.find((s) => s.id === slotId);
+    if (!slot) return "⚠️ Shift slot not found. Please refresh and try again.";
 
-    let updatedSlotsRef: LocumSlot[] = [];
-    let updatedUsersRef: UserProfile[] = [];
-    let badgesAwardedRef: string[] = [];
+    const updatedSlot: LocumSlot = {
+      ...slot,
+      sales,
+      pesakit: patients,
+      gaji: payment,
+      performanceRecorded: true,
+    };
+    const updatedSlots = state.slots.map((s) => s.id === slotId ? updatedSlot : s);
 
-    setState((prev) => {
-      const slot = prev.slots.find((s) => s.id === slotId);
-      if (!slot) return prev;
-
-      // 1. Update performance parameters in the slot
-      const updatedSlots = prev.slots.map((s) => {
-        if (s.id === slotId) {
-          return {
-            ...s,
-            sales,
-            pesakit: patients,
-            gaji: payment,
-            performanceRecorded: true,
-          } as LocumSlot;
-        }
-        return s;
-      });
-      updatedSlotsRef = updatedSlots;
-
-      // 2. Identify the doctor to reward
-      const drNameInSlot = slot.dr ? slot.dr.toUpperCase().trim() : "";
-      if (!drNameInSlot) {
-        updatedUsersRef = prev.users;
-        return { ...prev, slots: updatedSlots };
-      }
-
-      const badgesToUpdate: string[] = [];
-      badgesAwardedRef = badgesToUpdate;
-      const slotTimeRaw = slot.masa.toLowerCase();
-      const branchRaw = slot.cawangan.toUpperCase();
-      const slotDateRaw = slot.tarikh;
-      const bookedAtRaw = slot.bookedAt;
-
-      // Logic for Iron Doctor
-      const numbersOnly = slotTimeRaw.replace(/[^0-9]/g, "");
-      if (
-        /8.*8|9.*9|10.*10/.test(numbersOnly) ||
-        slotTimeRaw.includes("12h") ||
-        slotTimeRaw.includes("12jam") ||
-        slotTimeRaw.includes("12-hour") ||
-        slotTimeRaw.includes("12 hour")
-      ) {
-        badgesToUpdate.push("Iron Doctor");
-      }
-
-      // Logic for CME
-      if (branchRaw.includes("CME") || branchRaw.includes("BRIEFING")) {
-        badgesToUpdate.push("The Diligent Doc");
-      }
-
-      // Logic for Last Minute Saviour — booked within 25 hours of shift start
-      if (bookedAtRaw && slotDateRaw) {
-        try {
-          const parseDate = (dStr: string) => {
-            const p = dStr.split(/[\s/:-]+/);
-            return p.length >= 3
-              ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]))
-              : new Date(dStr);
-          };
-          const sDate = parseDate(slotDateRaw);
-          const bDate = parseDate(bookedAtRaw);
-          const diffInHours =
-            (sDate.getTime() - bDate.getTime()) / (1000 * 60 * 60);
-          if (diffInHours > 0 && diffInHours < 25) {
-            badgesToUpdate.push("Last Minute Saviour");
-          }
-        } catch (e: any) {
-          console.warn("Date parse error", e.message);
-        }
-      }
-
-      if (badgesToUpdate.length === 0) {
-        updatedUsersRef = prev.users;
-        return { ...prev, slots: updatedSlots };
-      }
-
-      // 3. Update the matching doctor profile
-      const updatedUsers = prev.users.map((u) => {
-        if (
-          u.name.toUpperCase().trim() === drNameInSlot ||
-          u.name
-            .toUpperCase()
-            .trim()
-            .replace(/^(DR|dr)\.?\s+/i, "") === drNameInSlot
-        ) {
-          const locksStr = u.locks || "";
-          const slotLockId = `[${slotId}]`;
-
-          if (locksStr.indexOf(slotLockId) !== -1) return u;
-
-          let updatedBadges = u.badges || "";
-          badgesToUpdate.forEach((badge) => {
-            updatedBadges = addBadgeAward(updatedBadges, badge, period);
-          });
-
-          const totalPointsAwarded = badgesToUpdate.length * 10;
-          const updatedLocks = locksStr + slotLockId;
-
-          resultText = `✅ Shift Completed! Doctor ${u.name} awarded ${totalPointsAwarded} Aracoins for: ${badgesToUpdate.join(", ")}`;
-
-          return {
-            ...u,
-            points: (u.points || 0) + totalPointsAwarded,
-            badges: updatedBadges,
-            locks: updatedLocks,
-          };
-        }
-        return u;
-      });
-      updatedUsersRef = updatedUsers;
-
-      return {
-        ...prev,
-        slots: updatedSlots,
-        users: updatedUsers,
-        currentUser:
-          updatedUsers.find((u) => u.phone === prev.currentUser?.phone) ||
-          prev.currentUser,
+    const drNameInSlot = (slot.dr || "").toUpperCase().trim();
+    const badgesToUpdate: string[] = [];
+    const slotTimeRaw = (slot.masa || "").toLowerCase();
+    const branchRaw = (slot.cawangan || "").toUpperCase();
+    const numbersOnly = slotTimeRaw.replace(/[^0-9]/g, "");
+    if (/8.*8|9.*9|10.*10/.test(numbersOnly) || /12h|12jam|12-hour|12 hour/.test(slotTimeRaw)) {
+      badgesToUpdate.push("Iron Doctor");
+    }
+    if (branchRaw.includes("CME") || branchRaw.includes("BRIEFING")) {
+      badgesToUpdate.push("The Diligent Doc");
+    }
+    if (slot.bookedAt && slot.tarikh) {
+      const parseDate = (dStr: string) => {
+        const p = dStr.split(/[\s/:-]+/);
+        return p.length >= 3
+          ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]))
+          : new Date(dStr);
       };
-    });
-
-    // Synchronous localStorage persistence
-    localStorage.setItem("ara_slots", JSON.stringify(updatedSlotsRef));
-    localStorage.setItem("ara_users", JSON.stringify(updatedUsersRef));
-
-    // Async Cloud sync
-    const slotToSave = updatedSlotsRef.find((s) => s.id === slotId);
-    if (slotToSave) {
-      await cloudSaveSlot(slotToSave).catch((err) =>
-        console.error("Cloud completeSlot saveSlot failed:", err),
-      );
+      const diffInHours = (parseDate(slot.tarikh).getTime() - parseDate(slot.bookedAt).getTime()) / (1000 * 60 * 60);
+      if (diffInHours > 0 && diffInHours < 25) badgesToUpdate.push("Last Minute Saviour");
     }
 
-    // Also update the doctor in Supabase if points were awarded
-    const userToSave = updatedUsersRef.find((u) => {
-      const drNameInSlot = (state.slots.find((s) => s.id === slotId)?.dr || "")
-        .toUpperCase()
-        .trim();
-      return (
-        u.name.toUpperCase().trim() === drNameInSlot ||
-        u.name
-          .toUpperCase()
-          .trim()
-          .replace(/^(DR|dr)\.?\s+/i, "") === drNameInSlot
-      );
+    const slotLockId = `[${slotId}]`;
+    let resultText = "✅ Performance saved.";
+    const updatedUsers = state.users.map((u) => {
+      const cleanUserName = u.name.toUpperCase().trim().replace(/^DR\.?\s+/i, "");
+      const cleanSlotName = drNameInSlot.replace(/^DR\.?\s+/i, "");
+      if (cleanUserName !== cleanSlotName || badgesToUpdate.length === 0 || (u.locks || "").includes(slotLockId)) return u;
+      let updatedBadges = u.badges || "";
+      badgesToUpdate.forEach((badge) => { updatedBadges = addBadgeAward(updatedBadges, badge, period); });
+      const totalPointsAwarded = badgesToUpdate.length * 10;
+      resultText = `✅ Shift Completed! Doctor ${u.name} awarded ${totalPointsAwarded} Aracoins for: ${badgesToUpdate.join(", ")}`;
+      return { ...u, points: (u.points || 0) + totalPointsAwarded, badges: updatedBadges, locks: `${u.locks || ""}${slotLockId}` };
     });
+
+    // Save the exact snapshot first. The old implementation populated these
+    // refs inside a setState updater, which could run after the cloud-save
+    // code and leave nothing to persist for some doctors.
+    try {
+      await cloudSaveSlot(updatedSlot);
+    } catch (err: any) {
+      console.error("Cloud completeSlot saveSlot failed:", err);
+      return `❌ Performance could not be saved: ${err?.message || "database update failed"}`;
+    }
+
+    const userToSave = updatedUsers.find((u, index) => u !== state.users[index]);
     if (userToSave) {
-      await saveUserToSupabase(userToSave).catch((err) =>
-        console.error("Cloud completeSlot saveUser failed:", err),
-      );
-      badgesAwardedRef.forEach((badge) => {
-        saveBadgeAwardToSupabase(
-          userToSave.phone,
-          userToSave.name,
-          badge,
-          period,
-          getBadgeCountForMonth(userToSave.badges, badge, period),
-        ).catch((err) => console.error("saveBadgeAwardToSupabase failed:", err));
-      });
+      try {
+        await saveUserToSupabase(userToSave);
+        await Promise.all(badgesToUpdate.map((badge) =>
+          saveBadgeAwardToSupabase(
+            userToSave.phone,
+            userToSave.name,
+            badge,
+            period,
+            getBadgeCountForMonth(userToSave.badges, badge, period),
+          ),
+        ));
+      } catch (err) {
+        console.error("Cloud completeSlot user/badge sync failed:", err);
+      }
     }
 
+    setState((prev) => ({
+      ...prev,
+      slots: updatedSlots,
+      users: updatedUsers,
+      currentUser: updatedUsers.find((u) => u.phone === prev.currentUser?.phone) || prev.currentUser,
+    }));
+    localStorage.setItem("ara_slots", JSON.stringify(updatedSlots));
+    localStorage.setItem("ara_users", JSON.stringify(updatedUsers));
     return resultText;
   };
 
