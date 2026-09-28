@@ -46,6 +46,14 @@ const countBadges = (badges: string) => {
   }, 0);
 };
 
+const displayBranchName = (branch: string) => {
+  const normalized = (branch || '').trim().toLowerCase();
+  if (normalized === 'sk' || normalized === 'sk branch' || normalized.includes('seri kembangan')) {
+    return 'Seri Kembangan';
+  }
+  return branch;
+};
+
 const getBadgeCounts = (badges: string) => badges.split(',').filter(Boolean).reduce<Record<string, number>>((result, item) => {
   const lastColon = item.lastIndexOf(':');
   const name = item.slice(0, lastColon === -1 ? undefined : lastColon).trim().split('(')[0].trim().replace('Saviour', 'Savior');
@@ -107,7 +115,7 @@ export const DoctorOverviewTab: React.FC<DoctorOverviewTabProps> = ({
             <span className="text-[10px] font-bold tracking-[0.2em] text-sky-300 uppercase">Next shift</span>
             {nextShift ? (
               <>
-                <h4 className="mt-1.5 font-display text-lg font-semibold sm:text-xl">{nextShift.cawangan}</h4>
+                <h4 className="mt-1.5 font-display text-lg font-semibold sm:text-xl">{displayBranchName(nextShift.cawangan)}</h4>
                 <p className="mt-1 text-sm text-slate-300">
                   {isToday ? 'Today' : nextShift.tarikh} · {nextShift.masa}
                 </p>
