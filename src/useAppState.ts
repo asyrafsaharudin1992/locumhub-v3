@@ -325,7 +325,11 @@ export function useAppState() {
       setState((prev) => ({
         ...prev,
         users: nonEmpty(sbUsers, prev.users),
-        adminAlerts: nonEmpty(sbAlerts, prev.adminAlerts),
+        // An empty admin_alerts result is a valid state after the admin has
+        // dismissed the last alert. Do not preserve stale localStorage data
+        // just because the fresh cloud list is empty; only null means fetch
+        // failed and should retain the previous alerts.
+        adminAlerts: sbAlerts === null ? prev.adminAlerts : sbAlerts,
         currentUser: prev.currentUser
           ? sbUsers?.find((u) => u.phone === prev.currentUser?.phone) ||
             prev.currentUser
