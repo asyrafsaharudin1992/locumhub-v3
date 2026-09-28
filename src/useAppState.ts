@@ -22,6 +22,7 @@ import {
   saveUserToSupabase,
   deleteUserFromSupabase,
   saveSlotToSupabase,
+  releaseSlotByDoctor,
   deleteSlotFromSupabase,
   saveAnnouncementToSupabase,
   deleteAnnouncementFromSupabase,
@@ -1316,7 +1317,11 @@ export function useAppState() {
     // doctor saw a successful cancellation while the slot remained booked in
     // the database. Only update local state after the cloud write succeeds.
     try {
-      await cloudSaveSlot(updatedSlot);
+      if (isSupabaseEnabled && isSupabaseActive()) {
+        await releaseSlotByDoctor(slotId);
+      } else {
+        await cloudSaveSlot(updatedSlot);
+      }
     } catch (err) {
       console.error("Cloud cancelSlotByDoctor failed:", err);
       throw new Error(

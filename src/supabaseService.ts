@@ -910,6 +910,34 @@ export async function saveSlotToSupabase(slot: LocumSlot) {
   }
 }
 
+// Doctors must release an existing row with UPDATE, not upsert. Upsert also
+// requires INSERT permission, while the RLS policy intentionally restricts
+// slot creation to admins. The direct update lets the doctor use the existing
+// self-cancellation UPDATE policy without opening INSERT access.
+export async function releaseSlotByDoctor(slotId: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("Supabase client not initialized");
+
+  const { data, error } = await client
+    .from("slots")
+    .update({
+      status: "Available",
+      nama_locum: "",
+      no_telefon_locum: "",
+      booked_at: null,
+    })
+    .eq("id", slotId)
+    .select("id");
+
+  if (error) {
+    console.error("Supabase releaseSlotByDoctor failed:", error);
+    throw error;
+  }
+  if (!data || data.length === 0) {
+    throw new Error("Slot could not be released by the current doctor.");
+  }
+}
+
 export async function deleteSlotFromSupabase(slotId: string) {
   const { success, error } = await deleteTableWithFallback(
     ["slots", "Slots"],
