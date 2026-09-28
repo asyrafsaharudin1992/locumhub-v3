@@ -39,9 +39,9 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
 
   // Close-out states
   const [selectedSlotId, setSelectedSlotId] = useState('');
-  const [salesVal, setSalesVal] = useState<number>(0);
-  const [ptsVal, setPtsVal] = useState<number>(0);
-  const [payVal, setPayVal] = useState<number>(0);
+  const [salesVal, setSalesVal] = useState('');
+  const [ptsVal, setPtsVal] = useState('');
+  const [payVal, setPayVal] = useState('');
 
   // Statistics summaries
   const monthlySlots = slots.filter(s => {
@@ -168,9 +168,9 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
       // making a successful save look like it had failed. Now it just loads
       // the saved values so admin can view (and correct, if needed) them.
       setSelectedSlotId(slotId);
-      setSalesVal(slot.sales || 0);
-      setPtsVal(slot.pesakit || 0);
-      setPayVal(slot.gaji);
+      setSalesVal(slot.sales !== undefined ? String(slot.sales) : '');
+      setPtsVal(slot.pesakit !== undefined ? String(slot.pesakit) : '');
+      setPayVal(slot.gaji !== undefined ? String(slot.gaji) : '');
     }
   };
 
@@ -189,15 +189,23 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
     // Note: previously recorded slots can now be re-saved (e.g. to correct a
     // typo in sales/patients/payout) rather than being permanently locked.
 
+    const sales = Number.parseFloat(salesVal);
+    const patients = Number.parseInt(ptsVal, 10);
+    const payment = Number.parseFloat(payVal);
+    if (!Number.isFinite(sales) || sales < 0 || !Number.isFinite(patients) || patients < 0 || !Number.isFinite(payment) || payment < 0) {
+      alert('⚠️ Please enter valid non-negative sales, patient and payout values.');
+      return;
+    }
+
     const period = `${month}/${year}`;
-    const resultMsg = await onCompleteSlot(selectedSlotId, salesVal, ptsVal, payVal, period);
+    const resultMsg = await onCompleteSlot(selectedSlotId, sales, patients, payment, period);
     alert(resultMsg);
 
     // Reset closeout values
     setSelectedSlotId('');
-    setSalesVal(0);
-    setPtsVal(0);
-    setPayVal(0);
+    setSalesVal('');
+    setPtsVal('');
+    setPayVal('');
   };
 
   return (
@@ -461,32 +469,38 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
 
                           <div className="grid grid-cols-3 gap-3">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase">Sales RM</label>
+                              <label className="text-[10px] font-bold text-slate-600 uppercase">Sales RM</label>
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 required
-                                value={salesVal || ''}
-                                onChange={e => setSalesVal(Math.max(0, parseInt(e.target.value) || 0))}
+                                value={salesVal}
+                                onChange={e => setSalesVal(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
+                                placeholder="0.00"
                                 className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-mono font-semibold outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase">Patients pts</label>
+                              <label className="text-[10px] font-bold text-slate-600 uppercase">Patients pts</label>
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="numeric"
                                 required
-                                value={ptsVal || ''}
-                                onChange={e => setPtsVal(Math.max(0, parseInt(e.target.value) || 0))}
+                                value={ptsVal}
+                                onChange={e => setPtsVal(e.target.value.replace(/\D/g, ''))}
+                                placeholder="0"
                                 className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-mono font-semibold outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-400 uppercase">Payout RM</label>
+                              <label className="text-[10px] font-bold text-slate-600 uppercase">Payout RM</label>
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 required
-                                value={payVal || ''}
-                                onChange={e => setPayVal(Math.max(0, parseInt(e.target.value) || 0))}
+                                value={payVal}
+                                onChange={e => setPayVal(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
+                                placeholder="0.00"
                                 className="w-full bg-white border border-slate-200 rounded-lg p-2.5 text-xs font-mono font-semibold outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                               />
                             </div>
