@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { saveShiftDeclarationToSupabase, fetchUsersFromSupabase } from '../supabaseService';
 import { UserProfile } from '../types';
-
-const BRANCHES = ['Kajang', 'Seri Kembangan', 'Semenyih'];
+import { useClinicBranches } from '../useClinicBranches';
 
 // The users.mmc field can contain just a plain number (e.g. "90420"), or
 // that number followed by a Google Drive link to the uploaded credential
@@ -77,8 +76,9 @@ interface PreShiftDeclarationFormProps {
 export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = ({
   initialBranch,
 }) => {
+  const branches = useClinicBranches();
   const [branch, setBranch] = useState(
-    initialBranch && BRANCHES.includes(initialBranch) ? initialBranch : BRANCHES[0],
+    initialBranch || branches[0],
   );
   const [doctors, setDoctors] = useState<UserProfile[]>([]);
   const [loadingDoctors, setLoadingDoctors] = useState(true);
@@ -91,6 +91,10 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!branches.includes(branch)) setBranch(initialBranch || branches[0]);
+  }, [branches.join('|'), branch, initialBranch]);
 
   useEffect(() => {
     (async () => {
@@ -212,7 +216,7 @@ export const PreShiftDeclarationForm: React.FC<PreShiftDeclarationFormProps> = (
               onChange={(e) => setBranch(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 text-sm rounded-xl p-3 cursor-pointer"
             >
-              {BRANCHES.map((b) => (
+              {branches.map((b) => (
                 <option key={b} value={b}>
                   {b}
                 </option>

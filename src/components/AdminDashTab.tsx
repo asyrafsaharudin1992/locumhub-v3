@@ -35,6 +35,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   const [isRecalculatingBadges, setIsRecalculatingBadges] = useState(false);
   const [showBadgeResultModal, setShowBadgeResultModal] = useState(false);
   const [badgeResultText, setBadgeResultText] = useState('');
+  const reportYears = Array.from({ length: 5 }, (_, index) => String(now.getFullYear() - 2 + index));
 
   // Close-out states
   const [selectedSlotId, setSelectedSlotId] = useState('');
@@ -253,7 +254,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
             onChange={e => setYear(e.target.value)}
             className="bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-semibold rounded-xl p-3 focus:ring-2 focus:ring-sky-300 focus:border-sky-300 outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {['2025', '2026', '2027'].map(y => (
+            {reportYears.map(y => (
               <option key={y} value={y}>
                 {y}
               </option>

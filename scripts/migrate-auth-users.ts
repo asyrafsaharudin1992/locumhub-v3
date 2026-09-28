@@ -85,6 +85,7 @@ let created = 0;
 let updated = 0;
 let skipped = 0;
 let failed = 0;
+const adminInitialPassword = (process.env.ADMIN_INITIAL_PASSWORD || "").trim();
 
 for (const row of (rows || []) as AppUser[]) {
   try {
@@ -94,14 +95,14 @@ for (const row of (rows || []) as AppUser[]) {
     const isAdmin = (row.role || "").trim().toLowerCase() === "admin";
     const isStaff = (row.role || "").trim().toLowerCase() === "staff";
     const password = isAdmin
-      ? "klinikARA2026"
+      ? adminInitialPassword
       : isStaff
         ? staffAccessPassword || ""
         : mmc
           ? authPassword(mmc)
           : "";
 
-    if (!phone || (isStaff && !staffAccessPassword) || (!isAdmin && !isStaff && !/^\d{5,6}$/.test(mmc))) {
+    if (!phone || (isAdmin && !adminInitialPassword) || (isStaff && !staffAccessPassword) || (!isAdmin && !isStaff && !/^\d{5,6}$/.test(mmc))) {
       skipped += 1;
       console.log(
         `SKIP ${phone || "<no phone>"}: MMC must be 5 or 6 digits unless role is Admin or Staff`,

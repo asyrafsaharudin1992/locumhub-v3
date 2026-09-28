@@ -799,25 +799,6 @@ export function useAppState() {
     role?: string,
     verifiedUser?: any,
   ): Promise<{ success: boolean; message: string; user: UserProfile | null }> => {
-    // Local preview accounts only. This branch is never used by production
-    // because Vite sets import.meta.env.DEV to false in production builds.
-    if (import.meta.env.DEV && passwordInput === "dev") {
-      const cleanPhone = phone.trim();
-      const localUsers: Record<string, UserProfile> = {
-        admin: { phone: "0182194256", password: "", name: "Dev Admin (Klinik ARA)", role: "Admin", email: "admin@araclinic.com", mmc: "", apc: "", indemnity: "Tiada", workplace: "Klinik ARA 24 Jam", points: 1000, badges: "", locks: "" },
-        "0182194256": { phone: "0182194256", password: "", name: "Dev Admin (Klinik ARA)", role: "Admin", email: "admin@araclinic.com", mmc: "", apc: "", indemnity: "Tiada", workplace: "Klinik ARA 24 Jam", points: 1000, badges: "", locks: "" },
-        doctor: { phone: "0198765432", password: "", name: "Dr. Dev Locum", role: "Doctor", email: "doctor@araclinic.com", mmc: "12345", apc: "2026/12345", indemnity: "Ada", workplace: "Klinik ARA 24 Jam", points: 150, badges: "", locks: "" },
-        "0198765432": { phone: "0198765432", password: "", name: "Dr. Dev Locum", role: "Doctor", email: "doctor@araclinic.com", mmc: "12345", apc: "2026/12345", indemnity: "Ada", workplace: "Klinik ARA 24 Jam", points: 150, badges: "", locks: "" },
-        staff: { phone: "0112233445", password: "", name: "Dev Staff", role: "Staff", email: "staff@araclinic.com", mmc: "", apc: "", indemnity: "Tiada", workplace: "Klinik ARA 24 Jam", points: 0, badges: "", locks: "" },
-        "0112233445": { phone: "0112233445", password: "", name: "Dev Staff", role: "Staff", email: "staff@araclinic.com", mmc: "", apc: "", indemnity: "Tiada", workplace: "Klinik ARA 24 Jam", points: 0, badges: "", locks: "" },
-      };
-      const localUser = localUsers[cleanPhone];
-      if (localUser) {
-        setState((prev) => ({ ...prev, currentUser: localUser }));
-        return { success: true, message: "Local dev login successful", user: localUser };
-      }
-    }
-
     // Staff Quick Access is already verified server-side by verify_staff_key.
     // Keep this restricted view-only path independent of Auth users created
     // for phone/MMC login, so legacy staff accounts continue to work.
@@ -952,8 +933,7 @@ export function useAppState() {
     email: string = "",
   ): Promise<{ success: boolean; message: string }> => {
     const trimmedPhone = phone.trim();
-    const effectiveInitialPassword =
-      role === "Admin" ? "klinikARA2026" : initialPassword.trim();
+    const effectiveInitialPassword = initialPassword.trim();
     if (!trimmedPhone || !name.trim()) {
       return { success: false, message: "Name and phone number are required." };
     }

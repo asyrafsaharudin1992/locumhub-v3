@@ -150,64 +150,10 @@ export async function verifyLogin(
 ): Promise<{ success: boolean; message?: string; user?: any }> {
   const client = getSupabaseClient();
   if (!client) {
-    if (!import.meta.env.DEV) {
-      return {
-        success: false,
-        message: "Authentication service is unavailable. Please try again shortly.",
-      };
-    }
-
-    const cleanPhone = phone.trim();
-    if (cleanPhone === "admin" || cleanPhone === "0182194256" || cleanPhone === "0123456789" || cleanPhone === "dev") {
-      return {
-        success: true,
-        user: {
-          phone: "0182194256",
-          name: "Dev Admin (Klinik ARA)",
-          role: "Admin",
-          email: "admin@araclinic.com",
-          points: 1000,
-        },
-      };
-    }
-    if (cleanPhone === "doctor" || cleanPhone === "0198765432") {
-      return {
-        success: true,
-        user: {
-          phone: "0198765432",
-          name: "Dr. Dev Locum",
-          role: "Doctor",
-          email: "doctor@araclinic.com",
-          mmc: "12345",
-          apc: "2026/12345",
-          points: 150,
-        },
-      };
-    }
-    if (cleanPhone === "staff" || cleanPhone === "0112233445") {
-      return {
-        success: true,
-        user: {
-          phone: "0112233445",
-          name: "Dev Staff",
-          role: "Staff",
-          email: "staff@araclinic.com",
-        },
-      };
-    }
-    if (cleanPhone.length > 0 && password.trim().length > 0) {
-      return {
-        success: true,
-        user: {
-          phone: cleanPhone,
-          name: `Dev Doctor (${cleanPhone})`,
-          role: "Doctor",
-          email: `${cleanPhone}@araclinic.com`,
-          points: 50,
-        },
-      };
-    }
-    return { success: false, message: "Please input phone number." };
+    return {
+      success: false,
+      message: "Authentication service is unavailable. Please try again shortly.",
+    };
   }
 
   // New accounts are authenticated by Supabase Auth. We look up the
@@ -287,19 +233,9 @@ export async function verifyStaffKey(
 ): Promise<{ success: boolean; message?: string; user?: any }> {
   const client = getSupabaseClient();
   if (!client) {
-    if (!import.meta.env.DEV) {
-      return {
-        success: false,
-        message: "Authentication service is unavailable. Please try again shortly.",
-      };
-    }
     return {
-      success: true,
-      user: {
-        phone: "0112233445",
-        name: "Dev Staff",
-        role: "Staff",
-      },
+      success: false,
+      message: "Authentication service is unavailable. Please try again shortly.",
     };
   }
 
@@ -445,6 +381,39 @@ export async function fetchAnnouncementsFromSupabase(): Promise<
     text: row.text || "",
     date: row.date || row.Date || "",
   }));
+}
+
+export async function fetchClinicBranchesFromSupabase(): Promise<string[] | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data, error } = await client
+    .from("clinic_branches")
+    .select("name")
+    .eq("is_active", true)
+    .order("name");
+  if (error) {
+    console.warn("Supabase fetchClinicBranches failed:", error);
+    return null;
+  }
+  return (data || []).map((row) => String(row.name || "").trim()).filter(Boolean);
+}
+
+export async function saveClinicBranchToSupabase(name: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("Supabase client not initialized");
+  const cleanName = name.trim();
+  const id = cleanName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const { error } = await client
+    .from("clinic_branches")
+    .upsert({ id, name: cleanName, is_active: true }, { onConflict: "name" });
+  if (error) throw error;
+}
+
+export async function deleteClinicBranchFromSupabase(name: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("Supabase client not initialized");
+  const { error } = await client.from("clinic_branches").delete().eq("name", name);
+  if (error) throw error;
 }
 
 export async function fetchFeedbacksPatientFromSupabase(): Promise<

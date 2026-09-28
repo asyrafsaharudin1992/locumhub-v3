@@ -2,6 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useAppState } from "./useAppState";
 import { Announcement, NewApplication, LocumSurveyEntry, StaffFeedbackEntry, FeedbackRecord } from "./types";
+import { useClinicBranches } from "./useClinicBranches";
 import { isSupabaseActive, verifyStaffKey } from "./supabaseService";
 import {
   loadAllDataFromPublicGoogleSheet,
@@ -72,25 +73,17 @@ import {
 } from "lucide-react";
 
 // Doctor names show up inconsistently across sources ("Dr Pravinaa", "DR PRAVINAA",
-// "Pravinaa", trailing/leading whitespace, etc). Normalize + flexible substring match
-// so filters and per-doctor views work regardless of "Dr" prefix or casing.
+// "Pravinaa", trailing/leading whitespace, etc). Normalize the harmless prefix
+// and spacing differences, then require the complete registered name to match.
 function normalizeDoctorName(s: string): string {
-  return s.toLowerCase().replace(/^dr\.?\s+/i, "").trim();
+  return s.toLowerCase().replace(/^dr\.?\s+/i, "").trim().replace(/\s+/g, " ");
 }
 
 function doctorNamesMatch(a: string, b: string): boolean {
   const na = normalizeDoctorName(a);
   const nb = normalizeDoctorName(b);
   if (!na || !nb) return false;
-  if (na === nb) return true;
-  // Word-boundary matching only — plain .includes() would wrongly match
-  // e.g. "ain" against "wan zainol" since those letters appear consecutively
-  // inside "zainol", even though it's a completely different name/word.
-  const wordsA = na.split(/\s+/).filter(Boolean);
-  const wordsB = nb.split(/\s+/).filter(Boolean);
-  const [shortWords, longWords] =
-    wordsA.length <= wordsB.length ? [wordsA, wordsB] : [wordsB, wordsA];
-  return shortWords.every((w) => longWords.includes(w));
+  return na === nb;
 }
 
 const HADITH_QUOTES = [
@@ -160,6 +153,7 @@ const DoctorTabHeader: React.FC<{ tab: string }> = ({ tab }) => {
 };
 
 export default function App() {
+  const clinicBranches = useClinicBranches();
   // Public pre-shift declaration form — reached by scanning the static
   // per-branch QR code at the clinic counter. Deliberately checked here,
   // before any of useAppState()'s hooks run, and returns immediately: no
@@ -384,7 +378,7 @@ export default function App() {
   const resolvedSlotIdsRef = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (activeTab === "admin-fb" || activeTab === "feedback" || activeTab === "overview") {
+    if (activeTab === "admin-fb" || activeTab === "admin-tasks" || activeTab === "feedback" || activeTab === "overview") {
       setLoadingFeedback(true);
       Promise.all([
         fetchPatientFeedbackFromSheets(),
@@ -876,7 +870,7 @@ export default function App() {
                 <div className="pointer-events-none absolute bottom-24 left-16 h-32 w-32 rounded-full border-[22px] border-sky-300/10" />
                 <div className="relative z-10 max-w-md">
                   <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-2xl bg-white/10 p-2.5 shadow-lg ring-1 ring-white/15">
-                    <img src="/logo-ara-white.png" alt="AraLocum Hub" className="h-full w-full object-contain" />
+                    <img src="/logo-ara-white.png" alt="Klinik ARA 24 Jam" className="h-full w-full object-contain" />
                   </div>
                   <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-sky-300">AraLocum Hub</span>
                   <h1 className="mt-3 font-display text-5xl font-bold leading-[1.05] tracking-tight text-white">Welcome back!</h1>
@@ -951,36 +945,6 @@ export default function App() {
                   Forgot your password? Please contact your clinic admin to have it reset.
                 </p>
               </form>
-
-                {/* Local development quick logins only. */}
-                {import.meta.env.DEV && <div className="space-y-2 rounded-2xl border border-sky-200/20 bg-slate-950/25 p-2.5 text-left md:border-slate-200 md:bg-slate-50">
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-white">
-                    ⚡ Quick Dev Logins
-                  </span>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => loginUser("0182194256", "dev")}
-                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold py-1.5 px-2 rounded-lg text-[11px] transition"
-                    >
-                      Dev Admin
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => loginUser("0198765432", "dev")}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-2 rounded-lg text-[11px] transition"
-                    >
-                      Dev Doctor
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => loginUser("0112233445", "dev", "Staff")}
-                      className="bg-slate-700 hover:bg-slate-800 text-white font-bold py-1.5 px-2 rounded-lg text-[11px] transition"
-                    >
-                      Dev Staff
-                    </button>
-                  </div>
-                </div>}
 
                 {/* Staff quick access — keyword only, view-only Clinical Schedule access */}
                 <div className="space-y-2 border-t border-white/15 pt-3 text-left md:border-slate-200">
@@ -1585,6 +1549,26 @@ export default function App() {
                         )}
                       </div>
 
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("admin-fb")}
+                        className="group flex w-full items-center justify-between rounded-3xl border border-indigo-100 bg-white p-5 text-left shadow-[0_6px_22px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                            <MessageSquare className="h-5 w-5" />
+                          </span>
+                          <span>
+                            <span className="block text-sm font-bold text-slate-800">Feedback management</span>
+                            <span className="mt-1 block text-xs text-slate-500">Review patient, staff and doctor feedback.</span>
+                          </span>
+                        </span>
+                        <span className="flex items-center gap-2 text-xs font-bold text-indigo-600">
+                          {patientFeedbackEntries.length > 0 && `${patientFeedbackEntries.length} patient reviews`}
+                          <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                        </span>
+                      </button>
+
                       {/* Newly onboarded CVs recruitment checklist pipeline */}
                       <div className="space-y-3">
                         <h5 className="font-display font-bold text-slate-900 tracking-tight text-sm uppercase">
@@ -2180,7 +2164,7 @@ export default function App() {
                         </p>
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          {["Kajang", "Seri Kembangan", "Semenyih"].map((branch) => {
+                          {clinicBranches.map((branch) => {
                             const declareUrl = `${window.location.origin}${window.location.pathname}?declare=${encodeURIComponent(branch)}`;
                             const qrImg = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(declareUrl)}`;
                             return (

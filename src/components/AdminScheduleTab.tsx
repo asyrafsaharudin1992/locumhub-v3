@@ -3,6 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CustomCalendar } from './CustomCalendar';
 import { SlotManageModal } from './SlotManageModal';
 import { LocumSlot, UserProfile, AdminAlert } from '../types';
+import { DEFAULT_CLINIC_BRANCH, setStoredClinicBranches } from '../clinicConfig';
+import { saveClinicBranchToSupabase } from '../supabaseService';
+import { useClinicBranches } from '../useClinicBranches';
 import { Plus, Trash2, Calendar, MapPin, Clock, DollarSign, CalendarDays, Key, Users, AlertCircle, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 
 interface AdminScheduleTabProps {
@@ -26,20 +29,24 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
   adminAlerts = [],
   onDismissAlert
 }) => {
-  const [selectedBranch, setSelectedBranch] = useState<'All' | 'Seri Kembangan' | 'Kajang'>('All');
+  const [selectedBranch, setSelectedBranch] = useState('All');
   const [managingSlot, setManagingSlot] = useState<LocumSlot | null>(null);
 
   // Bulk creation planning states
   const [bulkDates, setBulkDates] = useState<string[]>([]);
   const [pendingDates, setPendingDates] = useState<string[]>([]);
   const [pickerMonth, setPickerMonth] = useState(() => new Date());
-  const [bulkBranch, setBulkBranch] = useState('Seri Kembangan');
+  const [bulkBranch, setBulkBranch] = useState(DEFAULT_CLINIC_BRANCH);
   const [bulkTime, setBulkTime] = useState('9am-5pm');
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<string | null>(null);
 
   // New non-blocking notification state to replace blocked browser alert()
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isPublishing, setIsPublishing] = useState<boolean>(false);
+  const branchOptions = useClinicBranches(slots.map((slot) => slot.cawangan));
+  const [showBranchManager, setShowBranchManager] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [branchSaving, setBranchSaving] = useState(false);
 
   // Staff clicking an empty (Available) slot — shows a doctor picker so
   // they can WhatsApp one or more doctors directly about the open shift,
@@ -72,7 +79,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
     setNotification(null);
     setBulkDates([]);
     setPendingDates([]);
-    setBulkBranch('Seri Kembangan');
+    setBulkBranch(DEFAULT_CLINIC_BRANCH);
     setBulkTime('9am-5pm');
   };
 
@@ -248,7 +255,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
       {/* Visual calendar display on left side (Col 8) */}
       <div className="xl:col-span-8 space-y-4">
         <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200 shadow-sm">
-          {(['All', 'Seri Kembangan', 'Kajang'] as const).map(branch => (
+          {(['All', ...branchOptions]).map(branch => (
             <button
               key={branch}
               onClick={() => setSelectedBranch(branch)}
@@ -258,7 +265,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
                   : 'text-slate-600 hover:text-slate-850'
               }`}
             >
-              {branch === 'All' ? 'All Branches' : branch === 'Seri Kembangan' ? 'SK branch' : 'Kajang branch'}
+              {branch === 'All' ? 'All Branches' : branch === 'Seri Kembangan' ? 'SK branch' : branch}
             </button>
           ))}
         </div>
@@ -285,15 +292,70 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         </div>
       ) : (
       <div className="xl:col-span-4 rounded-[28px] border border-slate-700/80 bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-6 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] space-y-5">
-        <div className="flex items-center gap-2">
-          <Key className="w-4 h-4 text-indigo-600" />
-          <h5 className="font-display font-bold text-white tracking-tight text-sm uppercase">
-            Bulk planners & publishers
-          </h5>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Key className="w-4 h-4 text-indigo-600" />
+            <h5 className="font-display font-bold text-white tracking-tight text-sm uppercase">
+              Bulk planners & publishers
+            </h5>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowBranchManager((open) => !open)}
+            className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-[10px] font-bold text-white transition hover:bg-white/20"
+          >
+            Manage branches
+          </button>
         </div>
         <p className="text-xs text-slate-300 leading-relaxed font-sans">
           Select multiple dates and publish open locum slots instantly across all doctor workspaces.
         </p>
+
+        {showBranchManager && (
+          <div className="space-y-3 rounded-2xl border border-white/15 bg-white/10 p-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-sky-100">Clinic branches</p>
+              <p className="mt-1 text-[11px] text-slate-300">Add a branch for schedules, booking filters and QR declarations.</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={newBranchName}
+                onChange={(event) => setNewBranchName(event.target.value)}
+                placeholder="e.g. Bangi"
+                className="min-w-0 flex-1 rounded-xl border border-white/20 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+              />
+              <button
+                type="button"
+                disabled={branchSaving || !newBranchName.trim()}
+                onClick={async () => {
+                  const cleanName = newBranchName.trim().replace(/\s+/g, ' ');
+                  if (!cleanName || branchOptions.some((branch) => branch.toLowerCase() === cleanName.toLowerCase())) return;
+                  setBranchSaving(true);
+                  try {
+                    await saveClinicBranchToSupabase(cleanName);
+                    setStoredClinicBranches([...branchOptions, cleanName]);
+                    setNewBranchName('');
+                    setNotification({ type: 'success', text: `${cleanName} added successfully.` });
+                  } catch (error: any) {
+                    setNotification({ type: 'error', text: error?.message || 'Could not save the branch.' });
+                  } finally {
+                    setBranchSaving(false);
+                  }
+                }}
+                className="rounded-xl bg-indigo-500 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {branchSaving ? 'Saving…' : 'Add'}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {branchOptions.map((branch) => (
+                <span key={branch} className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[10px] font-semibold text-sky-50">
+                  {branch}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Clean Modern Non-blocking Status Notifications */}
         {notification && (
@@ -426,9 +488,9 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
                 onChange={e => setBulkBranch(e.target.value)}
                 className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#0d5078] outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-200"
               >
-                <option value="Seri Kembangan">Seri Kembangan</option>
-                <option value="Kajang">Kajang</option>
-                <option value="CME / BRIEFING">CME / BRIEFING</option>
+                {branchOptions.map((branch) => (
+                  <option key={branch} value={branch}>{branch}</option>
+                ))}
               </select>
             </div>
 

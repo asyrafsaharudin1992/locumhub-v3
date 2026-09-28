@@ -91,10 +91,7 @@ export default async function handler(req: any, res: any) {
   const email = String(body.email || "").trim().toLowerCase();
   const role = body.role || "Doctor";
   const mmc = extractMmc(String(body.mmc || ""));
-  const initialPassword =
-    role === "Admin"
-      ? "klinikARA2026"
-      : String(body.initialPassword || "").trim();
+  const initialPassword = String(body.initialPassword || "").trim();
 
   if (!phone || !name) {
     res.status(400).json({ error: "Name and phone number are required." });
@@ -104,14 +101,20 @@ export default async function handler(req: any, res: any) {
     res.status(400).json({ error: "Please enter a valid email address." });
     return;
   }
-  if (initialPassword.length < 6 && !/^\d{5,6}$/.test(mmc)) {
+  if (
+    (role === "Admin" && initialPassword.length < 6) ||
+    (role !== "Admin" && initialPassword.length < 6 && !/^\d{5,6}$/.test(mmc))
+  ) {
     res.status(400).json({
-      error: "An initial password of at least 6 characters is required when there is no 5/6 digit MMC.",
+      error:
+        role === "Admin"
+          ? "An initial password of at least 6 characters is required for Admin accounts."
+          : "An initial password of at least 6 characters is required when there is no 5/6 digit MMC.",
     });
     return;
   }
 
-  const password = /^\d{5,6}$/.test(mmc)
+  const password = role !== "Admin" && /^\d{5,6}$/.test(mmc)
     ? mmc.length === 5
       ? `0${mmc}`
       : mmc

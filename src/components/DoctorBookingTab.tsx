@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CustomCalendar } from './CustomCalendar';
 import { LocumSlot, UserProfile } from '../types';
+import { useClinicBranches } from '../useClinicBranches';
 import { MapPin, Info, AlertTriangle, Clock, X, CheckCircle2, CalendarDays, Hourglass, Check } from 'lucide-react';
 
 interface DoctorBookingTabProps {
@@ -16,7 +17,7 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
   currentUser,
   onBookSlot,
 }) => {
-  const [selectedBranch, setSelectedBranch] = useState<'All' | 'Seri Kembangan' | 'Kajang'>('All');
+  const [selectedBranch, setSelectedBranch] = useState('All');
   const [pendingSlot, setPendingSlot] = useState<LocumSlot | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
   });
   // Doctors should only ever see genuinely open/unbooked locum slots here.
   const availableSlots = locumSlots.filter((s) => s.status === 'Available');
+  const branchOptions = useClinicBranches(locumSlots.map((slot) => slot.cawangan));
   const normalizePhone = (value: string) => value.replace(/\D/g, '').replace(/^60/, '0');
   const mySlots = locumSlots.filter((s) => normalizePhone(String(s.phone || '')) === normalizePhone(currentUser.phone));
   const parseSlotDate = (value: string) => {
@@ -150,7 +152,7 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
 
       {/* Branch Location filters switcher */}
       <div className="flex gap-2 bg-slate-100 p-1 rounded-xl w-fit border border-slate-200 shadow-sm">
-        {(['All', 'Seri Kembangan', 'Kajang'] as const).map(branch => (
+        {(['All', ...branchOptions]).map(branch => (
           <button
             key={branch}
             onClick={() => setSelectedBranch(branch)}
@@ -160,7 +162,7 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
                 : 'text-slate-600 hover:text-[#082f49]'
             }`}
           >
-            {branch === 'All' ? 'All Clinics' : branch === 'Seri Kembangan' ? 'SK Branch' : 'Kajang Branch'}
+              {branch === 'All' ? 'All Clinics' : branch === 'Seri Kembangan' ? 'SK Branch' : branch}
           </button>
         ))}
       </div>

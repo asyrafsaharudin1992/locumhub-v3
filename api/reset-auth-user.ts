@@ -33,13 +33,18 @@ export default async function handler(req: any, res: any) {
     return;
   }
   const callerPhone = String(callerData.user.user_metadata?.phone || "").trim();
+  const callerEmail = String(callerData.user.email || callerData.user.user_metadata?.email || "")
+    .trim()
+    .toLowerCase();
   const { data: callerProfile } = await admin.from("users").select("role").eq("phone", callerPhone).maybeSingle();
   const phone = String(req.body?.phone || "").trim();
   const newPassword = String(req.body?.newPassword || "").trim();
   const callerRole = callerProfile?.role || callerData.user.user_metadata?.role;
   const isSelfReset = phone === callerPhone;
-  if (callerRole !== "Admin" && !isSelfReset) {
-    res.status(403).json({ error: "Only an Admin can reset another user's password." });
+  const isSuperAdmin =
+    callerPhone === "0182194256" || callerEmail === "operation@hsohealthcare.com";
+  if (!isSelfReset && !isSuperAdmin) {
+    res.status(403).json({ error: "Only the Operations superadmin can reset another user's password." });
     return;
   }
   if (!phone || (newPassword.length < 6 && !/^\d{5}$/.test(newPassword))) {
