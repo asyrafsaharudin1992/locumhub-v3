@@ -503,7 +503,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
                 required
                 value={bulkTime}
                 onChange={e => setBulkTime(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#0d5078] outline-none placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500"
                 placeholder="e.g. 9am-5pm"
               />
             </div>

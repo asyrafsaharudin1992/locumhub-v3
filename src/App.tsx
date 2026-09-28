@@ -1552,7 +1552,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => setActiveTab("admin-fb")}
-                        className="group flex w-full items-center justify-between rounded-3xl border border-indigo-100 bg-white p-5 text-left shadow-[0_6px_22px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
+                        className="group flex w-full items-center justify-between rounded-3xl border border-indigo-100 bg-white p-5 text-left shadow-[0_6px_22px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md lg:hidden"
                       >
                         <span className="flex items-center gap-3">
                           <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
