@@ -565,6 +565,13 @@ export function useAppState() {
       const metadata = session.user.user_metadata || {};
       const phone = String(metadata.phone || "").trim();
       const email = String(session.user.email || "").trim().toLowerCase();
+      const cachedProfileRaw = localStorage.getItem("ara_current_user");
+      let cachedProfile: Partial<UserProfile> | null = null;
+      try {
+        cachedProfile = cachedProfileRaw ? JSON.parse(cachedProfileRaw) : null;
+      } catch {
+        cachedProfile = null;
+      }
       const profiles = await fetchUsersFromSupabase();
       if (cancelled) return;
       const raw = (profiles || []).find(
@@ -587,6 +594,27 @@ export function useAppState() {
         : fallbackRole === "staff"
           ? "Staff"
           : "Doctor";
+
+      // Never let a cached Admin/Staff screen ride on a different Auth
+      // identity (most commonly a previous Doctor session in Safari). That
+      // mismatch is exactly what makes the UI look like Admin while Supabase
+      // RLS correctly rejects the write as a doctor. Force a clean login so
+      // the JWT role and the visible role can never disagree.
+      const cachedRole = String(cachedProfile?.role || "").toLowerCase();
+      const cachedPhone = String(cachedProfile?.phone || "").trim();
+      const authRole = String(raw?.role || role).toLowerCase();
+      const authPhone = String(raw?.phone || phone).trim();
+      const cachedPrivileged = cachedRole === "admin" || cachedRole === "staff";
+      const identityMismatch = cachedPrivileged && (
+        (cachedPhone && authPhone && cachedPhone !== authPhone) ||
+        (cachedRole !== authRole)
+      );
+      if (identityMismatch) {
+        localStorage.removeItem("ara_current_user");
+        localStorage.setItem("ara_manual_logout", "true");
+        setState((prev) => ({ ...prev, currentUser: null }));
+        return;
+      }
       const user: UserProfile = {
         phone: String(raw?.phone || phone || session.user.id).trim(),
         password: "",
