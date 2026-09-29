@@ -179,7 +179,9 @@ export function useAppState() {
     // keeps the interface on the same account during a page refresh. The
     // restore effect below immediately replaces it with the fresh Supabase
     // profile when a valid Auth session is available.
-    const savedCurrentUser = localStorage.getItem("ara_current_user");
+    const savedCurrentUser = localStorage.getItem("ara_manual_logout") === "true"
+      ? null
+      : localStorage.getItem("ara_current_user");
     const savedNotifications = localStorage.getItem("ara_notifications");
     const savedAdminAlerts = localStorage.getItem("ara_admin_alerts");
 
@@ -597,6 +599,7 @@ export function useAppState() {
         badges: typeof raw?.badges === "string" ? raw.badges : "",
         locks: typeof raw?.locks === "string" ? raw.locks : "",
       };
+      localStorage.removeItem("ara_manual_logout");
       setState((prev) => ({ ...prev, currentUser: user }));
       localStorage.setItem("ara_current_user", JSON.stringify(user));
       await pullFromSupabase();
@@ -611,7 +614,7 @@ export function useAppState() {
       // Only an explicit SIGNED_OUT event should clear the app user. A
       // transient null session during token refresh must not log the user
       // out of the interface by itself.
-      else if (event === "SIGNED_OUT") {
+      else if (event === "SIGNED_OUT" && localStorage.getItem("ara_manual_logout") === "true") {
         setState((prev) => ({ ...prev, currentUser: null }));
       }
     });
@@ -861,6 +864,7 @@ export function useAppState() {
         badges: typeof rawUser.badges === "string" ? rawUser.badges : "",
         locks: typeof rawUser.locks === "string" ? rawUser.locks : "",
       };
+      localStorage.removeItem("ara_manual_logout");
       setState((prev) => ({ ...prev, currentUser: user }));
       return { success: true, message: "Login successful", user };
     }
@@ -900,6 +904,7 @@ export function useAppState() {
           user: null,
         };
       }
+      localStorage.removeItem("ara_manual_logout");
       setState((prev) => ({ ...prev, currentUser: user }));
       localStorage.setItem("ara_current_user", JSON.stringify(user));
       // The first app load can happen before Supabase Auth has a session
@@ -926,6 +931,7 @@ export function useAppState() {
           user: null,
         };
       }
+      localStorage.removeItem("ara_manual_logout");
       setState((prev) => ({ ...prev, currentUser: user }));
       localStorage.setItem("ara_current_user", JSON.stringify(user));
       return { success: true, message: "Login successful", user };
@@ -1032,6 +1038,7 @@ export function useAppState() {
   const logout = () => {
     // Deliberately NOT logged via logActivity — same reasoning as login:
     // never read/displayed anywhere in the app, just write-only noise.
+    localStorage.setItem("ara_manual_logout", "true");
     localStorage.removeItem("ara_current_user");
     const client = getSupabaseClient();
     if (client) {
