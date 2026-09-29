@@ -417,9 +417,20 @@ export function useAppState() {
     if (!client) return;
     const { data } = await client.auth.getSession();
     if (!data.session) throw new Error("Your login session has expired. Please sign in again.");
-    const refreshed = await client.auth.refreshSession();
-    if (refreshed.error || !refreshed.data.session) {
-      throw refreshed.error || new Error("Your login session could not be refreshed. Please sign in again.");
+    const expiresSoon = !data.session.expires_at || data.session.expires_at * 1000 <= Date.now() + 60 * 1000;
+    if (!expiresSoon) return;
+    try {
+      const refreshed = await client.auth.refreshSession();
+      if (refreshed.error || !refreshed.data.session) {
+        throw refreshed.error || new Error("Session refresh returned no session.");
+      }
+    } catch (err) {
+      const tokenStillValid = !data.session.expires_at || data.session.expires_at * 1000 > Date.now();
+      if (tokenStillValid) {
+        console.warn("Safari session refresh failed; using the still-valid access token:", err);
+        return;
+      }
+      throw new Error("Your login session has expired. Please sign in again.");
     }
   };
 
@@ -659,8 +670,15 @@ export function useAppState() {
         // used by the Supabase RLS trigger match the visible role.
         let session = data.session;
         if (session) {
-          const refreshed = await client.auth.refreshSession();
-          session = refreshed.data.session || session;
+          const expiresSoon = !session.expires_at || session.expires_at * 1000 <= Date.now() + 5 * 60 * 1000;
+          if (expiresSoon) {
+            try {
+              const refreshed = await client.auth.refreshSession();
+              session = refreshed.data.session || session;
+            } catch (err) {
+              console.warn("Supabase session refresh deferred:", err);
+            }
+          }
         }
         return restoreSession(session);
       })
