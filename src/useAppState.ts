@@ -549,21 +549,35 @@ export function useAppState() {
         (profile) =>
           (phone && profile.phone.trim() === phone) ||
           (email && profile.email.trim().toLowerCase() === email),
+      ) || (state.users || []).find(
+        (profile) =>
+          (phone && profile.phone.trim() === phone) ||
+          (email && profile.email.trim().toLowerCase() === email),
       );
-      if (!raw) return;
+      // A valid Supabase Auth session must not look like a logout just
+      // because the users_safe profile query is briefly unavailable or the
+      // legacy phone/email fields do not match the Auth metadata exactly.
+      // Use the trusted Auth identity as a temporary profile in that case;
+      // the next Supabase pull will replace it with the full database row.
+      const fallbackRole = String(metadata.role || "Doctor").toLowerCase();
+      const role = fallbackRole === "admin"
+        ? "Admin"
+        : fallbackRole === "staff"
+          ? "Staff"
+          : "Doctor";
       const user: UserProfile = {
-        phone: String(raw.phone || phone).trim(),
+        phone: String(raw?.phone || phone || session.user.id).trim(),
         password: "",
-        name: raw.name || metadata.name || "",
-        role: (raw.role || metadata.role || "Doctor") as any,
-        email: raw.email || email,
-        mmc: raw.mmc || metadata.mmc || "",
-        apc: raw.apc || "",
-        indemnity: raw.indemnity || "Tiada",
-        workplace: raw.workplace || "",
-        points: Number(raw.points || 0),
-        badges: typeof raw.badges === "string" ? raw.badges : "",
-        locks: typeof raw.locks === "string" ? raw.locks : "",
+        name: raw?.name || metadata.name || email || "",
+        role: (raw?.role || role) as any,
+        email: raw?.email || email,
+        mmc: raw?.mmc || metadata.mmc || "",
+        apc: raw?.apc || "",
+        indemnity: raw?.indemnity || "Tiada",
+        workplace: raw?.workplace || "",
+        points: Number(raw?.points || 0),
+        badges: typeof raw?.badges === "string" ? raw.badges : "",
+        locks: typeof raw?.locks === "string" ? raw.locks : "",
       };
       setState((prev) => ({ ...prev, currentUser: user }));
       await pullFromSupabase();

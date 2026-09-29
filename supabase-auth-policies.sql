@@ -12,14 +12,20 @@ stable
 security definer
 set search_path = public
 as $$
-  select coalesce(
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'Admin',
-    exists (
+  select
+    lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin'
+    or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'role', '')) = 'admin'
+    or exists (
       select 1 from public.users u
       where trim(u.phone::text) = trim(auth.jwt() -> 'user_metadata' ->> 'phone')
         and lower(trim(u.role::text)) = 'admin'
     )
-  );
+    or exists (
+      select 1 from public.users u
+      where lower(trim(coalesce(u.email::text, ''))) =
+            lower(trim(coalesce(auth.jwt() ->> 'email', '')))
+        and lower(trim(u.role::text)) = 'admin'
+    );
 $$;
 
 grant select on table public.slots to authenticated;
