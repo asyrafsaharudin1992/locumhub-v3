@@ -602,9 +602,9 @@ export function useAppState() {
       // the JWT role and the visible role can never disagree.
       const cachedRole = String(cachedProfile?.role || "").toLowerCase();
       const cachedPhone = String(cachedProfile?.phone || "").trim();
-      const authRole = String(raw?.role || role).toLowerCase();
+      const authRole = String(metadata.role || raw?.role || role).toLowerCase();
       const authPhone = String(raw?.phone || phone).trim();
-      const cachedPrivileged = cachedRole === "admin" || cachedRole === "staff";
+      const cachedPrivileged = ["admin", "super admin", "superadmin", "staff"].includes(cachedRole);
       const identityMismatch = cachedPrivileged && (
         (cachedPhone && authPhone && cachedPhone !== authPhone) ||
         (cachedRole !== authRole)
@@ -637,7 +637,17 @@ export function useAppState() {
 
     client.auth
       .getSession()
-      .then(({ data }) => restoreSession(data.session))
+      .then(async ({ data }) => {
+        // Safari can keep an older access token after an Auth user's role was
+        // repaired. Refresh once on the initial restore so the JWT claims
+        // used by the Supabase RLS trigger match the visible role.
+        let session = data.session;
+        if (session) {
+          const refreshed = await client.auth.refreshSession();
+          session = refreshed.data.session || session;
+        }
+        return restoreSession(session);
+      })
       .finally(() => setAuthReady(true));
     const { data: authListener } = client.auth.onAuthStateChange((event, session) => {
       if (session) void restoreSession(session);

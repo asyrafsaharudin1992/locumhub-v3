@@ -13,18 +13,18 @@ security definer
 set search_path = public
 as $$
   select
-    lower(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin'
-    or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'role', '')) = 'admin'
+    lower(trim(coalesce(auth.jwt() -> 'app_metadata' ->> 'role', ''))) in ('admin', 'super admin', 'superadmin')
+    or lower(trim(coalesce(auth.jwt() -> 'user_metadata' ->> 'role', ''))) in ('admin', 'super admin', 'superadmin')
     or exists (
       select 1 from public.users u
       where trim(u.phone::text) = trim(auth.jwt() -> 'user_metadata' ->> 'phone')
-        and lower(trim(u.role::text)) = 'admin'
+        and lower(trim(u.role::text)) in ('admin', 'super admin', 'superadmin')
     )
     or exists (
       select 1 from public.users u
       where lower(trim(coalesce(u.email::text, ''))) =
             lower(trim(coalesce(auth.jwt() ->> 'email', '')))
-        and lower(trim(u.role::text)) = 'admin'
+        and lower(trim(u.role::text)) in ('admin', 'super admin', 'superadmin')
     );
 $$;
 
