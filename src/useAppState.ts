@@ -417,9 +417,11 @@ export function useAppState() {
     if (!client) return;
     const { data } = await client.auth.getSession();
     if (!data.session) throw new Error("Your login session has expired. Please sign in again.");
-    const expiresSoon = !data.session.expires_at || data.session.expires_at * 1000 <= Date.now() + 60 * 1000;
-    if (!expiresSoon) return;
     try {
+      // Safari can keep a stale access token in memory after a tab has been
+      // backgrounded. Refresh on the actual write instead of trusting the
+      // cached expires_at value; this is an Auth request only, not a database
+      // read or polling operation.
       const refreshed = await client.auth.refreshSession();
       if (refreshed.error || !refreshed.data.session) {
         throw refreshed.error || new Error("Session refresh returned no session.");
@@ -452,6 +454,7 @@ export function useAppState() {
 
   const cloudSaveUsersBulk = async (usersToSave: UserProfile[]) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
+      await refreshSupabaseSessionForWrite();
       // Must actually await each save — previously this fired all saves
       // without waiting, so callers like recalculateBadges() would think
       // they were done while writes were still in flight. That created a
@@ -692,9 +695,19 @@ export function useAppState() {
         setState((prev) => ({ ...prev, currentUser: null }));
       }
     });
+    const refreshOnResume = () => {
+      if (document.visibilityState !== "visible") return;
+      void client.auth.refreshSession().catch((err) =>
+        console.warn("Supabase session refresh on Safari resume deferred:", err),
+      );
+    };
+    document.addEventListener("visibilitychange", refreshOnResume);
+    window.addEventListener("focus", refreshOnResume);
     return () => {
       cancelled = true;
       authListener.subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", refreshOnResume);
+      window.removeEventListener("focus", refreshOnResume);
     };
   }, [isSupabaseEnabled]);
 
