@@ -1803,13 +1803,13 @@ export function useAppState() {
 
     if (action === "DELETE") {
       const updatedSlots = baseSlots.filter((s) => s.id !== id);
-      setState((prev) => ({
-        ...prev,
-        slots: updatedSlots,
-      }));
-      await cloudDeleteSlot(id).catch((err) =>
-        console.error("Cloud adminManageSlot DELETE failed:", err),
-      );
+      try {
+        await cloudDeleteSlot(id);
+      } catch (err: any) {
+        console.error("Cloud adminManageSlot DELETE failed:", err);
+        return `❌ Slot could not be deleted: ${err?.message || "database update failed"}`;
+      }
+      setState((prev) => ({ ...prev, slots: updatedSlots }));
 
       if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
         await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
@@ -1838,8 +1838,6 @@ export function useAppState() {
         return s;
       });
 
-      setState((prev) => ({ ...prev, slots: updatedSlots }));
-
       const updatedSlot = {
         ...slot,
         status: "Available",
@@ -1848,9 +1846,23 @@ export function useAppState() {
         bookedAt: undefined,
       } as LocumSlot;
 
-      await cloudSaveSlot(updatedSlot).catch((err) =>
-        console.error("Cloud adminManageSlot CANCEL failed:", err),
-      );
+      try {
+        await cloudSaveSlot(updatedSlot);
+      } catch (err: any) {
+        console.error("Cloud adminManageSlot CANCEL failed:", err);
+        return `❌ Slot could not be reset: ${err?.message || "database update failed"}`;
+      }
+
+      const confirmedSlots = await fetchSlotsFromSupabase();
+      if (confirmedSlots) {
+        const confirmed = confirmedSlots.find((candidate) => candidate.id === id);
+        if (!confirmed || confirmed.status !== "Available" || confirmed.dr || confirmed.phone) {
+          return "❌ Reset could not be confirmed in Supabase. Please try again.";
+        }
+        setState((prev) => ({ ...prev, slots: confirmedSlots }));
+      } else {
+        setState((prev) => ({ ...prev, slots: updatedSlots }));
+      }
 
       if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
         await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
