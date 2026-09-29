@@ -5,27 +5,20 @@
 //
 // Badges implemented, matching the original Google Apps Script rules:
 //
-// 1. Heart Winner       — doctor has a perfect/near-perfect rating in the
-//                          "Manual Feedback" patient feedback source that
-//                          month.
+// 1. Heart Winner       — manual Loyalty Points award.
 // 2. The Unstoppable    — doctor completed >= 2 shifts that month AND had
 //                          ZERO cancellations that month (by admin or by
 //                          themselves).
-// 3. The Diligent Doc   — doctor attended a CME/Briefing session that month
-//                          (a slot whose branch/cawangan is "CME" or
-//                          "Briefing"). Awarded per month attended, not a
-//                          one-time lifetime milestone.
-// 4. Iron Doctor        — doctor worked a shift >10 hours, OR 2+ shifts in
-//                          the same calendar day, that month. Triggers as
-//                          soon as the shift's end time has passed — does
-//                          NOT require the admin to have closed out
-//                          sales/patient numbers for it.
-// 5. Last Minute Saviour— doctor's booking timestamp was less than 25 hours
-//                          before the shift's own start time, that month.
+// 3. The Diligent Doc   — manual Loyalty Points award.
+// 4. Iron Doctor        — doctor worked a shift >10 hours. Triggers as soon
+//                          as the shift's end time has passed and does NOT
+//                          require a performance close-out.
+// 5. Last Minute Saviour— doctor was booked within 24 hours before the
+//                          shift; awarded only after the shift has ended.
 //
-// NOTE: "Team Favourite" is intentionally NOT automated — admin picks and
-// awards it manually via the Loyalty Points panel, since "favourite" is a
-// judgement call, not something purely countable.
+// NOTE: Team Favorite, Heart Winner and The Diligent Doc are intentionally
+// manual Loyalty Points awards. The Unstoppable is automated only when the
+// selected month is closed.
 //
 // KNOWN DATA LIMITATION: doctor self-cancellations were only recorded in
 // "admin_alerts", which gets deleted once an admin dismisses it — so for
@@ -195,9 +188,17 @@ export function recalculateBadgesForMonth(
 ): RecalcResult {
   const monthLabel = `${MONTH_NAMES[parseInt(month, 10) - 1] || month} ${year}`;
   const summaryLines: string[] = [];
+  const now = new Date();
+  // A month is closed only once the first day of the following month has
+  // started. This keeps The Unstoppable from being awarded early.
+  const monthIsClosed = new Date(Number(year), Number(month), 1).getTime() <= now.getTime();
 
   const monthSlots = allSlots.filter(
-    (s) => s.status === "Approved" && s.dr && slotIsInMonth(s, month, year),
+    (s) => {
+      if (s.status !== "Approved" || !s.dr || !slotIsInMonth(s, month, year)) return false;
+      const range = parseShiftRange(s.masa, s.tarikh);
+      return Boolean(range && range.end.getTime() <= now.getTime());
+    },
   );
 
   // ---- Cancellations this month (admin-side + doctor self-cancel) ----
@@ -243,118 +244,54 @@ export function recalculateBadgesForMonth(
     shiftsByDoctor.get(key)!.push(s);
   });
 
-  // ---- The Diligent Doc: attended a CME/Briefing slot this month ----
-  const diligentDocDoctors = new Set<string>();
-  const diligentDocSlotIds = new Map<string, Set<string>>();
+  // ---- Iron Doctor: strictly more than 10 hours, after the shift ends ----
+  // No same-day double-shift rule and no performance close-out requirement.
+  const ironDoctorSlotIds = new Map<string, Set<string>>();
   monthSlots.forEach((s) => {
-    const branchUpper = (s.cawangan || "").toUpperCase();
-    if (branchUpper.includes("CME") || branchUpper.includes("BRIEFING")) {
-      const key = normalizeDoctorName(s.dr);
-      diligentDocDoctors.add(key);
-      if (!diligentDocSlotIds.has(key)) diligentDocSlotIds.set(key, new Set());
-      diligentDocSlotIds.get(key)!.add(s.id);
-    }
+    const range = parseShiftRange(s.masa, s.tarikh);
+    if (!range) return;
+    const hours = (range.end.getTime() - range.start.getTime()) / (1000 * 60 * 60);
+    if (hours <= 10) return;
+    const key = normalizeDoctorName(s.dr);
+    if (!ironDoctorSlotIds.has(key)) ironDoctorSlotIds.set(key, new Set());
+    ironDoctorSlotIds.get(key)!.add(s.id);
   });
 
-  // ---- Iron Doctor: >12h shift, or 2+ shifts same calendar day, shift must
-  // have already ended (not gated behind performance close-out). Tracks
-  // WHICH slot IDs qualified per doctor, so re-running this scan later
-  // (e.g. next month, or a re-run for the same month) never double-counts
-  // a slot that was already credited.
-  const now = new Date();
-  const ironDoctorSlotIds = new Map<string, Set<string>>();
-  shiftsByDoctor.forEach((shifts, key) => {
-    const byDate = new Map<string, LocumSlot[]>();
-    shifts.forEach((s) => {
-      if (!byDate.has(s.tarikh)) byDate.set(s.tarikh, []);
-      byDate.get(s.tarikh)!.push(s);
-    });
-    byDate.forEach((sameDaySlots) => {
-      let qualifies = sameDaySlots.length >= 2;
-      sameDaySlots.forEach((s) => {
-        const range = parseShiftRange(s.masa, s.tarikh);
-        if (range && range.end.getTime() <= now.getTime()) {
-          const hours = (range.end.getTime() - range.start.getTime()) / (1000 * 60 * 60);
-          if (hours >= 10) qualifies = true;
-        } else if (!range) {
-          qualifies = false; // can't confirm timing, don't guess
-        }
-      });
-      // For the "2+ shifts same day" path, still require at least one of
-      // them to have already ended before crediting it.
-      const anyEnded = sameDaySlots.some((s) => {
-        const range = parseShiftRange(s.masa, s.tarikh);
-        return range && range.end.getTime() <= now.getTime();
-      });
-      if (qualifies && anyEnded) {
-        if (!ironDoctorSlotIds.has(key)) ironDoctorSlotIds.set(key, new Set());
-        sameDaySlots.forEach((s) => ironDoctorSlotIds.get(key)!.add(s.id));
+  // ---- The Unstoppable: only after the month has ended ----
+  const unstoppableDoctors = new Set<string>();
+  if (monthIsClosed) {
+    shiftsByDoctor.forEach((shifts, key) => {
+      if (shifts.length >= 2 && !cancelledDoctorsThisMonth.has(key)) {
+        unstoppableDoctors.add(key);
       }
     });
-  });
+  }
 
-  // ---- The Unstoppable: >=2 shifts this month, zero cancellations ----
-  const unstoppableDoctors = new Set<string>();
-  shiftsByDoctor.forEach((shifts, key) => {
-    if (shifts.length >= 2 && !cancelledDoctorsThisMonth.has(key)) {
-      unstoppableDoctors.add(key);
-    }
-  });
-
-  // ---- Last Minute Saviour: booked <24h before shift start ----
-  // Also tracked per slot ID for the same re-run-safety reason as Iron Doctor.
+  // ---- Last Minute Saviour: booked within 24h OR entered after the shift ----
   const lastMinuteSlotIds = new Map<string, Set<string>>();
   monthSlots.forEach((s) => {
     if (!s.bookedAt) return;
     const range = parseShiftRange(s.masa, s.tarikh);
     const bookedAt = parseBookedAt(s.bookedAt);
-    if (range && bookedAt) {
-      const diffHours = (range.start.getTime() - bookedAt.getTime()) / (1000 * 60 * 60);
-      if (diffHours >= 0 && diffHours < 25) {
-        const key = normalizeDoctorName(s.dr);
-        if (!lastMinuteSlotIds.has(key)) lastMinuteSlotIds.set(key, new Set());
-        lastMinuteSlotIds.get(key)!.add(s.id);
-      }
+    if (!range || !bookedAt) return;
+    const diffHours = (range.start.getTime() - bookedAt.getTime()) / (1000 * 60 * 60);
+    const enteredAfterShift = bookedAt.getTime() >= range.end.getTime();
+    if (enteredAfterShift || (diffHours >= 0 && diffHours <= 24)) {
+      const key = normalizeDoctorName(s.dr);
+      if (!lastMinuteSlotIds.has(key)) lastMinuteSlotIds.set(key, new Set());
+      lastMinuteSlotIds.get(key)!.add(s.id);
     }
   });
 
-  // ---- Heart Winner: perfect rating in Manual Feedback this month ----
-  // IMPORTANT: only the "MANUAL FEEDBACK" sheet counts here — NOT
-  // "Form responses 1" (a 4-question Likert satisfaction survey that gets
-  // averaged into a 1-5 number). A patient answering "Sangat Setuju" to
-  // all 4 Likert questions produces an average of exactly 5.0, which used
-  // to get treated as a genuine Heart Winner-qualifying review even though
-  // it was never an actual manual review. f.source distinguishes the two
-  // (set in googleSheetsService.ts); entries with no source tag at all
-  // (e.g. rows coming from the Supabase feedbacks_patient table, which
-  // only ever holds real Manual Feedback rows) are treated as manual.
-  const heartWinnerReviewIds = new Map<string, Set<string>>();
-  manualFeedback.forEach((f) => {
-    if (f.source === "form") return;
-    if (!f.target || f.rating < 5) return;
-    const parsed = parseMonthYear(f.tarikh);
-    if (!parsed) return;
-    if (parsed.month === month && parsed.year === year) {
-      const key = normalizeDoctorName(f.target);
-      // Prefer the REAL Supabase row id (guaranteed unique) over a
-      // content-based hash — two reviews can share the same
-      // date/reviewer/target (e.g. the same patient reviewing twice in one
-      // day), which a content hash alone can't tell apart.
-      const stableId = f.id
-        ? f.id
-        : `${f.tarikh.replace(/\//g, "-")}_${f.reviewer.trim()}_${f.target.trim()}`
-            .replace(/[^a-zA-Z0-9\-_]/g, "");
-      if (!heartWinnerReviewIds.has(key)) heartWinnerReviewIds.set(key, new Set());
-      heartWinnerReviewIds.get(key)!.add(`HW-${stableId}`);
-    }
-  });
+  // Heart Winner, Diligent Doc and Team Favorite are manual Loyalty Points
+  // awards. They deliberately do not participate in this automatic scan.
 
   // ---- Apply badges + AraCoins to each user ----
   // Every check here is written so running this scan again for the same
   // month (or accidentally twice) never inflates counts:
   //  - Per-slot badges (Iron Doctor, Last Minute Saviour) check the doctor's
   //    `locks` field for that exact slot ID before crediting it.
-  //  - Per-month badges (Heart Winner, Unstoppable, Diligent Doc) check
+  //  - Per-month badge (Unstoppable) checks
   //    whether that "(Month Year)" tag is already present before adding it.
   // IMPORTANT: this must match the exact format used everywhere else a
   // badge+month tag gets written into the badges string — adminGivePoints,
@@ -392,16 +329,11 @@ export function recalculateBadgesForMonth(
     const alreadyHasUnstoppable = alreadyHasMonthBadge("The Unstoppable");
     const qualifiesUnstoppable = unstoppableDoctors.has(key);
     let revokeUnstoppable = false;
-    if (qualifiesUnstoppable && !alreadyHasUnstoppable) {
+    if (monthIsClosed && qualifiesUnstoppable && !alreadyHasUnstoppable) {
       earnedBadges.push("The Unstoppable");
       coinsAwarded += 10;
-    } else if (!qualifiesUnstoppable && alreadyHasUnstoppable) {
+    } else if ((!monthIsClosed || !qualifiesUnstoppable) && alreadyHasUnstoppable) {
       revokeUnstoppable = true;
-    }
-
-    if (diligentDocDoctors.has(key) && !alreadyHasMonthBadge("The Diligent Doc")) {
-      earnedBadges.push("The Diligent Doc");
-      coinsAwarded += 10;
     }
 
     // Iron Doctor — count only slot-days not already locked. Also revoke
@@ -415,7 +347,7 @@ export function recalculateBadgesForMonth(
     let revokeIronDoctor = false;
     if (ironSlotIds && ironSlotIds.size > 0) {
       const newIronSlots = Array.from(ironSlotIds).filter(
-        (id) => !locksStr.includes(`[IRON-${id}]`),
+        (id) => !locksStr.includes(`[IRON-${id}]`) && !locksStr.includes(`[${id}]`),
       );
       if (newIronSlots.length > 0) {
         earnedBadges.push("Iron Doctor");
@@ -431,7 +363,7 @@ export function recalculateBadgesForMonth(
     let revokeLMS = false;
     if (lmsSlotIds && lmsSlotIds.size > 0) {
       const newLmsSlots = Array.from(lmsSlotIds).filter(
-        (id) => !locksStr.includes(`[LMS-${id}]`),
+        (id) => !locksStr.includes(`[LMS-${id}]`) && !locksStr.includes(`[${id}]`),
       );
       if (newLmsSlots.length > 0) {
         earnedBadges.push("Last Minute Saviour");
@@ -442,27 +374,7 @@ export function recalculateBadgesForMonth(
       revokeLMS = true;
     }
 
-    // Heart Winner — counted per qualifying 5-star review this month, not
-    // capped at 1: a doctor can genuinely earn several excellent reviews
-    // in the same month, and each one should count. Uses the same
-    // lock-tag pattern as Iron Doctor/LMS to avoid re-crediting a review
-    // already counted in an earlier run (id already includes the "HW-"
-    // prefix, so the tag here is just "[HW-xxx]" directly). Same
-    // add/revoke pattern too.
-    const heartWinnerIds = heartWinnerReviewIds.get(key);
-    let revokeHeartWinner = false;
-    if (heartWinnerIds && heartWinnerIds.size > 0) {
-      const newHeartWinnerIds = Array.from(heartWinnerIds).filter(
-        (id) => !locksStr.includes(`[${id}]`),
-      );
-      if (newHeartWinnerIds.length > 0) {
-        earnedBadges.push("Heart Winner");
-        coinsAwarded += 15 * newHeartWinnerIds.length;
-        newHeartWinnerIds.forEach((id) => newLockIds.push(`[${id}]`));
-      }
-    }
-
-    const anyRevoke = revokeUnstoppable || revokeIronDoctor || revokeLMS || revokeHeartWinner;
+    const anyRevoke = revokeUnstoppable || revokeIronDoctor || revokeLMS;
     if (earnedBadges.length === 0 && !anyRevoke) return u;
 
     const badgeMap: { [key: string]: number } = {};
@@ -476,10 +388,9 @@ export function recalculateBadgesForMonth(
       badgeMap[name] = count;
     });
 
-    // Per-month badges get +1; Iron Doctor/Last Minute Saviour/Heart Winner
-    // get +1 per newly-qualifying slot/review found above.
+    // Unstoppable is one award per closed month; Iron/LMS are per slot.
     const perMonthBadges = earnedBadges.filter(
-      (b) => b !== "Iron Doctor" && b !== "Last Minute Saviour" && b !== "Heart Winner",
+      (b) => b === "The Unstoppable",
     );
     perMonthBadges.forEach((badge) => {
       const tag = `${badge} ${monthTagSuffix}`;
@@ -503,15 +414,6 @@ export function recalculateBadgesForMonth(
         badgeMap[tag] = (badgeMap[tag] || 0) + newLmsCount;
       }
     }
-    if (heartWinnerIds) {
-      const newHeartWinnerCount = Array.from(heartWinnerIds).filter((id) =>
-        newLockIds.includes(`[${id}]`),
-      ).length;
-      if (newHeartWinnerCount > 0) {
-        const tag = `Heart Winner ${monthTagSuffix}`;
-        badgeMap[tag] = (badgeMap[tag] || 0) + newHeartWinnerCount;
-      }
-    }
     if (revokeUnstoppable) {
       delete badgeMap[`The Unstoppable ${monthTagSuffix}`];
     }
@@ -520,9 +422,6 @@ export function recalculateBadgesForMonth(
     }
     if (revokeLMS) {
       delete badgeMap[`Last Minute Saviour ${monthTagSuffix}`];
-    }
-    if (revokeHeartWinner) {
-      delete badgeMap[`Heart Winner ${monthTagSuffix}`];
     }
 
     const updatedBadgeString = Object.keys(badgeMap)
@@ -565,27 +464,12 @@ export function recalculateBadgesForMonth(
         monthTag: monthTagSlash,
       });
     }
-    if (revokeHeartWinner) {
-      summaryLines.push(
-        `${u.name}: Heart Winner REVOKED for ${monthLabel} (no qualifying review found)`,
-      );
-      badgeRevocations.push({
-        phone: u.phone,
-        name: u.name,
-        badgeName: "Heart Winner",
-        monthTag: monthTagSlash,
-      });
-    }
-
     // Record per-badge details for the badge_awards Supabase table — total
     // count for this month (not just what's new in this run), plus the full
     // set of contributing slot IDs for Iron Doctor / Last Minute Saviour.
     perMonthBadges.forEach((badge) => {
       let slotIds: string[] | undefined;
-      if (badge === "The Diligent Doc") {
-        const s = diligentDocSlotIds.get(key);
-        if (s && s.size > 0) slotIds = Array.from(s);
-      } else if (badge === "The Unstoppable") {
+      if (badge === "The Unstoppable") {
         const s = shiftsByDoctor.get(key);
         if (s && s.length > 0) slotIds = s.map((slot) => slot.id);
       }
@@ -627,16 +511,6 @@ export function recalculateBadgesForMonth(
         monthTag: monthTagSlash,
         totalCount: lmsSlotIds.size,
         slotIds: Array.from(lmsSlotIds),
-      });
-    }
-    if (heartWinnerIds && heartWinnerIds.size > 0) {
-      badgeAwardDetails.push({
-        phone: u.phone,
-        name: u.name,
-        badgeName: "Heart Winner",
-        monthTag: monthTagSlash,
-        totalCount: heartWinnerIds.size,
-        slotIds: Array.from(heartWinnerIds),
       });
     }
 

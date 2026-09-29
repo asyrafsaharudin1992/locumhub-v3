@@ -280,6 +280,13 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
             type="button"
             disabled={isRecalculatingBadges || viewMode === 'cumulative'}
             onClick={async () => {
+              const selectedMonthIsClosed = new Date(Number(year), Number(month), 1).getTime() <= Date.now();
+              if (selectedMonthIsClosed) {
+                const shouldRunUnstoppable = window.confirm(
+                  `The ${month}/${year} month has ended. Would you like to run the analysis for The Unstoppable award?\n\nRequirement: at least 2 completed shifts and no cancellation.`
+                );
+                if (!shouldRunUnstoppable) return;
+              }
               setIsRecalculatingBadges(true);
               const result = await onRecalculateBadges(month, year);
               setIsRecalculatingBadges(false);

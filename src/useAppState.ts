@@ -142,6 +142,25 @@ function getBadgeCountForMonth(
   return parseInt(match.substring(match.lastIndexOf(":") + 1).trim()) || 0;
 }
 
+function parseAwardShiftRange(masa: string, tarikh: string): { start: Date; end: Date } | null {
+  const dateParts = String(tarikh || "").split("/").map(Number);
+  if (dateParts.length !== 3 || dateParts.some((part) => !part)) return null;
+  const [day, month, year] = dateParts;
+  const match = String(masa || "").toLowerCase().replace(/\s+/g, "").match(/(\d{1,2})(?::(\d{2}))?(am|pm)?-(\d{1,2})(?::(\d{2}))?(am|pm)?/);
+  if (!match) return null;
+  const to24 = (hour: number, meridiem: string) => {
+    let value = hour % 12;
+    if (meridiem === "pm") value += 12;
+    return value;
+  };
+  const endMeridiem = match[6] || match[3];
+  const startMeridiem = match[3] || endMeridiem;
+  const start = new Date(year, month - 1, day, to24(Number(match[1]), startMeridiem), Number(match[2] || 0));
+  let end = new Date(year, month - 1, day, to24(Number(match[4]), endMeridiem), Number(match[5] || 0));
+  if (end.getTime() <= start.getTime()) end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end };
+}
+
 export function useAppState() {
   // Localhost may read live Supabase data for realistic previews, but demo
   // actions stay local so UI flows can be tested without touching production.
@@ -156,12 +175,11 @@ export function useAppState() {
     const savedFl = localStorage.getItem("ara_feedbacks_locum");
     const savedApp = localStorage.getItem("ara_applications");
     const savedLogs = localStorage.getItem("ara_logs");
-    // A browser-controlled value is not an authentication session. Keep the
-    // old local restore only for local development; production must require a
-    // fresh server-validated login after a reload.
-    const savedCurrentUser = import.meta.env.DEV
-      ? localStorage.getItem("ara_current_user")
-      : null;
+    // Supabase Auth remains the security authority, while this cached profile
+    // keeps the interface on the same account during a page refresh. The
+    // restore effect below immediately replaces it with the fresh Supabase
+    // profile when a valid Auth session is available.
+    const savedCurrentUser = localStorage.getItem("ara_current_user");
     const savedNotifications = localStorage.getItem("ara_notifications");
     const savedAdminAlerts = localStorage.getItem("ara_admin_alerts");
 
@@ -793,7 +811,7 @@ export function useAppState() {
     localStorage.setItem("ara_logs", JSON.stringify(state.activityLogs));
     localStorage.setItem("ara_notifications", JSON.stringify(state.notifications || []));
     localStorage.setItem("ara_admin_alerts", JSON.stringify(state.adminAlerts || []));
-    if (import.meta.env.DEV && state.currentUser) {
+    if (state.currentUser) {
       localStorage.setItem(
         "ara_current_user",
         JSON.stringify(state.currentUser),
@@ -1011,8 +1029,12 @@ export function useAppState() {
   const logout = () => {
     // Deliberately NOT logged via logActivity — same reasoning as login:
     // never read/displayed anywhere in the app, just write-only noise.
-    if (localDemoMode) {
-      localStorage.removeItem("ara_current_user");
+    localStorage.removeItem("ara_current_user");
+    const client = getSupabaseClient();
+    if (client) {
+      void client.auth.signOut().catch((err) =>
+        console.error("Supabase sign-out failed:", err),
+      );
     }
     setState((prev) => ({ ...prev, currentUser: null }));
   };
@@ -1924,9 +1946,7 @@ export function useAppState() {
     const summaryLines: string[] = [];
 
     byPhone.forEach((rows, phone) => {
-      const existingUser = state.users.find(
-        (u) => normalizePhone(u.phone) === normalizePhone(phone),
-      );
+      const existingUser = findUserByPhone(phone);
       if (!existingUser) return; // badge_awards row references a doctor no longer in users
 
       const badgesParts: string[] = [];
@@ -2032,6 +2052,16 @@ export function useAppState() {
   // match each other.
   const normalizePhone = (p: string) => (p || "").replace(/[^0-9]/g, "").slice(-9);
 
+  // Prefer an exact stored phone number. Only use the normalized fallback
+  // when it identifies exactly one user. This matters for legacy data where
+  // 013... and 6013... can normalize to the same last nine digits.
+  const findUserByPhone = (phone: string): UserProfile | undefined => {
+    const exact = state.users.find((u) => (u.phone || "").trim() === (phone || "").trim());
+    if (exact) return exact;
+    const matches = state.users.filter((u) => normalizePhone(u.phone) === normalizePhone(phone));
+    return matches.length === 1 ? matches[0] : undefined;
+  };
+
   const adminGivePoints = (
     phone: string,
     pointsToAdd: number,
@@ -2068,7 +2098,7 @@ export function useAppState() {
     // row appears in Supabase anyway" behavior seen in testing — the save
     // used the (correct) outer `state`, while the message used the
     // (sometimes stale) `prev`. A single lookup makes that impossible.
-    const user = state.users.find((u) => normalizePhone(u.phone) === targetPhone);
+    const user = findUserByPhone(phone);
     if (!user) {
       return `Error: User not found (searched for phone "${phone}").`;
     }
@@ -2090,10 +2120,10 @@ export function useAppState() {
     setState((prev) => ({
       ...prev,
       users: prev.users.map((u) =>
-        normalizePhone(u.phone) === targetPhone ? updatedUser : u,
+        u.phone === user.phone ? updatedUser : u,
       ),
       currentUser:
-        normalizePhone(prev.currentUser?.phone || "") === targetPhone
+        prev.currentUser?.phone === user.phone
           ? updatedUser
           : prev.currentUser,
     }));
@@ -2128,7 +2158,7 @@ export function useAppState() {
     badgeId: string, // "Heart Winner (MM/YYYY) [HW-<id>]"
   ): Promise<string> => {
     const targetPhone = normalizePhone(phone);
-    const user = state.users.find((u) => normalizePhone(u.phone) === targetPhone);
+    const user = findUserByPhone(phone);
     if (!user) return `Error: User not found (searched for phone "${phone}").`;
 
     const embeddedMonth = badgeId.match(/\((\d{2}\/\d{4})\)/);
@@ -2149,7 +2179,7 @@ export function useAppState() {
       const rows = await fetchBadgeAwardsFromSupabase();
       const existing = rows.find(
         (r) =>
-          normalizePhone(r.doctor_phone) === targetPhone &&
+          r.doctor_phone === user.phone &&
           r.badge_name === "Heart Winner" &&
           r.month_tag === monthTag,
       );
@@ -2222,44 +2252,6 @@ export function useAppState() {
     };
     const updatedSlots = state.slots.map((s) => s.id === slotId ? updatedSlot : s);
 
-    const drNameInSlot = (slot.dr || "").toUpperCase().trim();
-    const badgesToUpdate: string[] = [];
-    const slotTimeRaw = (slot.masa || "").toLowerCase();
-    const branchRaw = (slot.cawangan || "").toUpperCase();
-    const numbersOnly = slotTimeRaw.replace(/[^0-9]/g, "");
-    if (/8.*8|9.*9|10.*10/.test(numbersOnly) || /12h|12jam|12-hour|12 hour/.test(slotTimeRaw)) {
-      badgesToUpdate.push("Iron Doctor");
-    }
-    if (branchRaw.includes("CME") || branchRaw.includes("BRIEFING")) {
-      badgesToUpdate.push("The Diligent Doc");
-    }
-    if (slot.bookedAt && slot.tarikh) {
-      const parseDate = (dStr: string) => {
-        const p = dStr.split(/[\s/:-]+/);
-        return p.length >= 3
-          ? new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]))
-          : new Date(dStr);
-      };
-      const diffInHours = (parseDate(slot.tarikh).getTime() - parseDate(slot.bookedAt).getTime()) / (1000 * 60 * 60);
-      if (diffInHours > 0 && diffInHours < 25) badgesToUpdate.push("Last Minute Saviour");
-    }
-
-    const slotLockId = `[${slotId}]`;
-    let resultText = "✅ Performance saved.";
-    const updatedUsers = state.users.map((u) => {
-      const cleanUserName = u.name.toUpperCase().trim().replace(/^DR\.?\s+/i, "");
-      const cleanSlotName = drNameInSlot.replace(/^DR\.?\s+/i, "");
-      if (cleanUserName !== cleanSlotName || badgesToUpdate.length === 0 || (u.locks || "").includes(slotLockId)) return u;
-      let updatedBadges = u.badges || "";
-      badgesToUpdate.forEach((badge) => { updatedBadges = addBadgeAward(updatedBadges, badge, period); });
-      const totalPointsAwarded = badgesToUpdate.length * 10;
-      resultText = `✅ Shift Completed! Doctor ${u.name} awarded ${totalPointsAwarded} Aracoins for: ${badgesToUpdate.join(", ")}`;
-      return { ...u, points: (u.points || 0) + totalPointsAwarded, badges: updatedBadges, locks: `${u.locks || ""}${slotLockId}` };
-    });
-
-    // Save the exact snapshot first. The old implementation populated these
-    // refs inside a setState updater, which could run after the cloud-save
-    // code and leave nothing to persist for some doctors.
     try {
       await cloudSaveSlot(updatedSlot);
     } catch (err: any) {
@@ -2267,33 +2259,12 @@ export function useAppState() {
       return `❌ Performance could not be saved: ${err?.message || "database update failed"}`;
     }
 
-    const userToSave = updatedUsers.find((u, index) => u !== state.users[index]);
-    if (userToSave) {
-      try {
-        await saveUserToSupabase(userToSave);
-        await Promise.all(badgesToUpdate.map((badge) =>
-          saveBadgeAwardToSupabase(
-            userToSave.phone,
-            userToSave.name,
-            badge,
-            period,
-            getBadgeCountForMonth(userToSave.badges, badge, period),
-          ),
-        ));
-      } catch (err) {
-        console.error("Cloud completeSlot user/badge sync failed:", err);
-      }
-    }
-
     setState((prev) => ({
       ...prev,
       slots: updatedSlots,
-      users: updatedUsers,
-      currentUser: updatedUsers.find((u) => u.phone === prev.currentUser?.phone) || prev.currentUser,
     }));
     localStorage.setItem("ara_slots", JSON.stringify(updatedSlots));
-    localStorage.setItem("ara_users", JSON.stringify(updatedUsers));
-    return resultText;
+    return "✅ Performance saved.";
   };
 
   // Recalculates all 6 AraCoins badges for a given month (Team Favorite,

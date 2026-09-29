@@ -190,7 +190,6 @@ export default function App() {
     processMonthlyUnstoppable,
     processIronDoctorScan,
     migrateHistoricalBadgesToSupabase,
-    reconcilePointsFromBadgeAwards,
     getManualHeartCandidates,
     refreshHeartWinnerAwardedIds,
     giftHeartWinnerReview,
@@ -606,20 +605,6 @@ export default function App() {
     setIsMigratingBadges(true);
     const resp = await migrateHistoricalBadgesToSupabase();
     setIsMigratingBadges(false);
-    alert(resp);
-  };
-
-  const [isReconcilingPoints, setIsReconcilingPoints] = useState(false);
-  const handleReconcilePoints = async () => {
-    if (
-      !window.confirm(
-        "Rebuild every doctor's badges & points to match what's currently in badge_awards? This OVERWRITES their current badges/points with the badge_awards totals — use this after a reset/cleanup to bring the two back in sync."
-      )
-    )
-      return;
-    setIsReconcilingPoints(true);
-    const resp = await reconcilePointsFromBadgeAwards();
-    setIsReconcilingPoints(false);
     alert(resp);
   };
 
@@ -1401,25 +1386,11 @@ export default function App() {
                       onCompleteSlot={completeSlotAndAwardPoints}
                       allBadgeAwards={allBadgeAwards}
                       onRecalculateBadges={async (month, year) => {
-                        // Don't rely on patientFeedbackEntries — it's only
-                        // populated after visiting the Feedback Management
-                        // tab, so clicking Recalculate Badges straight from
-                        // this tab (a very normal thing to do) would run
-                        // with an empty feedback list and silently skip
-                        // Heart Winner every time. Fetch fresh right here
-                        // instead, so it works regardless of which tabs
-                        // were visited this session.
-                        let feedbackForRecalc = patientFeedbackEntries;
-                        try {
-                          feedbackForRecalc = await fetchPatientFeedbackFromSheets();
-                          setPatientFeedbackEntries(feedbackForRecalc);
-                        } catch (err) {
-                          console.error(
-                            "Recalculate Badges: failed to fetch fresh feedback, falling back to cached patientFeedbackEntries",
-                            err,
-                          );
-                        }
-                        return recalculateBadges(month, year, feedbackForRecalc);
+                        // Automatic recalculation covers Iron Doctor,
+                        // Last Minute Saviour and closed-month Unstoppable.
+                        // The other three awards stay manual in Loyalty
+                        // Points, so no feedback fetch is needed here.
+                        return recalculateBadges(month, year, []);
                       }}
                     />
                   )}
@@ -1813,19 +1784,16 @@ export default function App() {
                         </div>
 
                         {/* Log CME/Briefing Attendance — multi-doctor at once.
-                            Works around the "one slot = one doctor" limit by
-                            creating one Approved slot per selected doctor for
-                            the same session; The Diligent Doc detection
-                            (badgeEngine.ts) already picks these up as-is. */}
+                            The Diligent Doc award itself is given manually
+                            from the Loyalty Points panel. */}
                         <div className="bg-white rounded-3xl border border-slate-100 p-6 space-y-4">
                           <h5 className="text-sm font-bold text-slate-800 font-display flex items-center gap-2">
                             📋 Log CME/Briefing Attendance
                           </h5>
                           <p className="text-[11px] text-slate-500 font-sans leading-relaxed">
                             Select every doctor who attended one session —
-                            creates one Approved record per doctor so all of
-                            them qualify for The Diligent Doc once you run
-                            "Recalculate Badges" for this month.
+                            creates one attendance record per doctor. Give
+                            The Diligent Doc manually from Loyalty Points.
                           </p>
 
                           <div className="grid grid-cols-2 gap-3">
@@ -1926,57 +1894,6 @@ export default function App() {
                             ✓ Log Attendance for {cmeSelectedPhones.length} Doctor(s)
                           </button>
                         </div>
-                      </div>
-
-                      {/* Scanner modules bento */}
-                        <div className="bg-white rounded-3xl border border-slate-100 p-6 space-y-4">
-                          <h5 className="font-display font-semibold text-slate-800 text-sm uppercase tracking-tight flex items-center gap-1.5">
-                            <Sparkles className="w-4 h-4 text-emerald-500" />
-                            Automated evaluation scanners
-                          </h5>
-                          <p className="text-xs text-slate-500 font-sans leading-relaxed">
-                            Bypass slow manual sheets auditing. Command scanning
-                            tasks below directly inside local memory states.
-                          </p>
-
-                          <div className="space-y-3 pt-2">
-                            {/* Rebuild users.badges/points from badge_awards. This is the
-                                ONLY scanner kept here — "Migrate to badge_awards" (wrote the
-                                opposite direction, from the old badges string into
-                                badge_awards, which could re-introduce stale/corrupted data)
-                                and the two "Run Check" buttons (Iron Doctor auto-scan /
-                                Unstoppable Monthly evaluation) were removed: both called
-                                separate, older functions (processIronDoctorScan /
-                                processMonthlyUnstoppable) that duplicated what
-                                "Recalculate Badges" on the Analytics Dashboard already does
-                                correctly, using cruder detection logic and without the
-                                idempotent-points fix — running them corrupted badge_awards.
-                                Use "Recalculate Badges" (Analytics Dashboard) for all
-                                automatic badge detection now; use this button afterward to
-                                sync points/badges. */}
-                            <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 flex items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <h6 className="text-xs font-bold text-amber-950 font-display">
-                                  Reconcile points from badge_awards
-                                </h6>
-                                <p className="text-[11px] text-slate-500 font-sans leading-relaxed max-w-xs">
-                                  Rebuilds each doctor's badges &amp; points to
-                                  match badge_awards exactly — run this after
-                                  using "Recalculate Badges" on the Analytics
-                                  Dashboard, or after any reset/cleanup, to
-                                  bring the two tables back in sync. This
-                                  OVERWRITES current badges/points.
-                                </p>
-                              </div>
-                              <button
-                                onClick={handleReconcilePoints}
-                                disabled={isReconcilingPoints}
-                                className="bg-amber-600 text-white hover:bg-amber-700 text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1 tracking-wider outline-none cursor-pointer shrink-0 disabled:opacity-60"
-                              >
-                                {isReconcilingPoints ? "Reconciling..." : "Reconcile Now"}
-                              </button>
-                            </div>
-                          </div>
                       </div>
 
                       {/* Badge History table — filter by doctor and month to
