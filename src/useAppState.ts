@@ -309,11 +309,9 @@ export function useAppState() {
     return arr;
   };
 
-  // TIER 1 — fast poll (45s). Only slots and notifications are genuinely
-  // time-sensitive enough to warrant this frequency (booking/approval
-  // status, a doctor's own notifications). Also refreshes badge_awards
-  // and shift_declarations, which are lightweight single-table fetches
-  // tied to active features.
+  // TIER 1 — slot/notification fallback poll. Realtime handles immediate
+  // slot changes; this remains a safety net for browsers where Realtime is
+  // interrupted. Badge awards and shift declarations refresh on demand.
   const pullTier1FromSupabase = async (): Promise<boolean> => {
     if (!isSupabaseActive()) return false;
     try {
@@ -321,8 +319,6 @@ export function useAppState() {
         fetchSlotsFromSupabase(),
         fetchNotificationsFromSupabase(),
       ]);
-      refreshHeartWinnerAwardedIds();
-      refreshShiftDeclarations();
       setState((prev) => ({
         ...prev,
         slots: freshList(sbSlots, prev.slots),
@@ -571,6 +567,10 @@ export function useAppState() {
   useEffect(() => {
     if (isSupabaseEnabled && isSupabaseActive()) {
       pullFromSupabase();
+      // Load these feature-specific datasets once at startup; they are
+      // refreshed on demand rather than on every live slot poll.
+      refreshHeartWinnerAwardedIds();
+      refreshShiftDeclarations();
     }
   }, []);
 
@@ -722,7 +722,7 @@ export function useAppState() {
     const tier1Interval = setInterval(() => {
       if (document.visibilityState !== "visible") return;
       pullTier1FromSupabase();
-    }, 180000); // 3-minute fallback; Realtime handles immediate slot changes
+    }, 300000); // 5-minute fallback; Realtime handles immediate slot changes
     const tier2Interval = setInterval(() => {
       if (document.visibilityState !== "visible") return;
       pullTier2FromSupabase();
@@ -798,7 +798,6 @@ export function useAppState() {
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         subscribeRealtime();
-        void pullTier1FromSupabase();
       } else {
         unsubscribeRealtime();
       }
