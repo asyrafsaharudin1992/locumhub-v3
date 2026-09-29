@@ -598,6 +598,7 @@ export function useAppState() {
         locks: typeof raw?.locks === "string" ? raw.locks : "",
       };
       setState((prev) => ({ ...prev, currentUser: user }));
+      localStorage.setItem("ara_current_user", JSON.stringify(user));
       await pullFromSupabase();
     };
 
@@ -900,6 +901,7 @@ export function useAppState() {
         };
       }
       setState((prev) => ({ ...prev, currentUser: user }));
+      localStorage.setItem("ara_current_user", JSON.stringify(user));
       // The first app load can happen before Supabase Auth has a session
       // (especially in Safari or a fresh browser profile). RLS may then
       // return an empty slot list. Pull again after the credential-validated
@@ -925,6 +927,7 @@ export function useAppState() {
         };
       }
       setState((prev) => ({ ...prev, currentUser: user }));
+      localStorage.setItem("ara_current_user", JSON.stringify(user));
       return { success: true, message: "Login successful", user };
     }
     return {
@@ -2370,7 +2373,7 @@ export function useAppState() {
     return `✅ Badges recalculated!\n\n${summaryLines.join("\n")}`;
   };
 
-  // Iron Doctor — auto-detects shifts of 12+ hours (or specific back-to-back
+  // Iron Doctor — legacy scanner for shifts of 10+ hours
   // time patterns) once the shift's end time has passed, without needing the
   // Clinical Performance Close-Out form to be filled in first.
   const processIronDoctorScan = async (): Promise<string> => {
@@ -2403,18 +2406,14 @@ export function useAppState() {
       const endTime = parseSlotEnd(s.tarikh, s.masa);
       if (!endTime || endTime > now) return false; // shift hasn't ended yet
 
-      const numbersOnly = s.masa.toLowerCase().replace(/[^0-9]/g, "");
-      const isLongShift =
-        /8.*8|9.*9|10.*10|11.*11|12.*12/.test(numbersOnly) ||
-        s.masa.toLowerCase().includes("12h") ||
-        s.masa.toLowerCase().includes("12jam") ||
-        s.masa.toLowerCase().includes("12-hour") ||
-        s.masa.toLowerCase().includes("12 hour");
-      return isLongShift;
+      const range = parseAwardShiftRange(s.masa, s.tarikh);
+      if (!range) return false;
+      const hours = (range.end.getTime() - range.start.getTime()) / (1000 * 60 * 60);
+      return hours >= 10;
     });
 
     if (qualifyingSlots.length === 0) {
-      return "❌ No completed 12-hour+ shifts found to award.";
+      return "❌ No completed 10-hour+ shifts found to award.";
     }
 
     const awardedList: string[] = [];

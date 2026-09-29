@@ -10,7 +10,7 @@
 //                          ZERO cancellations that month (by admin or by
 //                          themselves).
 // 3. The Diligent Doc   — manual Loyalty Points award.
-// 4. Iron Doctor        — doctor worked a shift >10 hours. Triggers as soon
+// 4. Iron Doctor        — doctor worked a shift of 10 hours or more. Triggers as soon
 //                          as the shift's end time has passed and does NOT
 //                          require a performance close-out.
 // 5. Last Minute Saviour— doctor was booked within 24 hours before the
@@ -244,14 +244,14 @@ export function recalculateBadgesForMonth(
     shiftsByDoctor.get(key)!.push(s);
   });
 
-  // ---- Iron Doctor: strictly more than 10 hours, after the shift ends ----
+  // ---- Iron Doctor: 10 hours or more, after the shift ends ----
   // No same-day double-shift rule and no performance close-out requirement.
   const ironDoctorSlotIds = new Map<string, Set<string>>();
   monthSlots.forEach((s) => {
     const range = parseShiftRange(s.masa, s.tarikh);
     if (!range) return;
     const hours = (range.end.getTime() - range.start.getTime()) / (1000 * 60 * 60);
-    if (hours <= 10) return;
+    if (hours < 10) return;
     const key = normalizeDoctorName(s.dr);
     if (!ironDoctorSlotIds.has(key)) ironDoctorSlotIds.set(key, new Set());
     ironDoctorSlotIds.get(key)!.add(s.id);
