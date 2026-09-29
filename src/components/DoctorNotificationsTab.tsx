@@ -20,6 +20,7 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [inboxFilter, setInboxFilter] = useState<"All" | "Unread">("All");
+  const [expandedAnnouncements, setExpandedAnnouncements] = useState<Set<string>>(new Set());
   const PAGE_SIZE = 20;
 
   // Mark all notifications for the current doctor as read upon opening this view
@@ -112,9 +113,34 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
                     <h5 className="font-display text-sm font-bold text-slate-900">Noticeboard</h5>
                     <span className="text-[10px] font-semibold text-slate-400">{announcement.date}</span>
                   </div>
-                  <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-slate-600">
-                    {announcement.text}
-                  </p>
+                  {(() => {
+                    const isExpanded = expandedAnnouncements.has(announcement.id);
+                    const isLong = announcement.text.length > 280;
+                    const displayedText = isExpanded || !isLong
+                      ? announcement.text
+                      : `${announcement.text.slice(0, 280).trimEnd()}…`;
+                    return (
+                      <>
+                        <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-slate-600">
+                          {displayedText}
+                        </p>
+                        {isLong && (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedAnnouncements((previous) => {
+                              const next = new Set(previous);
+                              if (next.has(announcement.id)) next.delete(announcement.id);
+                              else next.add(announcement.id);
+                              return next;
+                            })}
+                            className="mt-2 text-[11px] font-bold text-indigo-600 hover:text-indigo-800"
+                          >
+                            {isExpanded ? "Show less" : "Read more"}
+                          </button>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             </div>

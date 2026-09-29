@@ -1722,8 +1722,6 @@ export function useAppState() {
           return s;
         });
 
-        setState((prev) => ({ ...prev, slots: updatedSlots }));
-
         const updatedSlot = {
           ...slot,
           status: "Approved",
@@ -1732,12 +1730,36 @@ export function useAppState() {
           bookedAt: assignedAt,
         } as LocumSlot;
 
-        await cloudSaveSlot(updatedSlot).catch((err) =>
-          console.error("Cloud adminManageSlot REPLACE failed:", err),
-        );
+        try {
+          await cloudSaveSlot(updatedSlot);
+        } catch (err: any) {
+          console.error("Cloud adminManageSlot REPLACE failed:", err);
+          return `❌ Assignment could not be saved: ${err?.message || "Supabase rejected the update."}`;
+        }
 
-        // Trigger local application notification
-        triggerApprovalNotification(updatedSlot);
+        // Confirm the exact row before showing success. Without this check,
+        // a blocked/zero-row update looked successful locally, then the next
+        // realtime refresh replaced the doctor's name with the old empty row.
+        const confirmedSlots = await fetchSlotsFromSupabase();
+        const confirmedSlot = confirmedSlots?.find((s) => s.id === id);
+        if (
+          !confirmedSlot ||
+          confirmedSlot.status !== "Approved" ||
+          confirmedSlot.dr !== finalName ||
+          confirmedSlot.phone !== finalPhone
+        ) {
+          return "❌ Assignment could not be confirmed in Supabase. Please try again.";
+        }
+        setState((prev) => ({ ...prev, slots: confirmedSlots! }));
+
+        // Do not notify a doctor about a slot that has already ended. Admins
+        // may still backfill historical roster records without creating a
+        // misleading new notification on the doctor's device.
+        const shiftRange = parseAwardShiftRange(updatedSlot.masa, updatedSlot.tarikh);
+        const shiftAlreadyEnded = Boolean(shiftRange && shiftRange.end.getTime() <= Date.now());
+        if (!shiftAlreadyEnded) {
+          triggerApprovalNotification(confirmedSlot);
+        }
 
         if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
           await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
