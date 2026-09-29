@@ -1612,6 +1612,7 @@ export function useAppState() {
 
     // Heads-up alert for admins so they know to find a replacement
     triggerCancellationAlert(slot, statusAsal);
+    triggerCancellationNotification(slot);
 
     // admin_alerts gets deleted once an admin dismisses it, so it's not a
     // durable record — log here too so badge recalculation (The Unstoppable)
@@ -1662,6 +1663,40 @@ export function useAppState() {
     );
 
     logActivity(`LocumHub Notification created for Dr ${slot.dr} (Phone: ${slot.phone})`);
+  };
+
+  const triggerCancellationNotification = (slot: LocumSlot) => {
+    const doctorPhone = String(slot.phone || '').trim();
+    if (!doctorPhone || doctorPhone === 'MANUAL') return;
+
+    // Deterministic ID prevents duplicate notifications if the same action is
+    // retried or replayed by the UI.
+    const eventKey = [slot.id, doctorPhone, slot.bookedAt || `${slot.tarikh}_${slot.masa}`]
+      .join('_')
+      .replace(/[^a-zA-Z0-9_-]/g, '_');
+    const newNotif: AppNotification = {
+      id: `notif_cancel_${eventKey}`,
+      phone: doctorPhone,
+      title: "Slot Cancelled",
+      message: `Your booking for ${slot.tarikh} (${slot.masa}) at ARA ${slot.cawangan} has been cancelled and the slot is now available again.`,
+      timestamp: new Date().toLocaleString("en-GB"),
+      isRead: false,
+      slotId: slot.id,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      notifications: [
+        newNotif,
+        ...(prev.notifications || []).filter((notification) => notification.id !== newNotif.id),
+      ],
+    }));
+
+    // One upsert only; the existing notification refresh picks it up without
+    // adding another polling loop or Realtime channel.
+    saveNotificationToSupabase(newNotif).catch((err) =>
+      console.error("Cloud saveCancellationNotification failed:", err),
+    );
   };
 
   const markNotificationsAsRead = (phone: string) => {
@@ -1841,6 +1876,10 @@ export function useAppState() {
       }
       setState((prev) => ({ ...prev, slots: updatedSlots }));
 
+      // If a booked slot is deleted, notify the former doctor before the
+      // roster row disappears from the database.
+      triggerCancellationNotification(slot);
+
       if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
         await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
           ...state,
@@ -1893,6 +1932,8 @@ export function useAppState() {
       } else {
         setState((prev) => ({ ...prev, slots: updatedSlots }));
       }
+
+      triggerCancellationNotification(slot);
 
       if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
         await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
