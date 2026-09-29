@@ -31,9 +31,25 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
   }, [currentUser?.phone, onMarkRead]);
 
   // Filter to notifications belonging to this doctor
-  const myNotifications = (notifications || []).filter(
-    (n) => n.phone?.trim() === currentUser?.phone?.trim()
-  );
+  const notificationTime = (value: string) => {
+    const enGb = String(value || '').match(/^(\d{2})\/(\d{2})\/(\d{4}),\s*(\d{2}):(\d{2}):(\d{2})$/);
+    if (enGb) {
+      return new Date(
+        Number(enGb[3]),
+        Number(enGb[2]) - 1,
+        Number(enGb[1]),
+        Number(enGb[4]),
+        Number(enGb[5]),
+        Number(enGb[6]),
+      ).getTime();
+    }
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  };
+
+  const myNotifications = (notifications || [])
+    .filter((n) => n.phone?.trim() === currentUser?.phone?.trim())
+    .sort((a, b) => notificationTime(b.timestamp) - notificationTime(a.timestamp));
   const unreadNotifications = myNotifications.filter((notification) => !notification.isRead);
   const pinnedAnnouncements = announcements || [];
   const visibleNotifications = inboxFilter === "Unread" ? unreadNotifications : myNotifications;
@@ -52,7 +68,7 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
   }, [currentPage, totalPages]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col space-y-6">
       {/* Inbox Header */}
       <div className="rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] sm:p-6">
         <div>
@@ -93,7 +109,7 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
       </div>
 
       {pinnedAnnouncements.length > 0 && (
-        <div className="space-y-2.5">
+        <div className="order-2 space-y-2.5">
           <div className="flex items-center gap-2 px-1">
             <span className="h-2 w-2 rounded-full bg-amber-400" />
             <h5 className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Pinned</h5>
@@ -149,7 +165,7 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
       )}
 
       {/* Notifications List */}
-      <div className="space-y-2.5">
+      <div className="order-1 space-y-2.5">
         <AnimatePresence mode="popLayout">
           {visibleNotifications.length === 0 ? (
             <motion.div
