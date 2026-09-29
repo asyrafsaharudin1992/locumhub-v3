@@ -1224,7 +1224,7 @@ export function useAppState() {
       logActivity(`ADMIN: MERGED EXTERNAL ${externalDoctorName} INTO ${targetUser.name} (${targetUser.phone})`);
       return {
         success: true,
-        message: `Merged ${linkedCount} historical external slot${linkedCount === 1 ? "" : "s"} into ${targetUser.name}.`,
+        message: `Successfully merged ${externalDoctorName} (External) into ${targetUser.name}. Linked ${linkedCount} historical slot${linkedCount === 1 ? "" : "s"}.`,
       };
     } catch (err: any) {
       console.error("External doctor merge failed:", err);

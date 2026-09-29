@@ -131,6 +131,12 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
     const isKajang = branchLower.includes('kajang') || branchLower.includes('kj');
     const isCME = branchLower.includes('cme') || branchLower.includes('briefing');
     if (slot.status === 'Pending') return 'bg-amber-500';
+    if (slot.status === 'Available' && openSlotColorMode === 'branch') {
+      if (isSK) return 'bg-emerald-500';
+      if (isKajang) return 'bg-sky-500';
+      if (isCME) return 'bg-purple-500';
+      return 'bg-indigo-500';
+    }
     if (slot.status === 'Available') return 'bg-red-500';
     if (isSK) return 'bg-emerald-500';
     if (isKajang) return 'bg-sky-500';
@@ -156,6 +162,19 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
     }
     return 'OPEN';
   };
+
+  const getBranchCode = (slot: LocumSlot) => {
+    const branch = String(slot.cawangan || '').trim();
+    const branchLower = branch.toLowerCase();
+    if (branchLower.includes('seri') || branchLower.includes('kembangan') || branchLower.includes('sk')) return 'SK';
+    if (branchLower.includes('kajang') || branchLower.includes('kj')) return 'KJ';
+    if (branchLower.includes('cme') || branchLower.includes('briefing')) return 'CME';
+    return branch.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 3).toUpperCase() || 'ARA';
+  };
+
+  const formatSlotTime = (value: string) => String(value || '').replace(/\s+/g, '').toUpperCase();
+
+  const isDoctorDesktopCalendar = desktopSlotPanel && openSlotColorMode === 'branch';
 
   // Generate full grid cells (35 or 42 grid cells)
   const getFullGridCells = () => {
@@ -356,7 +375,12 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                             title={`${slot.cawangan} | ${slot.masa} | ${/external/i.test(slot.dr || '') ? 'External doctor' : slot.dr || 'Open'}`}
                           >
                             <span className={`h-2 w-2 shrink-0 rounded-full ${getSlotDotClass(slot)}`} />
-                            {labelText}
+                            {isDoctorDesktopCalendar && slot.status === 'Available' ? (
+                              <span className="flex min-w-0 items-center gap-1 uppercase">
+                                <span className="shrink-0">{getBranchCode(slot)}</span>
+                                <span className="truncate">{formatSlotTime(slot.masa)} (OPEN)</span>
+                              </span>
+                            ) : labelText}
                           </button>
                         );
                         })
