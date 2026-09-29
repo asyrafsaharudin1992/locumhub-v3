@@ -25,6 +25,13 @@ const doctorMatches = (slot: LocumSlot, doctor: UserProfile) => {
   return shortWords.every(word => longWords.includes(word));
 };
 
+const feedbackMatchesDoctor = (feedback: FeedbackRecord, doctor: UserProfile) => {
+  const normalize = (value: string) => value.toLowerCase().trim().replace(/^dr\.?\s+/i, '').replace(/\s+/g, ' ');
+  const feedbackDoctorName = normalize(feedback.target || '');
+  const currentDoctorName = normalize(doctor.name || '');
+  return Boolean(feedbackDoctorName && currentDoctorName && feedbackDoctorName === currentDoctorName);
+};
+
 const parseShiftDate = (value: string) => {
   const match = String(value || '').match(/(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})/);
   if (!match) return null;
@@ -83,10 +90,7 @@ export const DoctorOverviewTab: React.FC<DoctorOverviewTabProps> = ({
   const badgeCounts = getBadgeCounts(currentUser.badges || '');
   const nextShiftDate = nextShift ? parseShiftDate(nextShift.tarikh) : null;
   const isToday = nextShiftDate?.getTime() === today.getTime();
-  const hasFeedback = feedbacks.some((feedback) => doctorMatches(
-    { dr: feedback.target, phone: '', id: '', tarikh: '', masa: '', cawangan: '', status: 'Available', gaji: 0 },
-    currentUser,
-  ));
+  const hasFeedback = feedbacks.some((feedback) => feedbackMatchesDoctor(feedback, currentUser));
 
   const quickActions = [
     { label: 'Book Slot', icon: CalendarDays, color: 'text-white', tab: 'booking' },

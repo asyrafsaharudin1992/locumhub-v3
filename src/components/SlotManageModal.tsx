@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Calendar, MapPin, Clock, Trash2, RotateCcw, UserPlus, AlertTriangle } from 'lucide-react';
+import { X, Calendar, MapPin, Clock, Trash2, RotateCcw, UserPlus, AlertTriangle, Search } from 'lucide-react';
 import { LocumSlot, UserProfile } from '../types';
 
 interface SlotManageModalProps {
@@ -24,6 +24,7 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
 }) => {
   const [selectedAction, setSelectedAction] = useState<ManagementAction>('REPLACE');
   const [chosenDoctorPhone, setChosenDoctorPhone] = useState<string>('');
+  const [doctorSearch, setDoctorSearch] = useState<string>('');
   const [manualDoctorName, setManualDoctorName] = useState<string>('');
   const [isManualInput, setIsManualInput] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -46,6 +47,7 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
       setStatusMessage(null);
       setIsSubmitting(false);
       setChosenDoctorPhone('');
+      setDoctorSearch('');
       setManualDoctorName('');
       setIsManualInput(false);
       setSelectedAction('REPLACE');
@@ -74,6 +76,13 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
   const slotDr = currentDocName !== 'OPEN' ? `DR ${currentDocName.toUpperCase().trim().replace(/^DR\s+/i, '')}` : 'OPEN';
 
   const slotPayment = slot?.bayaran || slot?.gaji || '0';
+
+  const filteredDoctors = doctors.filter((doc) => {
+    const docPhone = doc.phone || (doc as any).Phone || '';
+    const docName = doc.name || (doc as any).nama || (doc as any).Nama || 'DOCTOR';
+    const searchTerm = doctorSearch.trim().toLowerCase();
+    return !searchTerm || `${docName} ${docPhone}`.toLowerCase().includes(searchTerm);
+  });
 
   const handleExecute = async () => {
     if (!slot) return;
@@ -334,13 +343,24 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
                         <label className="text-[10px] font-bold text-slate-500 tracking-wider uppercase block">
                           Select Doctor
                         </label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                          <input
+                            type="search"
+                            value={doctorSearch}
+                            onChange={(e) => setDoctorSearch(e.target.value)}
+                            placeholder="Search doctor name or phone number..."
+                            aria-label="Search doctor name or phone number"
+                            className="w-full bg-white border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl pl-9 pr-3 py-3 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </div>
                         <select
                           value={chosenDoctorPhone}
                           onChange={(e) => setChosenDoctorPhone(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 text-xs sm:text-sm font-semibold rounded-xl p-3 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
                         >
                           <option value="">-- Please Select Doctor --</option>
-                          {doctors.map((doc) => {
+                          {filteredDoctors.map((doc) => {
                             const docPhone = doc.phone || (doc as any).Phone || '';
                             const docName = doc.name || (doc as any).nama || (doc as any).Nama || 'DOCTOR';
                             return (
@@ -350,6 +370,11 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
                             );
                           })}
                         </select>
+                        {doctorSearch.trim() && filteredDoctors.length === 0 && (
+                          <p className="text-[11px] text-slate-500 font-medium px-1">
+                            No doctors found. Try another name or phone number.
+                          </p>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-1.5">

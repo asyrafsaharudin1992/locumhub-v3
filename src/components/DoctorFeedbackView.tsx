@@ -120,7 +120,7 @@ export const DoctorFeedbackView: React.FC<DoctorFeedbackViewProps> = ({ feedback
         <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex gap-1.5 text-xs text-indigo-800 leading-snug">
           <ShieldAlert className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" />
           <p className="font-medium">
-            This workspace takes patient privacy seriously. Selected logs are cleared on sign-out and visible solely inside your account.
+            This workspace takes patient privacy seriously. Selected logs are cleared on sign-out and visible solely inside your account. Patient feedback is collected from Google Forms and Google Reviews.
           </p>
         </div>
 
@@ -183,7 +183,6 @@ export const DoctorFeedbackView: React.FC<DoctorFeedbackViewProps> = ({ feedback
             >
               <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
               <p className="text-sm font-semibold">No feedback records found matching this filter.</p>
-              <p className="text-xs">Once patients rate your sessions they'll appear here.</p>
             </motion.div>
           ) : (
             paginatedFeedbacks.map((f, i) => (
