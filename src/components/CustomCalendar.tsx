@@ -163,15 +163,6 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
     return 'OPEN';
   };
 
-  const getBranchCode = (slot: LocumSlot) => {
-    const branch = String(slot.cawangan || '').trim();
-    const branchLower = branch.toLowerCase();
-    if (branchLower.includes('seri') || branchLower.includes('kembangan') || branchLower.includes('sk')) return 'SK';
-    if (branchLower.includes('kajang') || branchLower.includes('kj')) return 'KJ';
-    if (branchLower.includes('cme') || branchLower.includes('briefing')) return 'CME';
-    return branch.split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 3).toUpperCase() || 'ARA';
-  };
-
   const formatSlotTime = (value: string) => String(value || '').replace(/\s+/g, '').toUpperCase();
 
   const isDoctorDesktopCalendar = desktopSlotPanel && openSlotColorMode === 'branch';
@@ -376,9 +367,8 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                           >
                             <span className={`h-2 w-2 shrink-0 rounded-full ${getSlotDotClass(slot)}`} />
                             {isDoctorDesktopCalendar && slot.status === 'Available' ? (
-                              <span className="flex min-w-0 items-center gap-1 uppercase">
-                                <span className="shrink-0">{getBranchCode(slot)}</span>
-                                <span className="truncate">{formatSlotTime(slot.masa)} (OPEN)</span>
+                              <span className="truncate uppercase">
+                                {formatSlotTime(slot.masa)}
                               </span>
                             ) : labelText}
                           </button>
