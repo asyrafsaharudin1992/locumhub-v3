@@ -203,11 +203,38 @@ export function recalculateBadgesForMonth(
 
   // ---- Cancellations this month (admin-side + doctor self-cancel) ----
   // Text patterns logged by adminManageSlot('CANCEL') and cancelSlotByDoctor.
+  // Cancellation logs contain the exact Slot ID. Use that as the primary
+  // key so a doctor cancelling one shift cannot accidentally invalidate a
+  // different shift on the same date. The date/time then come from the slot
+  // record itself, rather than from the log timestamp.
   const cancelledDoctorsThisMonth = new Set<string>();
+  const slotsById = new Map(allSlots.map((slot) => [slot.id, slot]));
+
+  const markCancelledSlot = (slotId: string, loggedDoctorName: string) => {
+    const cancelledSlot = slotsById.get(slotId);
+    if (!cancelledSlot || !slotIsInMonth(cancelledSlot, month, year)) return false;
+    // Admin reset clears `slot.dr`, so prefer the doctor name captured in the
+    // immutable cancellation log when the slot has already been reset.
+    const doctorName = loggedDoctorName || cancelledSlot.dr;
+    if (doctorName) cancelledDoctorsThisMonth.add(normalizeDoctorName(doctorName));
+    return true;
+  };
 
   activityLogs.forEach((log) => {
     const adminMatch = log.action.match(/ADMIN: CANCEL & RESET.*\(Dr:\s*(.+?)\)/i);
     const selfMatch = log.action.match(/DOCTOR: SELF-CANCEL.*\(Dr:\s*(.+?)\).*on\s+(\d{2}\/\d{2}\/\d{4})/i);
+    const slotIdMatch = log.action.match(/Slot ID\s+([^\s(]+)/i);
+    const slotId = slotIdMatch?.[1] || "";
+
+    // New-format records: exact Slot ID match, with the slot's own date and
+    // timing determining whether it belongs to the month being scanned.
+    if (slotId) {
+      const loggedDoctorName = selfMatch?.[1] || adminMatch?.[1] || "";
+      if (markCancelledSlot(slotId, loggedDoctorName)) return;
+    }
+
+    // Legacy fallback for old activity rows whose slot was deleted and can no
+    // longer be resolved by ID. Keep this only for historical compatibility.
     if (selfMatch) {
       const [, drName, dateStr] = selfMatch;
       if (slotIsInMonth({ tarikh: dateStr } as LocumSlot, month, year)) {
@@ -227,9 +254,11 @@ export function recalculateBadgesForMonth(
     }
   });
 
-  // Any still-undismissed admin_alerts (doctor self-cancel) for this month
+  // Any still-undismissed admin_alerts (doctor self-cancel) for this month.
+  // These also carry slotId; use the exact slot whenever available.
   adminAlerts.forEach((alert) => {
     const drName = alert.drName || "";
+    if (alert.slotId && markCancelledSlot(alert.slotId, drName)) return;
     const tarikh = alert.tarikh || "";
     if (drName && tarikh && slotIsInMonth({ tarikh } as LocumSlot, month, year)) {
       cancelledDoctorsThisMonth.add(normalizeDoctorName(drName));
