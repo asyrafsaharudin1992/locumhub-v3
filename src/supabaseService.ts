@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "./supabaseClient";
+import { getFreshSupabaseSession, getSupabaseClient } from "./supabaseClient";
 import {
   UserProfile,
   LocumSlot,
@@ -608,12 +608,12 @@ export async function saveUserToSupabase(user: UserProfile) {
   // The base users table is intentionally protected from browser reads after
   // Auth migration. Persist profile edits through the server route instead of
   // exposing the password-bearing table to the browser.
-  const { data: sessionData } = await client.auth.getSession();
-  if (sessionData.session?.access_token && typeof window !== "undefined") {
+  if (typeof window !== "undefined") {
+    const session = await getFreshSupabaseSession();
     const response = await fetch("/api/save-user-profile", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${sessionData.session.access_token}`,
+        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(user),
@@ -971,20 +971,22 @@ export async function releaseSlotByDoctor(slotId: string): Promise<void> {
 }
 
 export async function deleteSlotFromSupabase(slotId: string) {
-  const { success, error } = await deleteTableWithFallback(
-    ["slots", "Slots"],
-    "id",
-    slotId,
-  );
-  if (!success) {
-    console.error(
-      "Supabase deleteSlot failed for ID:",
-      slotId,
-      "Error:",
-      JSON.stringify(error, null, 2),
-    );
-    throw error || new Error("Failed to delete slot from Supabase");
+  const client = getSupabaseClient();
+  if (!client) throw new Error("Supabase client not initialized");
+
+  let lastError: any = null;
+  for (const table of ["slots", "Slots"]) {
+    const { data, error } = await client
+      .from(table)
+      .delete()
+      .eq("id", slotId)
+      .select("id");
+    if (!error && data?.some((row) => String(row.id) === slotId)) return;
+    lastError = error || new Error(`Slot ${slotId} was not deleted.`);
   }
+
+  console.error("Supabase deleteSlot failed for ID:", slotId, lastError);
+  throw lastError;
 }
 
 export async function saveAnnouncementToSupabase(ann: Announcement) {

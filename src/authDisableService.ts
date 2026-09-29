@@ -1,11 +1,10 @@
-import { getSupabaseClient } from "./supabaseClient";
+import { getFreshSupabaseSession, getSupabaseClient } from "./supabaseClient";
 
 export async function disableAuthUser(phone: string): Promise<void> {
   const client = getSupabaseClient();
   if (!client) throw new Error("Authentication service is unavailable.");
-  const { data } = await client.auth.getSession();
-  const accessToken = data.session?.access_token;
-  if (!accessToken) throw new Error("Please sign in again as an Admin.");
+  const session = await getFreshSupabaseSession();
+  const accessToken = session.access_token;
 
   const response = await fetch("/api/disable-auth-user", {
     method: "POST",

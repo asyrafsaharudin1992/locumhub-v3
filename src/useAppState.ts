@@ -8,7 +8,11 @@ import {
   AppNotification,
   AdminAlert,
 } from "./types";
-import { getSupabaseConfig, getSupabaseClient } from "./supabaseClient";
+import {
+  getFreshSupabaseSession,
+  getSupabaseConfig,
+  getSupabaseClient,
+} from "./supabaseClient";
 import { provisionAuthUser } from "./authProvisionService";
 import { disableAuthUser } from "./authDisableService";
 import { resetAuthUserPassword } from "./authResetService";
@@ -409,27 +413,7 @@ export function useAppState() {
   // Dual cloud wrappers
   const refreshSupabaseSessionForWrite = async () => {
     if (!isSupabaseEnabled || !isSupabaseActive()) return;
-    const client = getSupabaseClient();
-    if (!client) return;
-    const { data } = await client.auth.getSession();
-    if (!data.session) throw new Error("Your login session has expired. Please sign in again.");
-    try {
-      // Safari can keep a stale access token in memory after a tab has been
-      // backgrounded. Refresh on the actual write instead of trusting the
-      // cached expires_at value; this is an Auth request only, not a database
-      // read or polling operation.
-      const refreshed = await client.auth.refreshSession();
-      if (refreshed.error || !refreshed.data.session) {
-        throw refreshed.error || new Error("Session refresh returned no session.");
-      }
-    } catch (err) {
-      const tokenStillValid = !data.session.expires_at || data.session.expires_at * 1000 > Date.now();
-      if (tokenStillValid) {
-        console.warn("Safari session refresh failed; using the still-valid access token:", err);
-        return;
-      }
-      throw new Error("Your login session has expired. Please sign in again.");
-    }
+    await getFreshSupabaseSession();
   };
 
   const cloudSaveUser = async (user: UserProfile) => {
@@ -498,9 +482,7 @@ export function useAppState() {
   const cloudDeleteSlot = async (slotId: string) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
       await refreshSupabaseSessionForWrite();
-      await deleteSlotFromSupabase(slotId).catch((err) =>
-        console.error("Supabase deleteSlot failed:", err),
-      );
+      await deleteSlotFromSupabase(slotId);
     }
   };
 
@@ -619,7 +601,7 @@ export function useAppState() {
       // Use the trusted Auth identity as a temporary profile in that case;
       // the next Supabase pull will replace it with the full database row.
       const fallbackRole = String(metadata.role || "Doctor").toLowerCase();
-      const role = fallbackRole === "admin"
+      const role = ["admin", "super admin", "superadmin"].includes(fallbackRole)
         ? "Admin"
         : fallbackRole === "staff"
           ? "Staff"
@@ -635,9 +617,13 @@ export function useAppState() {
       const authRole = String(metadata.role || raw?.role || role).toLowerCase();
       const authPhone = String(raw?.phone || phone).trim();
       const cachedPrivileged = ["admin", "super admin", "superadmin", "staff"].includes(cachedRole);
+      const roleClass = (value: string) =>
+        ["admin", "super admin", "superadmin"].includes(value)
+          ? "admin"
+          : value;
       const identityMismatch = cachedPrivileged && (
         (cachedPhone && authPhone && cachedPhone !== authPhone) ||
-        (cachedRole !== authRole)
+        (roleClass(cachedRole) !== roleClass(authRole))
       );
       if (identityMismatch) {
         localStorage.removeItem("ara_current_user");
@@ -676,8 +662,7 @@ export function useAppState() {
           const expiresSoon = !session.expires_at || session.expires_at * 1000 <= Date.now() + 5 * 60 * 1000;
           if (expiresSoon) {
             try {
-              const refreshed = await client.auth.refreshSession();
-              session = refreshed.data.session || session;
+              session = await getFreshSupabaseSession({ minValidityMs: 5 * 60 * 1000 });
             } catch (err) {
               console.warn("Supabase session refresh deferred:", err);
             }
@@ -697,7 +682,7 @@ export function useAppState() {
     });
     const refreshOnResume = () => {
       if (document.visibilityState !== "visible") return;
-      void client.auth.refreshSession().catch((err) =>
+      void getFreshSupabaseSession({ force: true }).catch((err) =>
         console.warn("Supabase session refresh on Safari resume deferred:", err),
       );
     };
@@ -742,15 +727,35 @@ export function useAppState() {
   // Receive slot creates, bookings, approvals and cancellations immediately
   // across phones and browsers. Only the changed row is applied locally;
   // do not refetch the whole table here, otherwise Realtime would increase
-  // egress significantly. The 3-minute poll remains as a fallback.
+  // egress significantly. The 5-minute poll remains as a fallback.
   useEffect(() => {
     if (!isSupabaseEnabled || !isSupabaseActive()) return;
     const client = getSupabaseClient();
     if (!client) return;
+    let disposed = false;
     let channel: any = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
+
+    const clearReconnectTimer = () => {
+      if (!reconnectTimer) return;
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    };
+
+    const scheduleReconnect = () => {
+      if (disposed || reconnectTimer || document.visibilityState !== "visible") return;
+      const delay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt);
+      reconnectAttempt += 1;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        subscribeRealtime();
+      }, delay);
+    };
+
     const subscribeRealtime = () => {
-      if (document.visibilityState !== "visible" || channel) return;
-      channel = client
+      if (disposed || document.visibilityState !== "visible" || channel) return;
+      const nextChannel = client
       .channel("live-slots")
       .on(
         "postgres_changes",
@@ -787,25 +792,50 @@ export function useAppState() {
             return { ...prev, slots };
           });
         },
-      )
-      .subscribe();
+      );
+      channel = nextChannel;
+      nextChannel.subscribe((status: string) => {
+        if (disposed || channel !== nextChannel) return;
+        if (status === "SUBSCRIBED") {
+          reconnectAttempt = 0;
+          clearReconnectTimer();
+          // Reconcile changes that happened while the socket was connecting
+          // or while this tab was suspended by the browser.
+          void pullTier1FromSupabase();
+          return;
+        }
+        if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
+          channel = null;
+          void client.removeChannel(nextChannel);
+          scheduleReconnect();
+        }
+      });
     };
     const unsubscribeRealtime = () => {
+      clearReconnectTimer();
       if (!channel) return;
-      void client.removeChannel(channel);
+      const currentChannel = channel;
       channel = null;
+      void client.removeChannel(currentChannel);
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         subscribeRealtime();
-      } else {
-        unsubscribeRealtime();
+        void pullTier1FromSupabase();
       }
+    };
+    const handleOnline = () => {
+      if (document.visibilityState !== "visible") return;
+      subscribeRealtime();
+      void pullTier1FromSupabase();
     };
     subscribeRealtime();
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("online", handleOnline);
     return () => {
+      disposed = true;
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("online", handleOnline);
       unsubscribeRealtime();
     };
   }, [isSupabaseEnabled, state.currentUser?.phone]);
@@ -2122,12 +2152,11 @@ export function useAppState() {
       };
     });
 
-    setState((prev) => ({
-      ...prev,
-      slots: [...prev.slots, ...newSlots],
-    }));
-
     if (localDemoMode) {
+      setState((prev) => ({
+        ...prev,
+        slots: [...prev.slots, ...newSlots],
+      }));
       logActivity(
         `ADMIN: Local demo bulk created ${dates.length} slots for branch ${branch}`,
       );
@@ -2138,6 +2167,19 @@ export function useAppState() {
     // prevents an activity log entry from implying that a slot was published
     // when an Auth/RLS policy blocked the actual slot write.
     await cloudSaveSlotsBulk(newSlots);
+
+    // Apply the confirmed rows after the write. A startup/background fetch
+    // that began just before the insert can otherwise replace an earlier
+    // optimistic update with its stale snapshot, making the new slots appear
+    // only after a manual refresh.
+    const createdIds = new Set(newSlots.map((slot) => slot.id));
+    setState((prev) => ({
+      ...prev,
+      slots: [
+        ...prev.slots.filter((slot) => !createdIds.has(slot.id)),
+        ...newSlots,
+      ],
+    }));
 
     logActivity(
       `ADMIN: Bulk created ${dates.length} slots for branch ${branch}`,

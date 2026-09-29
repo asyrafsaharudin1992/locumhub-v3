@@ -31,6 +31,16 @@ $$;
 grant select on table public.slots to authenticated;
 grant insert, update, delete on table public.slots to authenticated;
 
+-- Postgres Changes only emits slot INSERT/UPDATE/DELETE events when the table
+-- belongs to Supabase's Realtime publication. Safe to run repeatedly.
+do $$
+begin
+  alter publication supabase_realtime add table public.slots;
+exception
+  when duplicate_object then null;
+end
+$$;
+
 alter table public.slots enable row level security;
 
 drop policy if exists "authenticated can read slots" on public.slots;

@@ -1,4 +1,4 @@
-import { getSupabaseClient } from "./supabaseClient";
+import { getFreshSupabaseSession, getSupabaseClient } from "./supabaseClient";
 
 export async function provisionAuthUser(input: {
   phone: string;
@@ -11,9 +11,8 @@ export async function provisionAuthUser(input: {
   const client = getSupabaseClient();
   if (!client) throw new Error("Authentication service is unavailable.");
 
-  const { data: sessionData } = await client.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
-  if (!accessToken) throw new Error("Please sign in again as an Admin.");
+  const session = await getFreshSupabaseSession();
+  const accessToken = session.access_token;
 
   const response = await fetch("/api/provision-auth-user", {
     method: "POST",

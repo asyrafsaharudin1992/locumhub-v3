@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, Session, SupabaseClient } from '@supabase/supabase-js';
 
 export interface SupabaseConfig {
   url: string;
@@ -43,6 +43,10 @@ export function saveSupabaseConfig(url: string, anonKey: string, isEnabled: bool
 
 let cachedClient: SupabaseClient | null = null;
 let lastConfigHash = '';
+let sessionRefreshPromise: Promise<Session> | null = null;
+let lastSuccessfulRefreshAt = 0;
+
+const FORCE_REFRESH_COOLDOWN_MS = 30_000;
 
 export function getSupabaseClient(): SupabaseClient | null {
   const { url, anonKey, isEnabled } = getSupabaseConfig();
@@ -68,6 +72,71 @@ export function getSupabaseClient(): SupabaseClient | null {
   } catch (error) {
     console.error("Failed to initialize Supabase client:", error);
     return null;
+  }
+}
+
+/**
+ * Returns a usable Auth session and coalesces concurrent refresh requests.
+ *
+ * A tab returning from the background can emit both `visibilitychange` and
+ * `focus`, while an admin may click a write action at the same time. Calling
+ * refreshSession independently from all three paths can rotate the same
+ * refresh token more than once and make a still-signed-in user appear logged
+ * out. Keep refreshes single-flight and avoid re-refreshing a token that was
+ * renewed only moments ago.
+ */
+export async function getFreshSupabaseSession(options: {
+  force?: boolean;
+  minValidityMs?: number;
+} = {}): Promise<Session> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("Authentication service is unavailable.");
+
+  const { force = false, minValidityMs = 60_000 } = options;
+  const { data, error } = await client.auth.getSession();
+  if (error) throw error;
+
+  const currentSession = data.session;
+  if (!currentSession) {
+    throw new Error("Your login session has expired. Please sign in again.");
+  }
+
+  const now = Date.now();
+  const validUntil = currentSession.expires_at
+    ? currentSession.expires_at * 1000
+    : 0;
+  const hasEnoughLifetime = validUntil > now + minValidityMs;
+  const wasJustRefreshed = now - lastSuccessfulRefreshAt < FORCE_REFRESH_COOLDOWN_MS;
+
+  if (hasEnoughLifetime && (!force || wasJustRefreshed)) {
+    return currentSession;
+  }
+
+  if (!sessionRefreshPromise) {
+    sessionRefreshPromise = client.auth
+      .refreshSession()
+      .then(({ data: refreshed, error: refreshError }) => {
+        if (refreshError || !refreshed.session) {
+          throw refreshError || new Error("Session refresh returned no session.");
+        }
+        lastSuccessfulRefreshAt = Date.now();
+        return refreshed.session;
+      })
+      .finally(() => {
+        sessionRefreshPromise = null;
+      });
+  }
+
+  try {
+    return await sessionRefreshPromise;
+  } catch (refreshError) {
+    // A temporary network failure should not invalidate an access token that
+    // is still usable. Actual expired sessions continue to surface as errors.
+    if (validUntil > Date.now() + 5_000) {
+      console.warn("Session refresh deferred; current access token is still valid:", refreshError);
+      return currentSession;
+    }
+    throw new Error("Your login session has expired. Please sign in again.");
   }
 }
 
