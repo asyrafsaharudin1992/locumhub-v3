@@ -185,6 +185,7 @@ export function recalculateBadgesForMonth(
   manualFeedback: FeedbackRecord[],
   month: string,
   year: string,
+  targetPhone?: string,
 ): RecalcResult {
   const monthLabel = `${MONTH_NAMES[parseInt(month, 10) - 1] || month} ${year}`;
   const summaryLines: string[] = [];
@@ -336,6 +337,7 @@ export function recalculateBadgesForMonth(
   const badgeRevocations: RecalcResult["badgeRevocations"] = [];
 
   const updatedUsers = users.map((u) => {
+    if (targetPhone && u.phone !== targetPhone) return u;
     const key = normalizeDoctorName(u.name);
     const earnedBadges: string[] = [];
     let coinsAwarded = 0;

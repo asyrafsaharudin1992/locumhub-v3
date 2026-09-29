@@ -1125,6 +1125,79 @@ export function useAppState() {
     return { success: true, message: `Account created for ${name}.${linkedMessage}` };
   };
 
+  const adminMergeExternalDoctor = async (
+    externalDoctorName: string,
+    targetPhone: string,
+  ): Promise<{ success: boolean; message: string }> => {
+    const targetUser = state.users.find(
+      (user) => user.role === "Doctor" && user.phone.trim() === targetPhone.trim(),
+    );
+    if (!targetUser) return { success: false, message: "Existing doctor account not found." };
+
+    try {
+      const fetchedSlots = await fetchSlotsFromSupabase();
+      const slotsToCheck = fetchedSlots && fetchedSlots.length > 0 ? fetchedSlots : state.slots;
+      const externalKey = normalizeDoctorName(
+        externalDoctorName.replace(/\s*\(External\)\s*$/i, ""),
+      );
+      let linkedCount = 0;
+      const linkedSlots = slotsToCheck.map((slot) => {
+        const slotKey = normalizeDoctorName(
+          String(slot.dr || "").replace(/\s*\(External\)\s*$/i, ""),
+        );
+        if (String(slot.phone || "").trim().toUpperCase() !== "MANUAL" || slotKey !== externalKey) {
+          return slot;
+        }
+        linkedCount += 1;
+        return { ...slot, dr: targetUser.name, phone: targetUser.phone };
+      });
+
+      if (linkedCount === 0) {
+        return { success: false, message: "No matching external slots were found." };
+      }
+      for (const slot of linkedSlots) {
+        const original = slotsToCheck.find((candidate) => candidate.id === slot.id);
+        if (original && original !== slot) await cloudSaveSlot(slot);
+      }
+
+      setState((prev) => ({ ...prev, slots: linkedSlots }));
+      if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
+        await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
+          ...state,
+          slots: linkedSlots,
+        }).catch((err) => console.error("Google Sheets external merge failed:", err));
+      }
+
+      const monthsToRecalculate: string[] = Array.from(
+        new Set<string>(
+          linkedSlots
+            .filter((slot) => slot.phone === targetUser.phone)
+            .map((slot) => {
+              const parts = String(slot.tarikh || "").split(/[/-]/).map((part) => part.trim());
+              if (parts.length !== 3) return null;
+              const month = parts[1]?.padStart(2, "0");
+              const year = parts[2]?.length === 2 ? `20${parts[2]}` : parts[2];
+              return month && year ? `${month}/${year}` : null;
+            })
+            .filter((month): month is string => Boolean(month)),
+        ),
+      );
+      for (const monthTag of monthsToRecalculate) {
+        const [month, year] = monthTag.split("/");
+        await recalculateBadges(month, year, [], targetUser.phone, linkedSlots);
+      }
+
+      logActivity(`ADMIN: MERGED EXTERNAL ${externalDoctorName} INTO ${targetUser.name} (${targetUser.phone})`);
+      return {
+        success: true,
+        message: `Merged ${linkedCount} historical external slot${linkedCount === 1 ? "" : "s"} into ${targetUser.name}.`,
+      };
+    } catch (err: any) {
+      console.error("External doctor merge failed:", err);
+      return { success: false, message: `Merge failed: ${err?.message || "Unknown error"}` };
+    }
+  };
+
   const logout = () => {
     // Deliberately NOT logged via logActivity — same reasoning as login:
     // never read/displayed anywhere in the app, just write-only noise.
@@ -2398,9 +2471,11 @@ export function useAppState() {
     month: string,
     year: string,
     manualFeedback: FeedbackRecord[],
+    targetPhone?: string,
+    slotsOverride?: LocumSlot[],
   ): Promise<string> => {
     let freshUsers = state.users;
-    let freshSlots = state.slots;
+    let freshSlots = slotsOverride || state.slots;
     let freshActivityLogs = state.activityLogs;
     let freshAdminAlerts: AdminAlert[] = [];
     try {
@@ -2417,7 +2492,7 @@ export function useAppState() {
         fetchAdminAlertsFromSupabase(),
       ]);
       if (usersResult && usersResult.length >= freshUsers.length) freshUsers = usersResult;
-      if (slotsResult && slotsResult.length >= freshSlots.length) freshSlots = slotsResult;
+      if (!slotsOverride && slotsResult && slotsResult.length >= freshSlots.length) freshSlots = slotsResult;
       if (logsResult && logsResult.length >= freshActivityLogs.length) freshActivityLogs = logsResult;
       if (alertsResult && alertsResult.length > 0) freshAdminAlerts = alertsResult;
     } catch (err) {
@@ -2432,6 +2507,7 @@ export function useAppState() {
       manualFeedback,
       month,
       year,
+      targetPhone,
     );
 
     if (summaryLines.length === 0) {
@@ -3146,6 +3222,7 @@ export function useAppState() {
     loginUser,
     registerUser,
     adminCreateUser,
+    adminMergeExternalDoctor,
     deleteUser,
     logout,
     changePassword,

@@ -174,6 +174,7 @@ export default function App() {
     updateProfile,
     uploadCredentialFile,
     adminCreateUser,
+    adminMergeExternalDoctor,
     bookSlot,
     cancelSlotByDoctor,
     adminApproveSlot,
@@ -418,6 +419,11 @@ export default function App() {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [selectedExternalDoctor, setSelectedExternalDoctor] = useState("");
   const [createUserError, setCreateUserError] = useState("");
+  const [showMergeExternalModal, setShowMergeExternalModal] = useState(false);
+  const [mergeExternalDoctor, setMergeExternalDoctor] = useState("");
+  const [mergeTargetPhone, setMergeTargetPhone] = useState("");
+  const [isMergingExternal, setIsMergingExternal] = useState(false);
+  const [mergeExternalError, setMergeExternalError] = useState("");
 
   const externalDoctorOptions = Array.from(
     new Map<string, string>(
@@ -430,6 +436,9 @@ export default function App() {
         .filter(([key, name]) => Boolean(key && name)),
     ).values(),
   ).sort((a, b) => a.localeCompare(b));
+  const registeredDoctorOptions = state.users
+    .filter((user) => user.role === "Doctor")
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Manual Points Evaluator States
   const [selectedDrPhone, setSelectedDrPhone] = useState("");
@@ -2665,9 +2674,23 @@ export default function App() {
                           </p>
                         </div>
                         {isSuperAdmin && (
-                          <button
-                            type="button"
-                            onClick={() => {
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMergeExternalError("");
+                                setMergeExternalDoctor(externalDoctorOptions[0] || "");
+                                setMergeTargetPhone("");
+                                setShowMergeExternalModal(true);
+                              }}
+                              disabled={externalDoctorOptions.length === 0}
+                              className="border border-indigo-200 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition"
+                            >
+                              Merge External
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
                               setCreateUserError("");
                               setNewUserName("");
                               setNewUserPhone("");
@@ -2676,12 +2699,13 @@ export default function App() {
                               setNewUserEmail("");
                               setSelectedExternalDoctor("");
                               setShowCreateUserModal(true);
-                            }}
-                            className="bg-[#001F3F] hover:bg-[#001226] text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-1.5 shrink-0"
-                          >
-                            <PlusCircle className="w-3.5 h-3.5" />
-                            Add User
-                          </button>
+                              }}
+                              className="bg-[#001F3F] hover:bg-[#001226] text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-1.5 shrink-0"
+                            >
+                              <PlusCircle className="w-3.5 h-3.5" />
+                              Add User
+                            </button>
+                          </div>
                         )}
                       </div>
 
@@ -3196,6 +3220,94 @@ export default function App() {
                 </button>
               </div>
             </motion.form>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Merge External Doctor Modal */}
+      <AnimatePresence>
+        {showMergeExternalModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl space-y-4"
+            >
+              <div>
+                <h3 className="font-display font-medium text-lg text-slate-900">Merge External Doctor</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Move historical External slots into an existing doctor account. No new account will be created.
+                </p>
+              </div>
+              <div className="space-y-3 text-left">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
+                    External Doctor
+                  </label>
+                  <select
+                    value={mergeExternalDoctor}
+                    onChange={(e) => setMergeExternalDoctor(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-[#001F3F]"
+                  >
+                    {externalDoctorOptions.map((doctorName) => (
+                      <option key={doctorName} value={doctorName}>{doctorName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
+                    Existing Doctor Account
+                  </label>
+                  <select
+                    value={mergeTargetPhone}
+                    onChange={(e) => setMergeTargetPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-[#001F3F]"
+                  >
+                    <option value="">-- Select Existing Account --</option>
+                    {registeredDoctorOptions.map((doctor) => (
+                      <option key={doctor.phone} value={doctor.phone}>{doctor.name} ({doctor.phone})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {mergeExternalError && (
+                <p className="text-xs text-rose-500 font-semibold flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {mergeExternalError}
+                </p>
+              )}
+              <div className="flex gap-2 text-xs font-bold pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowMergeExternalModal(false)}
+                  disabled={isMergingExternal}
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-xl text-slate-650 py-2.5 hover:bg-slate-100 transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isMergingExternal || !mergeExternalDoctor || !mergeTargetPhone}
+                  onClick={async () => {
+                    setIsMergingExternal(true);
+                    setMergeExternalError("");
+                    const result = await adminMergeExternalDoctor(mergeExternalDoctor, mergeTargetPhone);
+                    setIsMergingExternal(false);
+                    if (result.success) {
+                      setShowMergeExternalModal(false);
+                      setSuccessToast(result.message);
+                      setTimeout(() => setSuccessToast(""), 3000);
+                    } else {
+                      setMergeExternalError(result.message);
+                    }
+                  }}
+                  className="flex-1 bg-[#001F3F] text-white hover:bg-[#001226] rounded-xl py-2.5 shadow-md disabled:opacity-60"
+                >
+                  {isMergingExternal ? "Merging..." : "Merge Doctor"}
+                </button>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
