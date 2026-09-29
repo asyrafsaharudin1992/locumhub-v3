@@ -416,7 +416,20 @@ export default function App() {
   const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState<"Doctor" | "Admin" | "Staff">("Doctor");
   const [newUserEmail, setNewUserEmail] = useState("");
+  const [selectedExternalDoctor, setSelectedExternalDoctor] = useState("");
   const [createUserError, setCreateUserError] = useState("");
+
+  const externalDoctorOptions = Array.from(
+    new Map<string, string>(
+      state.slots
+        .filter((slot) => String(slot.phone || "").trim().toUpperCase() === "MANUAL")
+        .map((slot) => {
+          const name = String(slot.dr || "").replace(/\s*\(External\)\s*$/i, "").trim();
+          return [name.toLowerCase(), name] as const;
+        })
+        .filter(([key, name]) => Boolean(key && name)),
+    ).values(),
+  ).sort((a, b) => a.localeCompare(b));
 
   // Manual Points Evaluator States
   const [selectedDrPhone, setSelectedDrPhone] = useState("");
@@ -2661,6 +2674,7 @@ export default function App() {
                               setNewUserPassword("");
                               setNewUserRole("Doctor");
                               setNewUserEmail("");
+                              setSelectedExternalDoctor("");
                               setShowCreateUserModal(true);
                             }}
                             className="bg-[#001F3F] hover:bg-[#001226] text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-sm transition flex items-center gap-1.5 shrink-0"
@@ -3256,6 +3270,30 @@ export default function App() {
                     <option value="Admin">Admin</option>
                   </select>
                 </div>
+                {newUserRole === "Doctor" && externalDoctorOptions.length > 0 && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
+                      Link Existing External Doctor (optional)
+                    </label>
+                    <select
+                      value={selectedExternalDoctor}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setSelectedExternalDoctor(value);
+                        if (value && !newUserName.trim()) setNewUserName(value);
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-[#001F3F]"
+                    >
+                      <option value="">Create a new doctor account</option>
+                      {externalDoctorOptions.map((doctorName) => (
+                        <option key={doctorName} value={doctorName}>{doctorName}</option>
+                      ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Links matching slots previously assigned as External to this new account.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="text-[10px] font-bold text-slate-400 tracking-widest uppercase block mb-1">
                     Email (optional)
@@ -3297,6 +3335,7 @@ export default function App() {
                       newUserPassword,
                       newUserRole,
                       newUserEmail,
+                      selectedExternalDoctor,
                     );
                     setIsCreatingUser(false);
                     if (result.success) {

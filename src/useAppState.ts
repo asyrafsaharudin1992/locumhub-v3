@@ -1026,6 +1026,7 @@ export function useAppState() {
     initialPassword: string,
     role: "Doctor" | "Admin" | "Staff",
     email: string = "",
+    externalDoctorName: string = "",
   ): Promise<{ success: boolean; message: string }> => {
     const trimmedPhone = phone.trim();
     const effectiveInitialPassword = initialPassword.trim();
@@ -1071,12 +1072,57 @@ export function useAppState() {
       };
     }
 
+    let linkedExternalSlots = 0;
+    if (role === "Doctor" && externalDoctorName.trim()) {
+      try {
+        const fetchedSlots = await fetchSlotsFromSupabase();
+        const slotsToCheck = fetchedSlots && fetchedSlots.length > 0 ? fetchedSlots : state.slots;
+        const externalKey = normalizeDoctorName(
+          externalDoctorName.replace(/\s*\(External\)\s*$/i, ""),
+        );
+        const linkedSlots = slotsToCheck.map((slot) => {
+          const isExternalSlot = String(slot.phone || "").trim().toUpperCase() === "MANUAL";
+          const slotKey = normalizeDoctorName(
+            String(slot.dr || "").replace(/\s*\(External\)\s*$/i, ""),
+          );
+          if (!isExternalSlot || slotKey !== externalKey) return slot;
+          linkedExternalSlots += 1;
+          return { ...slot, dr: newUser.name, phone: newUser.phone };
+        });
+
+        if (linkedExternalSlots > 0) {
+          for (const slot of linkedSlots) {
+            const original = slotsToCheck.find((candidate) => candidate.id === slot.id);
+            if (original && original !== slot) await cloudSaveSlot(slot);
+          }
+          setState((prev) => ({ ...prev, slots: linkedSlots }));
+
+          if (googleToken && connectedSpreadsheetId && isAutoSyncEnabled) {
+            await saveAllDataToGoogleSheet(googleToken, connectedSpreadsheetId, {
+              ...state,
+              users: [...state.users, newUser],
+              slots: linkedSlots,
+            }).catch((err) => console.error("Google Sheets external doctor merge failed:", err));
+          }
+        }
+      } catch (err: any) {
+        console.error("External doctor slot merge failed:", err);
+        return {
+          success: false,
+          message: `Account created, but historical external slots could not be linked: ${err?.message || "Unknown error"}`,
+        };
+      }
+    }
+
     setState((prev) => ({
       ...prev,
       users: [...prev.users, newUser],
     }));
     logActivity(`Admin created new ${role} account: ${name} (${trimmedPhone})`);
-    return { success: true, message: `Account created for ${name}.` };
+    const linkedMessage = linkedExternalSlots > 0
+      ? ` Linked ${linkedExternalSlots} historical external slot${linkedExternalSlots === 1 ? "" : "s"}.`
+      : "";
+    return { success: true, message: `Account created for ${name}.${linkedMessage}` };
   };
 
   const logout = () => {
