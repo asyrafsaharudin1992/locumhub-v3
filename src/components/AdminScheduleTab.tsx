@@ -399,7 +399,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
                 >
                   ‹
                 </button>
-                <span className="text-xs font-bold text-white">{pickerMonthLabel}</span>
+                <span className="text-xs font-bold text-slate-900">{pickerMonthLabel}</span>
                 <button
                   type="button"
                   onClick={() => setPickerMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
