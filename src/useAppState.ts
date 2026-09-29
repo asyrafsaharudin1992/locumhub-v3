@@ -411,8 +411,21 @@ export function useAppState() {
   };
 
   // Dual cloud wrappers
+  const refreshSupabaseSessionForWrite = async () => {
+    if (!isSupabaseEnabled || !isSupabaseActive()) return;
+    const client = getSupabaseClient();
+    if (!client) return;
+    const { data } = await client.auth.getSession();
+    if (!data.session) throw new Error("Your login session has expired. Please sign in again.");
+    const refreshed = await client.auth.refreshSession();
+    if (refreshed.error || !refreshed.data.session) {
+      throw refreshed.error || new Error("Your login session could not be refreshed. Please sign in again.");
+    }
+  };
+
   const cloudSaveUser = async (user: UserProfile) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
+      await refreshSupabaseSessionForWrite();
       // Must actually await this — previously it fired the save without
       // waiting, so callers (like giftHeartWinnerReview) would think the
       // write was done while it was still in flight. That created a race:
@@ -455,6 +468,7 @@ export function useAppState() {
 
   const cloudSaveSlot = async (slot: LocumSlot) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
+      await refreshSupabaseSessionForWrite();
       // Existing slot actions (approval, timing edits, admin cancel/replace)
       // must use UPDATE. Upsert also requires INSERT permission and can be
       // rejected by the slot RLS policy even when the admin may update it.
@@ -464,6 +478,7 @@ export function useAppState() {
 
   const cloudSaveSlotsBulk = async (slotsToSave: LocumSlot[]) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
+      await refreshSupabaseSessionForWrite();
       for (const s of slotsToSave) {
         await saveSlotToSupabase(s);
       }
@@ -472,6 +487,7 @@ export function useAppState() {
 
   const cloudDeleteSlot = async (slotId: string) => {
     if (isSupabaseEnabled && isSupabaseActive()) {
+      await refreshSupabaseSessionForWrite();
       await deleteSlotFromSupabase(slotId).catch((err) =>
         console.error("Supabase deleteSlot failed:", err),
       );

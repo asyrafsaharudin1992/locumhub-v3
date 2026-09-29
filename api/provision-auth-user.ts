@@ -1,5 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 
+function isSuperAdmin(value: unknown, phone = "", email = ""): boolean {
+  const role = String(value || "").trim().toLowerCase();
+  return ["super admin", "superadmin"].includes(role)
+    || phone.trim() === "0182194256"
+    || email.trim().toLowerCase() === "operation@hsohealthcare.com";
+}
+
 type ProvisionBody = {
   phone?: string;
   name?: string;
@@ -80,8 +87,8 @@ export default async function handler(req: any, res: any) {
     )
     .limit(1);
   const callerRole = callerProfiles?.[0]?.role || caller.user_metadata?.role;
-  if (callerRole !== "Admin") {
-    res.status(403).json({ error: "Only an Admin can create accounts." });
+  if (!isSuperAdmin(callerRole, callerPhone, callerEmail)) {
+    res.status(403).json({ error: "Only a Super Admin can create accounts." });
     return;
   }
 

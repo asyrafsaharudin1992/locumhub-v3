@@ -1,5 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
+function isAdminRole(value: unknown): boolean {
+  return ["admin", "super admin", "superadmin"].includes(
+    String(value || "").trim().toLowerCase(),
+  );
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -33,7 +39,7 @@ export default async function handler(req: any, res: any) {
   const callerPhone = String(callerData.user.user_metadata?.phone || "").trim();
   const { data: callerProfile } = await admin.from("users").select("role").eq("phone", callerPhone).maybeSingle();
   const callerRole = callerProfile?.role || callerData.user.user_metadata?.role;
-  if (!targetPhone || (callerRole !== "Admin" && targetPhone !== callerPhone)) {
+  if (!targetPhone || (!isAdminRole(callerRole) && targetPhone !== callerPhone)) {
     res.status(403).json({ error: "You are not allowed to update this profile." });
     return;
   }

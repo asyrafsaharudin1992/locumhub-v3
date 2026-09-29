@@ -86,6 +86,12 @@ function doctorNamesMatch(a: string, b: string): boolean {
   return na === nb;
 }
 
+function isAdminRole(role: unknown): boolean {
+  return ["admin", "super admin", "superadmin"].includes(
+    String(role || "").trim().toLowerCase(),
+  );
+}
+
 const HADITH_QUOTES = [
   "Behind every diagnosis is a person who wants to be heard.",
   "A good consultation can change more than a prescription.",
@@ -264,7 +270,7 @@ export default function App() {
   // those tabs are role-gated) instead of their actual landing page.
   useEffect(() => {
     if (state.currentUser) {
-      if (state.currentUser.role === "Admin") {
+      if (isAdminRole(state.currentUser.role)) {
         setActiveTab("admin-cal");
       } else if (state.currentUser.role === "Staff") {
         setActiveTab("admin-cal");
@@ -502,7 +508,7 @@ export default function App() {
     }
     const res = await loginUser(phoneInput, passwordInput);
     if (res.success) {
-      if (res.user?.role === "Admin") {
+      if (isAdminRole(res.user?.role)) {
         setActiveTab("admin-cal");
       } else if (res.user?.role === "Staff") {
         setActiveTab("admin-cal");
@@ -652,7 +658,7 @@ export default function App() {
       ).length
     : 0;
 
-  const pendingApprovalCount = state.currentUser && state.currentUser.role === "Admin"
+  const pendingApprovalCount = state.currentUser && isAdminRole(state.currentUser.role)
     ? Object.keys(stickyPendingSlots).length
     : 0;
 
@@ -751,7 +757,7 @@ export default function App() {
   ];
 
   const activeTabsList =
-    activeRole === "Admin"
+    isAdminRole(activeRole)
       ? ADMIN_TABS
       : activeRole === "Staff"
         ? STAFF_TABS
@@ -765,6 +771,7 @@ export default function App() {
   // Matched by phone (reliable) with email as a secondary check, since email
   // casing/whitespace can vary.
   const isSuperAdmin =
+    ["super admin", "superadmin"].includes(String(state.currentUser?.role || "").trim().toLowerCase()) ||
     state.currentUser?.phone === "0182194256" ||
     (state.currentUser?.email || "").trim().toLowerCase() === "operation@hsohealthcare.com";
 
@@ -1243,7 +1250,7 @@ export default function App() {
                     />
                   )}
 
-                  {activeTab === "announcements" && (activeRole === "Doctor" || activeRole === "Admin") && (
+                  {activeTab === "announcements" && (activeRole === "Doctor" || isAdminRole(activeRole)) && (
                     <div className="space-y-6">
                       <div className="relative overflow-hidden rounded-[28px] bg-[#082f49] p-6 text-white shadow-[0_12px_32px_rgba(8,47,73,0.18)]">
                         <div className="absolute -right-10 -top-12 h-36 w-36 rounded-full bg-sky-300/10 blur-2xl" />
@@ -1401,7 +1408,7 @@ export default function App() {
                   )}
 
                   {/* --- ADMIN PORTALS --- */}
-                  {activeTab === "admin-dash" && activeRole === "Admin" && (
+                  {activeTab === "admin-dash" && isAdminRole(activeRole) && (
                     <AdminDashTab
                       slots={state.slots}
                       users={state.users}
@@ -1418,7 +1425,7 @@ export default function App() {
                   )}
 
                   {activeTab === "admin-cal" &&
-                    (activeRole === "Admin" || activeRole === "Staff") && (
+                    (isAdminRole(activeRole) || activeRole === "Staff") && (
                       <AdminScheduleTab
                         slots={state.slots}
                         users={state.users}
@@ -1431,7 +1438,7 @@ export default function App() {
                       />
                     )}
 
-                  {activeTab === "admin-tasks" && activeRole === "Admin" && (
+                  {activeTab === "admin-tasks" && isAdminRole(activeRole) && (
                     <div className="space-y-6">
                       <div className="space-y-3">
                         <div className="rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] sm:p-6">
@@ -1580,7 +1587,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === "admin-ann" && activeRole === "Admin" && (
+                  {activeTab === "admin-ann" && isAdminRole(activeRole) && (
                     <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm space-y-6">
                       <div>
                         <h5 className="font-display font-bold text-slate-800 tracking-tight text-sm uppercase">
@@ -1663,7 +1670,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === "admin-award" && activeRole === "Admin" && (
+                  {activeTab === "admin-award" && isAdminRole(activeRole) && (
                     <div className="space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                         {/* Points Assigner */}
@@ -2424,7 +2431,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === "admin-fb" && activeRole === "Admin" && (
+                  {activeTab === "admin-fb" && isAdminRole(activeRole) && (
                     <div className="space-y-5">
                       <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#082f49] via-[#0a3b5d] to-[#0d5078] p-5 text-white shadow-[0_12px_30px_rgba(8,47,73,0.14)] sm:p-7">
                         <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-sky-300/10 blur-2xl" />
@@ -2660,7 +2667,7 @@ export default function App() {
                     </div>
                   )}
 
-                  {activeTab === "admin-dir" && activeRole === "Admin" && (
+                  {activeTab === "admin-dir" && isAdminRole(activeRole) && (
                     <div className="rounded-3xl bg-white border border-slate-100 p-6 shadow-sm space-y-4">
                       <div className="flex items-start justify-between gap-3 flex-wrap">
                         <div>

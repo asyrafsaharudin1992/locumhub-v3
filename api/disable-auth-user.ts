@@ -1,5 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 
+function isSuperAdmin(value: unknown, phone = "", email = ""): boolean {
+  const role = String(value || "").trim().toLowerCase();
+  return ["super admin", "superadmin"].includes(role)
+    || phone.trim() === "0182194256"
+    || email.trim().toLowerCase() === "operation@hsohealthcare.com";
+}
+
 function normalizePhone(value: string): string {
   const digits = value.replace(/\D/g, "");
   if (digits.startsWith("60")) return `+${digits}`;
@@ -49,8 +56,12 @@ export default async function handler(req: any, res: any) {
     .select("role")
     .eq("phone", callerPhone)
     .maybeSingle();
-  if ((callerProfile?.role || callerData.user.user_metadata?.role) !== "Admin") {
-    res.status(403).json({ error: "Only an Admin can disable accounts." });
+  if (!isSuperAdmin(
+    callerProfile?.role || callerData.user.user_metadata?.role,
+    callerPhone,
+    String(callerData.user.email || ""),
+  )) {
+    res.status(403).json({ error: "Only a Super Admin can disable accounts." });
     return;
   }
 
