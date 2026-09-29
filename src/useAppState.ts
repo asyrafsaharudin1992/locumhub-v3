@@ -179,9 +179,11 @@ export function useAppState() {
     // keeps the interface on the same account during a page refresh. The
     // restore effect below immediately replaces it with the fresh Supabase
     // profile when a valid Auth session is available.
-    const savedCurrentUser = localStorage.getItem("ara_manual_logout") === "true"
-      ? null
-      : localStorage.getItem("ara_current_user");
+    // The explicit logout action removes `ara_current_user` itself. Do not
+    // let a stale manual-logout marker hide a valid cached profile during a
+    // refresh; this is especially important for legacy admin accounts whose
+    // login may not have a persisted Supabase Auth session yet.
+    const savedCurrentUser = localStorage.getItem("ara_current_user");
     const savedNotifications = localStorage.getItem("ara_notifications");
     const savedAdminAlerts = localStorage.getItem("ara_admin_alerts");
 
@@ -866,6 +868,10 @@ export function useAppState() {
       };
       localStorage.removeItem("ara_manual_logout");
       setState((prev) => ({ ...prev, currentUser: user }));
+      // Staff quick access does not create a password-based Auth session, so
+      // persist the verified profile locally just like the normal login path.
+      // This keeps the staff view alive across a browser refresh.
+      localStorage.setItem("ara_current_user", JSON.stringify(user));
       return { success: true, message: "Login successful", user };
     }
 
