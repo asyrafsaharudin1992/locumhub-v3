@@ -736,6 +736,7 @@ export function useAppState() {
     let channel: any = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let reconnectAttempt = 0;
+    let hasSubscribedOnce = false;
 
     const clearReconnectTimer = () => {
       if (!reconnectTimer) return;
@@ -797,11 +798,15 @@ export function useAppState() {
       nextChannel.subscribe((status: string) => {
         if (disposed || channel !== nextChannel) return;
         if (status === "SUBSCRIBED") {
+          const isReconnect = hasSubscribedOnce;
+          hasSubscribedOnce = true;
           reconnectAttempt = 0;
           clearReconnectTimer();
-          // Reconcile changes that happened while the socket was connecting
-          // or while this tab was suspended by the browser.
-          void pullTier1FromSupabase();
+          // Startup and login already perform their own initial pull. Only
+          // reconcile after a genuine socket reconnect, when events may have
+          // been missed; this avoids another full slots/notifications read on
+          // every normal page load.
+          if (isReconnect) void pullTier1FromSupabase();
           return;
         }
         if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) {
@@ -821,13 +826,11 @@ export function useAppState() {
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         subscribeRealtime();
-        void pullTier1FromSupabase();
       }
     };
     const handleOnline = () => {
       if (document.visibilityState !== "visible") return;
       subscribeRealtime();
-      void pullTier1FromSupabase();
     };
     subscribeRealtime();
     document.addEventListener("visibilitychange", handleVisibility);
