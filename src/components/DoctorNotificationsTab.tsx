@@ -109,7 +109,7 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
       </div>
 
       {pinnedAnnouncements.length > 0 && (
-        <div className="order-2 space-y-2.5">
+        <div className="order-1 space-y-2.5">
           <div className="flex items-center gap-2 px-1">
             <span className="h-2 w-2 rounded-full bg-amber-400" />
             <h5 className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Pinned</h5>
@@ -165,7 +165,7 @@ export const DoctorNotificationsTab: React.FC<DoctorNotificationsTabProps> = ({
       )}
 
       {/* Notifications List */}
-      <div className="order-1 space-y-2.5">
+      <div className="order-2 space-y-2.5">
         <AnimatePresence mode="popLayout">
           {visibleNotifications.length === 0 ? (
             <motion.div

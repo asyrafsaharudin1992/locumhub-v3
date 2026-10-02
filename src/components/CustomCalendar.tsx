@@ -143,7 +143,6 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
       if (isSK) return 'bg-emerald-500';
       if (isKajang) return 'bg-sky-500';
       if (isSemenyih) return 'bg-pink-500';
-      if (isSemenyih) return 'bg-pink-500';
     if (isCME) return 'bg-purple-500';
       return 'bg-indigo-500';
     }
