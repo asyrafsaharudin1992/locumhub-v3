@@ -91,6 +91,7 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
     const isSK = branchLower.includes('seri') || branchLower.includes('kembangan') || branchLower.includes('sk');
     const isKajang = branchLower.includes('kajang') || branchLower.includes('kj');
     const isCME = branchLower.includes('cme') || branchLower.includes('briefing') || branchLower.includes('cme / briefing');
+    const isSemenyih = branchLower.includes('semenyih');
 
     if (slot.status === 'Approved') {
       if (isSK) {
@@ -98,6 +99,9 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
       }
       if (isKajang) {
         return 'bg-sky-500 hover:bg-sky-600 text-white border-sky-600 shadow-sm';
+      }
+      if (isSemenyih) {
+        return 'bg-pink-500 hover:bg-pink-600 text-white border-pink-600 shadow-sm';
       }
       if (isCME) {
         return 'bg-purple-500 hover:bg-purple-600 text-white border-purple-600 shadow-sm';
@@ -117,6 +121,9 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
       if (isKajang) {
         return 'bg-sky-500 hover:bg-sky-600 text-white border-sky-600 shadow-sm font-bold';
       }
+      if (isSemenyih) {
+        return 'bg-pink-500 hover:bg-pink-600 text-white border-pink-600 shadow-sm font-bold';
+      }
       if (isCME) {
         return 'bg-purple-500 hover:bg-purple-600 text-white border-purple-600 shadow-sm font-bold';
       }
@@ -130,16 +137,20 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
     const isSK = branchLower.includes('seri') || branchLower.includes('kembangan') || branchLower.includes('sk');
     const isKajang = branchLower.includes('kajang') || branchLower.includes('kj');
     const isCME = branchLower.includes('cme') || branchLower.includes('briefing');
+    const isSemenyih = branchLower.includes('semenyih');
     if (slot.status === 'Pending') return 'bg-amber-500';
     if (slot.status === 'Available' && openSlotColorMode === 'branch') {
       if (isSK) return 'bg-emerald-500';
       if (isKajang) return 'bg-sky-500';
-      if (isCME) return 'bg-purple-500';
+      if (isSemenyih) return 'bg-pink-500';
+      if (isSemenyih) return 'bg-pink-500';
+    if (isCME) return 'bg-purple-500';
       return 'bg-indigo-500';
     }
     if (slot.status === 'Available') return 'bg-red-500';
     if (isSK) return 'bg-emerald-500';
     if (isKajang) return 'bg-sky-500';
+    if (isSemenyih) return 'bg-pink-500';
     if (isCME) return 'bg-purple-500';
     return 'bg-indigo-500';
   };
@@ -268,6 +279,10 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-sky-500 inline-block" />
                 Kajang
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-md bg-pink-500 inline-block" />
+                Semenyih
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-md bg-purple-500 inline-block" />
@@ -633,12 +648,15 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                 {nonCmeSlots.map((slot) => {
                   const isSK = slot.cawangan.toLowerCase().includes('sk') || slot.cawangan.toLowerCase().includes('seri');
                   const isKajangSlot = slot.cawangan.toLowerCase().includes('kajang') || slot.cawangan.toLowerCase().includes('kj');
+                  const isSemenyihSlot = slot.cawangan.toLowerCase().includes('semenyih');
                   const badgeStyle = slot.status === 'Available'
                     ? (openSlotColorMode === 'branch'
                         ? (isSK
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
                             : isKajangSlot
                             ? 'bg-sky-50 text-sky-700 border-sky-100'
+                            : isSemenyihSlot
+                            ? 'bg-pink-50 text-pink-700 border-pink-100'
                             : 'bg-indigo-50 text-indigo-700 border-indigo-100')
                         : 'bg-red-50 text-red-700 border-red-100')
                     : slot.status === 'Pending'
