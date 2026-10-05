@@ -6,6 +6,17 @@ function isAdminRole(value: unknown): boolean {
   );
 }
 
+function normalizePhone(value: string): string {
+  const digits = value.replace(/\D/g, "");
+  if (digits.startsWith("60")) return `+${digits}`;
+  if (digits.startsWith("0")) return `+60${digits.slice(1)}`;
+  return `+${digits}`;
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -45,10 +56,52 @@ export default async function handler(req: any, res: any) {
   }
 
   // Never accept or write a password here. Auth owns credentials now.
+  const profileEmail = String(body.email || "").trim().toLowerCase();
+  if (profileEmail && !isValidEmail(profileEmail)) {
+    res.status(400).json({ error: "Please enter a valid email address." });
+    return;
+  }
+
+  // Keep the public profile email and the Supabase Auth email in sync. Auth
+  // remains the owner of the password; changing an email here must never
+  // replace or reset the password.
+  if (profileEmail) {
+    const { data: listed, error: listError } = await admin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (listError) {
+      res.status(500).json({ error: listError.message });
+      return;
+    }
+    const normalizedTargetPhone = normalizePhone(targetPhone);
+    const authUser = (listed.users || []).find(
+      (user) =>
+        user.phone === normalizedTargetPhone ||
+        String(user.user_metadata?.phone || "").trim() === targetPhone,
+    );
+    if (!authUser) {
+      res.status(409).json({
+        error: "This profile has no Supabase Auth account yet. Create the Auth account before changing its email.",
+      });
+      return;
+    }
+    if (String(authUser.email || "").trim().toLowerCase() !== profileEmail) {
+      const { error: authUpdateError } = await admin.auth.admin.updateUserById(
+        authUser.id,
+        { email: profileEmail, email_confirm: true },
+      );
+      if (authUpdateError) {
+        res.status(409).json({ error: `Auth email was not updated: ${authUpdateError.message}` });
+        return;
+      }
+    }
+  }
+
   const record = {
     nama: String(body.name || ""),
     role: String(body.role || "Doctor"),
-    email: String(body.email || ""),
+    email: profileEmail,
     mmc: String(body.mmc || ""),
     apc_2026: String(body.apc || ""),
     indemnity_insurance: String(body.indemnity || "Tiada"),

@@ -16,7 +16,7 @@ interface DoctorProfileTabProps {
     indStatus: string,
     indemnityFile: string,
     workplace: string
-  ) => string;
+  ) => Promise<string>;
   onUploadFile: (
     file: File,
     phone: string,
@@ -117,7 +117,7 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
     { name: 'The Diligent Doc', icon: 'bi-book-fill', color: 'linear-gradient(135deg, #F9CB28, #FF4D4D)', desc: 'Attended a Klinik ARA CME briefing session or training syllabus.' }
   ];
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !mmc) {
       alert("⚠️ Email and MMC declaration are compulsory fields.");
@@ -132,7 +132,7 @@ export const DoctorProfileTab: React.FC<DoctorProfileTabProps> = ({
     // Never replace an existing document link with an empty value when the
     // profile is edited for an unrelated field.
     const apcToSave = apcUploadedUrl || savedApcUrl;
-    const response = onUpdateProfile(
+    const response = await onUpdateProfile(
       currentUser.phone,
       email,
       mmc,

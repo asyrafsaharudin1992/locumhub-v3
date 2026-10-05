@@ -1357,7 +1357,7 @@ export function useAppState() {
     return "success";
   };
 
-  const updateProfile = (
+  const updateProfile = async (
     phone: string,
     email: string,
     mmc: string,
@@ -1365,7 +1365,7 @@ export function useAppState() {
     indStatus: string,
     indemnityFile: string,
     workplace: string,
-  ): string => {
+  ): Promise<string> => {
     if (localDemoMode) return "ℹ️ Local demo mode: profile changes are disabled.";
     const buildIndemnityString = (previousIndemnity: string): string => {
       if (indStatus !== "Ada") return "Tiada";
@@ -1376,31 +1376,6 @@ export function useAppState() {
         : "";
       return existingUrl ? `Ada | ${existingUrl}` : "Ada";
     };
-
-    setState((prev) => {
-      const updatedUsers = prev.users.map((u) => {
-        if (u.phone === phone) {
-          return {
-            ...u,
-            email,
-            mmc,
-            apc: apc || u.apc || "",
-            indemnity: buildIndemnityString(u.indemnity),
-            workplace,
-          };
-        }
-        return u;
-      });
-
-      const currentUpdated =
-        updatedUsers.find((u) => u.phone === phone) || null;
-      return {
-        ...prev,
-        users: updatedUsers,
-        currentUser:
-          prev.currentUser?.phone === phone ? currentUpdated : prev.currentUser,
-      };
-    });
 
     // The signed-in profile can be fresher than the background users list
     // (the latter is deliberately refreshed less often to save egress). Use
@@ -1417,9 +1392,30 @@ export function useAppState() {
         indemnity: buildIndemnityString(user.indemnity),
         workplace,
       };
-      cloudSaveUser(updatedUser).catch((err) =>
-        console.error("Cloud updateProfile failed:", err),
-      );
+      try {
+        await cloudSaveUser(updatedUser);
+      } catch (err: any) {
+        console.error("Cloud updateProfile failed:", err);
+        return `⚠️ Profile update failed: ${err?.message || "Please try again."}`;
+      }
+
+      setState((prev) => {
+        const updatedUsers = prev.users.map((u) => {
+          if (u.phone === phone) {
+            return updatedUser;
+          }
+          return u;
+        });
+
+        const currentUpdated =
+          updatedUsers.find((u) => u.phone === phone) || null;
+        return {
+          ...prev,
+          users: updatedUsers,
+          currentUser:
+            prev.currentUser?.phone === phone ? currentUpdated : prev.currentUser,
+        };
+      });
     }
 
     logActivity(`Profile updated for user: ${phone}`);
