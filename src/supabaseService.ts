@@ -170,13 +170,30 @@ export async function verifyLogin(
   ) || null;
   const profile: any = profileRow || {};
   const profileEmail = String(profile.email || profile.Email || "").trim().toLowerCase();
-  const syntheticEmail = `user-${cleanPhone.replace(/\D/g, "")}@auth.aralocum.local`;
+  const phoneDigits = cleanPhone.replace(/\D/g, "");
+  const syntheticEmail = `user-${phoneDigits}@auth.aralocum.local`;
+  // Older Auth migrations generated synthetic emails from the Malaysian
+  // country-code form (60...) while newer profiles usually store the local
+  // form (0...). Keep both aliases during login so a phone-format difference
+  // cannot make a valid password look incorrect.
+  const alternateSyntheticEmail = phoneDigits.startsWith("0")
+    ? `user-60${phoneDigits.slice(1)}@auth.aralocum.local`
+    : phoneDigits.startsWith("60")
+      ? `user-0${phoneDigits.slice(2)}@auth.aralocum.local`
+      : "";
+  const normalizedAuthPhone = phoneDigits.startsWith("0")
+    ? `+60${phoneDigits.slice(1)}`
+    : phoneDigits.startsWith("60")
+      ? `+${phoneDigits}`
+      : `+${phoneDigits}`;
   // Migrations use a synthetic identity for duplicate/placeholder emails.
   // Try both identities so older profiles remain compatible while repaired
   // profiles can log in without changing their displayed email.
-  const identifiers = profileEmail && profileEmail !== syntheticEmail
-    ? [profileEmail, syntheticEmail]
-    : [syntheticEmail];
+  const identifiers = Array.from(new Set([
+    ...(profileEmail ? [profileEmail] : []),
+    syntheticEmail,
+    ...(alternateSyntheticEmail ? [alternateSyntheticEmail] : []),
+  ]));
   const authPasswords = cleanPassword.length === 5
     ? [cleanPassword, `0${cleanPassword}`]
     : [cleanPassword];
@@ -192,6 +209,23 @@ export async function verifyLogin(
       }
     }
     if (authData) break;
+  }
+
+  // Some migrated Auth users have a placeholder or otherwise unrelated
+  // email, but their phone is correctly attached to the account. Supabase
+  // supports password sign-in by phone; use it as the final identifier so
+  // those accounts remain reachable without changing their password.
+  if (!authData) {
+    for (const authPassword of authPasswords) {
+      const authResult = await client.auth.signInWithPassword({
+        phone: normalizedAuthPhone,
+        password: authPassword,
+      });
+      if (!authResult.error && authResult.data.user) {
+        authData = authResult.data;
+        break;
+      }
+    }
   }
 
   if (authData?.user) {
