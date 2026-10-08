@@ -158,6 +158,13 @@ const DoctorTabHeader: React.FC<{ tab: string }> = ({ tab }) => {
   );
 };
 
+// Turns a badge_awards "MM/YYYY" month tag into a sortable number (YYYYMM),
+// since plain string sorting puts 01/2027 before 12/2026.
+function monthTagKey(monthTag: string): number {
+  const [month, year] = (monthTag || "").split("/").map(Number);
+  return (year || 0) * 100 + (month || 0);
+}
+
 export default function App() {
   const clinicBranches = useClinicBranches();
   // Public pre-shift declaration form — reached by scanning the static
@@ -360,7 +367,10 @@ export default function App() {
 
   // Filters for the badge history table (Loyalty Awards page)
   const [badgeHistoryDoctor, setBadgeHistoryDoctor] = useState("");
-  const [badgeHistoryMonth, setBadgeHistoryMonth] = useState("");
+  const [badgeHistoryBadge, setBadgeHistoryBadge] = useState("");
+  // Inclusive "MM/YYYY" month range; empty means open-ended on that side.
+  const [badgeHistoryFrom, setBadgeHistoryFrom] = useState("");
+  const [badgeHistoryTo, setBadgeHistoryTo] = useState("");
   const [declarationsPage, setDeclarationsPage] = useState(0);
   const [printDeclaration, setPrintDeclaration] = useState<any>(null);
 
@@ -1934,11 +1944,12 @@ export default function App() {
                           Badge History
                         </h5>
                         <p className="text-xs text-slate-500">
-                          Filter by doctor and/or month to see exactly which
-                          badges were awarded, sourced live from badge_awards.
+                          Filter by doctor, award and month range to see exactly
+                          which badges were awarded, sourced live from
+                          badge_awards. Doctors are ranked highest first.
                         </p>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                           <select
                             value={badgeHistoryDoctor}
                             onChange={(e) => setBadgeHistoryDoctor(e.target.value)}
@@ -1956,30 +1967,63 @@ export default function App() {
                               ))}
                           </select>
                           <select
-                            value={badgeHistoryMonth}
-                            onChange={(e) => setBadgeHistoryMonth(e.target.value)}
+                            value={badgeHistoryBadge}
+                            onChange={(e) => setBadgeHistoryBadge(e.target.value)}
                             className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 cursor-pointer"
                           >
-                            <option value="">All Months</option>
+                            <option value="">All Awards</option>
                             {Array.from(
-                              new Set(allBadgeAwards.map((r) => r.month_tag)),
+                              new Set(allBadgeAwards.map((r) => r.badge_name)),
                             )
                               .sort()
-                              .reverse()
-                              .map((mt) => (
-                                <option key={mt} value={mt}>
-                                  {mt}
+                              .map((name) => (
+                                <option key={name} value={name}>
+                                  {name}
                                 </option>
                               ))}
                           </select>
+                          {(
+                            [
+                              ["From", badgeHistoryFrom, setBadgeHistoryFrom],
+                              ["To", badgeHistoryTo, setBadgeHistoryTo],
+                            ] as const
+                          ).map(([label, value, setValue]) => (
+                            <select
+                              key={label}
+                              value={value}
+                              onChange={(e) => setValue(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl p-3 cursor-pointer"
+                            >
+                              <option value="">{label}: Any Month</option>
+                              {Array.from(
+                                new Set<string>(allBadgeAwards.map((r) => r.month_tag)),
+                              )
+                                .sort((a, b) => monthTagKey(b) - monthTagKey(a))
+                                .map((mt) => (
+                                  <option key={mt} value={mt}>
+                                    {label}: {mt}
+                                  </option>
+                                ))}
+                            </select>
+                          ))}
                         </div>
 
                         {(() => {
-                          const filtered = allBadgeAwards.filter(
-                            (r) =>
+                          // Accept the range in either order so picking
+                          // "From 09/2026, To 07/2026" still means Jul–Sep.
+                          const fromKey = badgeHistoryFrom ? monthTagKey(badgeHistoryFrom) : -Infinity;
+                          const toKey = badgeHistoryTo ? monthTagKey(badgeHistoryTo) : Infinity;
+                          const rangeStart = Math.min(fromKey, toKey);
+                          const rangeEnd = Math.max(fromKey, toKey);
+                          const filtered = allBadgeAwards.filter((r) => {
+                            const key = monthTagKey(r.month_tag);
+                            return (
                               (!badgeHistoryDoctor || r.doctor_name === badgeHistoryDoctor) &&
-                              (!badgeHistoryMonth || r.month_tag === badgeHistoryMonth),
-                          );
+                              (!badgeHistoryBadge || r.badge_name === badgeHistoryBadge) &&
+                              key >= rangeStart &&
+                              key <= rangeEnd
+                            );
+                          });
 
                           // Group: doctor -> badge -> [{month, count}], so
                           // each doctor's card shows every badge they've
@@ -2021,8 +2065,17 @@ export default function App() {
 
                           // Highest total AraCoins first, not alphabetical
                           const doctorNames = Object.keys(byDoctor).sort(
-                            (a, b) => doctorTotals[b] - doctorTotals[a],
+                            (a, b) => doctorTotals[b] - doctorTotals[a] || a.localeCompare(b),
                           );
+                          // Competition ranking: tied doctors share a rank.
+                          const doctorRanks: { [doctor: string]: number } = {};
+                          doctorNames.forEach((name, i) => {
+                            const prev = doctorNames[i - 1];
+                            doctorRanks[name] =
+                              prev !== undefined && doctorTotals[prev] === doctorTotals[name]
+                                ? doctorRanks[prev]
+                                : i + 1;
+                          });
 
                           if (doctorNames.length === 0) {
                             return (
@@ -2038,13 +2091,25 @@ export default function App() {
                                 const badges = byDoctor[doctorName];
                                 const badgeNames = Object.keys(badges).sort();
                                 const doctorTotal = doctorTotals[doctorName];
+                                const rank = doctorRanks[doctorName];
                                 return (
                                   <div
                                     key={doctorName}
-                                    className="rounded-2xl border border-slate-100 p-4 space-y-3 bg-slate-50/50"
+                                    className={`rounded-2xl border p-4 space-y-3 ${
+                                      rank === 1
+                                        ? "border-amber-300 bg-amber-50/60"
+                                        : "border-slate-100 bg-slate-50/50"
+                                    }`}
                                   >
-                                    <div className="flex justify-between items-baseline">
+                                    <div className="flex justify-between items-baseline gap-2">
                                       <h6 className="font-display font-bold text-slate-800 text-sm">
+                                        <span
+                                          className={`mr-1.5 font-mono ${
+                                            rank === 1 ? "text-amber-600" : "text-slate-400"
+                                          }`}
+                                        >
+                                          {rank === 1 ? "🏆 #1" : `#${rank}`}
+                                        </span>
                                         {doctorName}
                                       </h6>
                                       <span className="text-xs font-bold text-amber-600 font-mono">
