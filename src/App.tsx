@@ -11,6 +11,9 @@ import {
   fetchPatientFeedbackFromSheets,
 } from "./googleSheetsService";
 import { DoctorBookingTab } from "./components/DoctorBookingTab";
+import { SlotRestrictionModal } from "./components/SlotRestrictionModal";
+import { useSlotRestrictions } from "./useSlotRestrictions";
+import { collectSlotTimeOptions } from "./slotRestrictions";
 import { PreShiftDeclarationForm, DECLARATION_TEXT } from "./components/PreShiftDeclarationForm";
 import { DoctorStatusTab } from "./components/DoctorStatusTab";
 import { DoctorProfileTab } from "./components/DoctorProfileTab";
@@ -238,6 +241,7 @@ export default function App() {
     pullFromSupabase,
     pushToSupabase,
   } = useAppState();
+  const { getAllowedTimes, saveRestriction } = useSlotRestrictions(state.currentUser?.phone);
   const [dailyQuote] = useState(
     () => HADITH_QUOTES[Math.floor(Math.random() * HADITH_QUOTES.length)],
   );
@@ -416,6 +420,10 @@ export default function App() {
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
 
   // Admin roster action modals
+  const [slotAccessDoc, setSlotAccessDoc] = useState<{
+    phone: string;
+    name: string;
+  } | null>(null);
   const [resetPassDoc, setResetPassDoc] = useState<{
     phone: string;
     name: string;
@@ -1239,6 +1247,7 @@ export default function App() {
                       currentUser={state.currentUser}
                       onBookSlot={bookSlot}
                       onRefresh={() => {}}
+                      allowedTimes={getAllowedTimes(state.currentUser?.phone)}
                     />
                   )}
 
@@ -2830,6 +2839,11 @@ export default function App() {
                                     <td className="p-3">
                                       <div className="font-bold text-slate-800 font-display">
                                         Dr. {doc.name}
+                                        {getAllowedTimes(doc.phone) && (
+                                          <span className="ml-1.5 text-[9px] bg-amber-50 text-amber-700 border border-amber-100 px-1.5 py-0.5 rounded-full font-bold uppercase">
+                                            Slot restricted
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="text-[10px] text-slate-400 font-mono">
                                         {doc.phone} | {doc.email || "No email"}
@@ -2866,6 +2880,19 @@ export default function App() {
                                     <td className="p-3 text-right space-x-2">
                                       {isSuperAdmin ? (
                                         <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSlotAccessDoc({
+                                                phone: doc.phone,
+                                                name: doc.name,
+                                              });
+                                            }}
+                                            className="text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold py-1 px-2 rounded border border-amber-100 transition"
+                                          >
+                                            Slot Access
+                                          </button>
                                           <button
                                             type="button"
                                             onClick={(e) => {
@@ -3538,6 +3565,27 @@ export default function App() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Slot Access Modal — admin-only, silently limits a doctor's bookable times */}
+      <AnimatePresence>
+        {slotAccessDoc && (
+          <SlotRestrictionModal
+            doctor={slotAccessDoc}
+            timeOptions={collectSlotTimeOptions(state.slots)}
+            initialAllowedTimes={getAllowedTimes(slotAccessDoc.phone)}
+            onSave={async (allowedTimes) => {
+              await saveRestriction(slotAccessDoc.phone, allowedTimes);
+              setSuccessToast(
+                allowedTimes.length
+                  ? `Slot access updated for Dr. ${slotAccessDoc.name}`
+                  : `Dr. ${slotAccessDoc.name} can now see all slots`,
+              );
+              setTimeout(() => setSuccessToast(""), 3000);
+            }}
+            onClose={() => setSlotAccessDoc(null)}
+          />
         )}
       </AnimatePresence>
 

@@ -8,6 +8,7 @@ import {
   AppNotification,
   AdminAlert,
 } from "./types";
+import { normalizeRestrictionPhone, SlotRestrictionMap } from "./slotRestrictions";
 
 // Check if Supabase connection is active
 export function isSupabaseActive(): boolean {
@@ -447,6 +448,46 @@ export async function deleteClinicBranchFromSupabase(name: string): Promise<void
   const client = getSupabaseClient();
   if (!client) throw new Error("Supabase client not initialized");
   const { error } = await client.from("clinic_branches").delete().eq("name", name);
+  if (error) throw error;
+}
+
+// RLS limits a doctor to their own row, so for doctors this returns at most
+// one entry; admins get every restriction.
+export async function fetchSlotRestrictionsFromSupabase(): Promise<SlotRestrictionMap | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data, error } = await client
+    .from("doctor_slot_restrictions")
+    .select("phone, allowed_times");
+  if (error) {
+    console.warn("Supabase fetchSlotRestrictions failed:", error);
+    return null;
+  }
+  const map: SlotRestrictionMap = {};
+  (data || []).forEach((row) => {
+    const phone = normalizeRestrictionPhone(row.phone);
+    const times = Array.isArray(row.allowed_times) ? row.allowed_times.map(String) : [];
+    if (phone && times.length > 0) map[phone] = times;
+  });
+  return map;
+}
+
+/** Empty `allowedTimes` removes the restriction. */
+export async function saveSlotRestrictionToSupabase(phone: string, allowedTimes: string[]): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("Supabase client not initialized");
+  const cleanPhone = normalizeRestrictionPhone(phone);
+  if (allowedTimes.length === 0) {
+    const { error } = await client.from("doctor_slot_restrictions").delete().eq("phone", cleanPhone);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await client
+    .from("doctor_slot_restrictions")
+    .upsert(
+      { phone: cleanPhone, allowed_times: allowedTimes, updated_at: new Date().toISOString() },
+      { onConflict: "phone" },
+    );
   if (error) throw error;
 }
 

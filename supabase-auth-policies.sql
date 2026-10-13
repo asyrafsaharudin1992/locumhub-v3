@@ -227,3 +227,31 @@ create policy "admins can manage clinic branches"
   on public.clinic_branches for all to authenticated
   using (public.is_app_admin())
   with check (public.is_app_admin());
+
+-- DOCTOR SLOT RESTRICTIONS ---------------------------------------------------
+-- Admin-only setting that quietly limits which shift times a doctor sees on
+-- the booking page. Doctors can read only their own row (the app needs it to
+-- filter slots) and never see anyone else's; only admins can change rows.
+create table if not exists public.doctor_slot_restrictions (
+  phone text primary key,
+  allowed_times text[] not null default '{}',
+  updated_at timestamptz not null default now()
+);
+
+grant select, insert, update, delete on table public.doctor_slot_restrictions to authenticated;
+alter table public.doctor_slot_restrictions enable row level security;
+drop policy if exists "doctors read own slot restriction" on public.doctor_slot_restrictions;
+drop policy if exists "admins manage slot restrictions" on public.doctor_slot_restrictions;
+create policy "doctors read own slot restriction"
+  on public.doctor_slot_restrictions for select to authenticated
+  using (
+    public.is_app_admin()
+    or phone = regexp_replace(
+      regexp_replace(coalesce(auth.jwt() -> 'user_metadata' ->> 'phone', ''), '\D', '', 'g'),
+      '^60', '0'
+    )
+  );
+create policy "admins manage slot restrictions"
+  on public.doctor_slot_restrictions for all to authenticated
+  using (public.is_app_admin())
+  with check (public.is_app_admin());

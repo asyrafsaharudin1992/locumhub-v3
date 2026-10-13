@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CustomCalendar } from './CustomCalendar';
 import { LocumSlot, UserProfile } from '../types';
 import { useClinicBranches } from '../useClinicBranches';
+import { isSlotAllowed } from '../slotRestrictions';
 import { MapPin, Info, AlertTriangle, Clock, X, CheckCircle2, CalendarDays, Hourglass, Check } from 'lucide-react';
 
 interface DoctorBookingTabProps {
@@ -10,12 +11,14 @@ interface DoctorBookingTabProps {
   currentUser: UserProfile;
   onBookSlot: (slotId: string, name: string, phone: string) => Promise<string>;
   onRefresh: () => void;
+  allowedTimes?: string[] | null; // admin-set restriction; never shown to the doctor
 }
 
 export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
   slots,
   currentUser,
   onBookSlot,
+  allowedTimes,
 }) => {
   const [selectedBranch, setSelectedBranch] = useState('All');
   const [pendingSlot, setPendingSlot] = useState<LocumSlot | null>(null);
@@ -41,7 +44,8 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
     return !branch.includes('cme') && !branch.includes('briefing');
   });
   // Doctors should only ever see genuinely open/unbooked locum slots here.
-  const availableSlots = locumSlots.filter((s) => s.status === 'Available');
+  // Slots outside an admin-set time restriction are silently left out.
+  const availableSlots = locumSlots.filter((s) => s.status === 'Available' && isSlotAllowed(s, allowedTimes));
   const branchOptions = useClinicBranches(locumSlots.map((slot) => slot.cawangan));
   const normalizePhone = (value: string) => value.replace(/\D/g, '').replace(/^60/, '0');
   const mySlots = locumSlots.filter((s) => normalizePhone(String(s.phone || '')) === normalizePhone(currentUser.phone));
