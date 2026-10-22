@@ -586,15 +586,23 @@ export function useAppState() {
       }
       const profiles = await fetchUsersFromSupabase();
       if (cancelled) return;
-      const raw = (profiles || []).find(
-        (profile) =>
-          (phone && profile.phone.trim() === phone) ||
-          (email && profile.email.trim().toLowerCase() === email),
-      ) || (state.users || []).find(
-        (profile) =>
-          (phone && profile.phone.trim() === phone) ||
-          (email && profile.email.trim().toLowerCase() === email),
-      );
+      // Match by phone first. Email is only trusted when it identifies
+      // exactly ONE profile; shared/duplicate emails must never pick another
+      // doctor's row (that made the app send the wrong phone when booking).
+      const matchProfile = (list: UserProfile[]) => {
+        const byPhone = phone
+          ? list.find((profile) => profile.phone.trim() === phone)
+          : undefined;
+        if (byPhone) return byPhone;
+        const byEmail = email
+          ? list.filter(
+              (profile) => profile.email.trim().toLowerCase() === email,
+            )
+          : [];
+        return byEmail.length === 1 ? byEmail[0] : undefined;
+      };
+      const raw =
+        matchProfile(profiles || []) || matchProfile(state.users || []);
       // A valid Supabase Auth session must not look like a logout just
       // because the users_safe profile query is briefly unavailable or the
       // legacy phone/email fields do not match the Auth metadata exactly.
