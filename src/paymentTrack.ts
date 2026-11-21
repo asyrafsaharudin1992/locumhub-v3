@@ -9,13 +9,9 @@ export const trackFromDate = (): string => {
     if (import.meta.env.DEV) {
       const ok = (v: string | null) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
       const q = new URLSearchParams(window.location.search).get('trackFrom');
-      // Remember it, because the app may rewrite the URL after sign-in.
-      if (ok(q)) {
-        localStorage.setItem('trackFromDev', q as string);
-        return q as string;
-      }
-      const stored = localStorage.getItem('trackFromDev');
-      if (ok(stored)) return stored as string;
+      if (ok(q)) return q as string;
+      // Clean up the key an earlier dev build stored, so it can't linger.
+      localStorage.removeItem('trackFromDev');
     }
   } catch {
     /* ignore */

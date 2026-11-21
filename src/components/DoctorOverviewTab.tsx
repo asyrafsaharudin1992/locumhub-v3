@@ -164,15 +164,13 @@ export const DoctorOverviewTab: React.FC<DoctorOverviewTabProps> = ({
             className="group block w-full rounded-[22px] border border-slate-200 bg-white p-4 text-left shadow-[0_6px_20px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:shadow-md"
           >
             <span className="flex items-center justify-between gap-3">
-              <span className="flex items-center gap-2">
-                <span className="font-display text-sm font-bold text-slate-900">Track payment</span>
-                <span className="rounded-md bg-[#082f49] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-sky-100">
-                  New feature · Dec 2026
-                </span>
-              </span>
-              <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 transition group-hover:text-slate-700">
+              <span className="font-display text-sm font-bold text-slate-900">Track payment</span>
+              <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-slate-400 transition group-hover:text-slate-700">
                 Review <ArrowRight className="h-3.5 w-3.5" />
               </span>
+            </span>
+            <span className="mt-1.5 inline-block whitespace-nowrap rounded-md bg-[#082f49] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-sky-100">
+              New feature · Starts 1 Dec 2026
             </span>
 
             <span className="mt-3 flex items-end justify-between gap-3">
