@@ -6,6 +6,7 @@ import {
   BarChart3,
   Clock,
   Download,
+  Info,
   Moon,
   Search,
   Sun,
@@ -616,6 +617,16 @@ export const AdminAnalysisTab: React.FC<AdminAnalysisTabProps> = ({ slots }) => 
       <p className="px-1 text-[11px] text-slate-500">
         Not included in this analysis: Asyraf, Luqman, Haziq, Syafiq and Nabila (management / regular locums).
       </p>
+
+      {branchFilter !== "KJ" && (
+        <div className="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+          <div>
+            <strong>Seri Kembangan payment data has not been fully transferred yet.</strong>{" "}
+            SK pay, average rates and per-doctor figures are understated until the remaining records are entered.
+          </div>
+        </div>
+      )}
 
       {/* Data completeness */}
       {unpaid.length > 0 && (
