@@ -384,7 +384,16 @@ export const CustomCalendar: React.FC<CustomCalendarProps> = ({
                               <span className="truncate uppercase">
                                 {formatSlotTime(slot.masa)}
                               </span>
-                            ) : labelText}
+                            ) : (
+                              <span className="flex min-w-0 flex-col">
+                                <span>{labelText}</span>
+                                {slot.masa && (
+                                  <span className="text-[8px] font-medium leading-none text-slate-400">
+                                    {formatSlotTime(slot.masa)}
+                                  </span>
+                                )}
+                              </span>
+                            )}
                           </button>
                         );
                         })
