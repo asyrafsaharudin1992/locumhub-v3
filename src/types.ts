@@ -32,6 +32,8 @@ export interface LocumSlot {
   pesakit?: number; // Doctor's patient count logged after completion
   bookedAt?: string; // Time doctor clicked Book
   performanceRecorded?: boolean; // Track if performance output has been recorded
+  paidConfirmedBy?: 'doctor' | 'admin'; // who ticked it; a doctor can't undo an admin's tick
+  paidConfirmedAt?: string; // ISO time the doctor ticked "I've been paid" (Track Payment)
 }
 
 export interface FeedbackRecord {

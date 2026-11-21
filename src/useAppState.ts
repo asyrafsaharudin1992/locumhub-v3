@@ -28,6 +28,7 @@ import {
   saveSlotToSupabase,
   updateSlotToSupabase,
   releaseSlotByDoctor,
+  setSlotPaidConfirmed,
   deleteSlotFromSupabase,
   saveAnnouncementToSupabase,
   deleteAnnouncementFromSupabase,
@@ -789,6 +790,8 @@ export function useAppState() {
                 : undefined,
             bookedAt: row.bookedAt || row.booked_at || row.BookedAt || "",
             performanceRecorded: !!row.performance_recorded || String(row.performance_recorded) === "true",
+            paidConfirmedAt: row.paid_confirmed_at || undefined,
+            paidConfirmedBy: row.paid_confirmed_by || undefined,
           } as LocumSlot;
           setState((prev) => {
             if (payload.eventType === "DELETE") {
@@ -1593,6 +1596,22 @@ export function useAppState() {
       ? deleteAdminAlertsByEventFromSupabase(alert.slotId, alert.timestamp)
       : deleteAdminAlertFromSupabase(id);
     deleteRequest.catch((err) => console.error("Cloud deleteAdminAlert failed:", err));
+  };
+
+  const confirmSlotPaid = async (
+    slotId: string,
+    paid: boolean,
+    by: 'doctor' | 'admin' = 'doctor',
+  ): Promise<void> => {
+    const value = await setSlotPaidConfirmed(slotId, paid, by);
+    setState((prev) => ({
+      ...prev,
+      slots: prev.slots.map((s) =>
+        s.id === slotId
+          ? { ...s, paidConfirmedAt: value || undefined, paidConfirmedBy: paid ? by : undefined }
+          : s,
+      ),
+    }));
   };
 
   const cancelSlotByDoctor = async (
@@ -3378,6 +3397,7 @@ export function useAppState() {
     uploadCredentialFile,
     bookSlot,
     cancelSlotByDoctor,
+    confirmSlotPaid,
     adminApproveSlot,
     adminManageSlot,
     adminEditSlotTiming,

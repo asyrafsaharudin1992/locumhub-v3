@@ -1,20 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2, Trophy, Award, Heart, Zap, ShieldCheck, Flame, BookOpen, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ClipboardList, AlertCircle, AlertTriangle, Clock, Trash, X, CheckCircle2, Trophy, Award, Heart, Zap, ShieldCheck, Flame, BookOpen, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LocumSlot, UserProfile } from '../types';
+import { isPaymentTracked, formatRM } from '../paymentTrack';
+import { PayChart } from './PayChart';
 
 interface DoctorStatusTabProps {
   slots: LocumSlot[];
   currentUser: UserProfile;
   onCancelSlot: (slotId: string, statusAsal: string, phone: string) => Promise<string>;
+  onConfirmPaid?: (slotId: string, paid: boolean) => Promise<void>;
 }
 
 export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
   slots,
   currentUser,
-  onCancelSlot
+  onCancelSlot,
+  onConfirmPaid
 }) => {
-  const [shiftPeriod, setShiftPeriod] = useState<'All' | 'Past' | 'Upcoming'>('All');
+  const [paidBusyId, setPaidBusyId] = useState<string | null>(null);
+  const [paidError, setPaidError] = useState<string | null>(null);
+  const [pendingPaidSlot, setPendingPaidSlot] = useState<LocumSlot | null>(null);
+  const togglePaid = async (slot: LocumSlot) => {
+    if (!onConfirmPaid) return;
+    setPaidError(null);
+    setPaidBusyId(slot.id);
+    setPendingPaidSlot(null);
+    try {
+      await onConfirmPaid(slot.id, !slot.paidConfirmedAt);
+    } catch (e: any) {
+      setPaidError(e?.message || 'Could not save. Please try again.');
+    } finally {
+      setPaidBusyId(null);
+    }
+  };
+  const [shiftPeriod, setShiftPeriod] = useState<'All' | 'Past' | 'Upcoming' | 'Pay'>('All');
   const [monthFilter, setMonthFilter] = useState<string>('All');
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -80,9 +100,18 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
     return slotDate < today;
   };
 
-  const filteredSlots = sortedMySlots.filter(s => {
+  const toIsoDate = (t: string) => {
+    const [d, m, y] = (t || '').split('/');
+    return y && m && d ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : '';
+  };
+  const orderedSlots = shiftPeriod === 'Pay'
+    ? [...mySlots].sort((a, b) => toIsoDate(b.tarikh).localeCompare(toIsoDate(a.tarikh)))
+    : sortedMySlots;
+
+  const filteredSlots = orderedSlots.filter(s => {
     if (shiftPeriod === 'Past' && !isPastSlot(s.tarikh)) return false;
     if (shiftPeriod === 'Upcoming' && isPastSlot(s.tarikh)) return false;
+    if (shiftPeriod === 'Pay' && !isPaymentTracked(s)) return false;
     if (monthFilter !== 'All') {
       const parts = (s.tarikh || '').split('/');
       const slotMonthYear = parts.length === 3 ? `${parts[1].padStart(2, '0')}/${parts[2]}` : '';
@@ -90,6 +119,10 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
     }
     return true;
   });
+
+  const payTotal = filteredSlots.reduce((sum, s) => sum + (s.gaji || 0), 0);
+  const payReceived = filteredSlots.filter(s => s.paidConfirmedAt).reduce((sum, s) => sum + (s.gaji || 0), 0);
+  const payOutstanding = payTotal - payReceived;
 
   const totalPages = Math.max(1, Math.ceil(filteredSlots.length / PAGE_SIZE));
   const paginatedSlots = filteredSlots.slice(
@@ -278,6 +311,51 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
         </div>
       </div>
 
+      {/* Confirm payment received / undo */}
+      {pendingPaidSlot && (
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setPendingPaidSlot(null)}
+        >
+          <div
+            className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-sm p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h4 className="font-display font-bold text-slate-900 text-base">
+                Are you sure you received this payment?
+              </h4>
+              <p className="mt-1 text-xs text-slate-500">
+                Once confirmed, this cannot be undone. Only confirm when the money is in your account or in your hand.
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2.5 text-sm">
+              <p className="font-semibold text-slate-700">Klinik ARA {pendingPaidSlot.cawangan}</p>
+              <p className="text-slate-500">
+                {pendingPaidSlot.tarikh} &middot; {pendingPaidSlot.masa}
+                {pendingPaidSlot.gaji > 0 && <> &middot; <span className="font-bold text-slate-800">{formatRM(pendingPaidSlot.gaji)}</span></>}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingPaidSlot(null)}
+                className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => togglePaid(pendingPaidSlot)}
+                className="flex-1 rounded-xl py-2.5 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700"
+              >
+                Yes, I received it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Badge detail modal */}
       {selectedBadgeDetail && (() => {
         const config = MOBILE_BADGES_CONFIG.find(c => c.name === selectedBadgeDetail);
@@ -341,7 +419,7 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
       })()}
       <div className="flex flex-wrap gap-2 items-center">
         <div className="flex gap-1 bg-white p-1 rounded-xl w-fit border border-slate-200 shadow-sm">
-          {(['All', 'Past', 'Upcoming'] as const).map((period) => (
+          {((onConfirmPaid ? ['All', 'Past', 'Upcoming', 'Pay'] : ['All', 'Past', 'Upcoming']) as ('All' | 'Past' | 'Upcoming' | 'Pay')[]).map((period) => (
             <button
               key={period}
               type="button"
@@ -352,7 +430,9 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
                   : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
               }`}
             >
-              {period === 'All' ? 'All dates' : period === 'Past' ? 'Past shifts' : 'Upcoming shifts'}
+              {period === 'All' ? 'All dates' : period === 'Past' ? 'Past shifts' : period === 'Upcoming' ? 'Upcoming shifts' : (
+                <>Pay<span className={`ml-1 align-super text-[9px] font-semibold ${shiftPeriod === 'Pay' ? 'text-sky-200' : 'text-sky-600'}`}>new</span></>
+              )}
             </button>
           ))}
         </div>
@@ -386,6 +466,16 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
 
       {/* Slots List container */}
       <div className="space-y-3">
+        {shiftPeriod === 'Pay' && (
+          <div className="mb-3 space-y-3">
+            <PayChart slots={filteredSlots} />
+          </div>
+        )}
+        {paidError && (
+          <div className="flex items-center gap-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold px-3 py-2">
+            <AlertCircle className="w-4 h-4 shrink-0" /> {paidError}
+          </div>
+        )}
         <AnimatePresence mode="popLayout">
           {filteredSlots.length === 0 ? (
             <motion.div
@@ -427,6 +517,26 @@ export const DoctorStatusTab: React.FC<DoctorStatusTabProps> = ({
                       <span className="font-bold text-slate-700">{slot.tarikh}</span>
                       <span className="font-mono">({slot.masa})</span>
                     </div>
+
+                    {/* Payment tracking (shifts from the tracking start date) */}
+                    {onConfirmPaid && isPaymentTracked(slot) && (
+                      <button
+                        type="button"
+                        onClick={() => setPendingPaidSlot(slot)}
+                        disabled={paidBusyId === slot.id || !!slot.paidConfirmedAt}
+                        className={`mt-1 inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition ${
+                          slot.paidConfirmedAt
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                            : 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'
+                        }`}
+                      >
+                        <span className={`flex h-4 w-4 items-center justify-center rounded border-2 ${slot.paidConfirmedAt ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-amber-400 bg-white'}`}>
+                          {paidBusyId === slot.id ? <Loader2 className="h-2.5 w-2.5 animate-spin text-slate-400" /> : slot.paidConfirmedAt ? <CheckCircle2 className="h-3 w-3" /> : null}
+                        </span>
+                        {slot.paidConfirmedAt ? (slot.paidConfirmedBy === 'admin' ? 'Payment received · confirmed by admin' : 'Payment received') : 'Unpaid — tick when received'}
+                        {slot.gaji > 0 && <span className="font-mono opacity-80">· {formatRM(slot.gaji)}</span>}
+                      </button>
+                    )}
 
                     {/* Booked timer note */}
                     {slot.bookedAt && (

@@ -195,6 +195,7 @@ export default function App() {
     adminMergeExternalDoctor,
     bookSlot,
     cancelSlotByDoctor,
+    confirmSlotPaid,
     adminApproveSlot,
     adminManageSlot,
     adminEditSlotTiming,
@@ -1318,6 +1319,7 @@ export default function App() {
                       slots={state.slots}
                       currentUser={state.currentUser}
                       onCancelSlot={cancelSlotByDoctor}
+                      onConfirmPaid={(id, paid) => confirmSlotPaid(id, paid, 'doctor')}
                     />
                   )}
 
@@ -1517,6 +1519,7 @@ export default function App() {
                         currentUserRole={activeRole || "Admin"}
                         onManageSlot={adminManageSlot}
                         onEditTiming={adminEditSlotTiming}
+                        onConfirmPaid={(id, paid) => confirmSlotPaid(id, paid, 'admin')}
                         onBulkCreateSlots={adminCreateBulkSlots}
                         adminAlerts={state.adminAlerts}
                         onDismissAlert={dismissAdminAlert}

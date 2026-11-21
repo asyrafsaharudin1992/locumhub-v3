@@ -10,6 +10,7 @@ interface SlotManageModalProps {
   onClose: () => void;
   onManage: (action: 'DELETE' | 'CANCEL' | 'REPLACE', id: string, phone?: string, manualName?: string) => Promise<string>;
   onEditTiming: (id: string, newMasa: string) => Promise<string>;
+  onConfirmPaid?: (slotId: string, paid: boolean) => Promise<void>;
 }
 
 type ManagementAction = 'REPLACE' | 'RESET' | 'DELETE';
@@ -21,6 +22,7 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
   onClose,
   onManage,
   onEditTiming,
+  onConfirmPaid,
 }) => {
   const [selectedAction, setSelectedAction] = useState<ManagementAction>('REPLACE');
   const [chosenDoctorPhone, setChosenDoctorPhone] = useState<string>('');
@@ -34,10 +36,14 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
   const [isSavingTiming, setIsSavingTiming] = useState<boolean>(false);
 
   const [slot, setSlot] = useState<LocumSlot | null>(null);
+  const [paidAt, setPaidAt] = useState<string | undefined>(undefined);
+  const [isSavingPaid, setIsSavingPaid] = useState<boolean>(false);
+  const [confirmPaidNext, setConfirmPaidNext] = useState<boolean | null>(null);
 
   React.useEffect(() => {
     if (incomingSlot) {
       setSlot(incomingSlot);
+      setPaidAt(incomingSlot.paidConfirmedAt);
       setEditedMasa(incomingSlot.masa || '');
     }
   }, [incomingSlot]);
@@ -250,6 +256,62 @@ export const SlotManageModal: React.FC<SlotManageModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Payment received — admin can tick on the doctor's behalf */}
+              {onConfirmPaid && slot.status === 'Approved' && (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+                  {confirmPaidNext === null ? (
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-emerald-600"
+                        checked={!!paidAt}
+                        disabled={isSavingPaid}
+                        onChange={(e) => setConfirmPaidNext(e.target.checked)}
+                      />
+                      <span className="text-xs font-bold text-slate-700">Payment received</span>
+                      {paidAt && (
+                        <span className="ml-auto text-[10px] text-emerald-600 font-semibold">
+                          {new Date(paidAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                        </span>
+                      )}
+                    </label>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="flex-1 text-xs font-bold text-slate-700">
+                        {confirmPaidNext ? 'Mark this shift as paid?' : 'Mark this shift as not paid?'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmPaidNext(null)}
+                        className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingPaid}
+                        onClick={async () => {
+                          const next = confirmPaidNext;
+                          setIsSavingPaid(true);
+                          try {
+                            await onConfirmPaid(slot.id, next);
+                            setPaidAt(next ? new Date().toISOString() : undefined);
+                          } catch (err: any) {
+                            setStatusMessage({ type: 'error', text: err?.message || 'Could not update payment status.' });
+                          } finally {
+                            setIsSavingPaid(false);
+                            setConfirmPaidNext(null);
+                          }
+                        }}
+                        className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white"
+                      >
+                        Yes
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Toast Status Message */}
               {statusMessage && (

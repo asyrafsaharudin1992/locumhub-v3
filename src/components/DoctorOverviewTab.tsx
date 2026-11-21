@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowRight, Award, Bell, CalendarDays, ClipboardList, Clock, BookOpen, ExternalLink, Heart, MessageSquare } from 'lucide-react';
+import { isPaymentTracked, formatRM } from '../paymentTrack';
 import { AppNotification, FeedbackRecord, LocumSlot, UserProfile } from '../types';
 
 interface DoctorOverviewTabProps {
@@ -85,6 +86,9 @@ export const DoctorOverviewTab: React.FC<DoctorOverviewTabProps> = ({
     })
     .sort((a, b) => (parseShiftDate(a.tarikh)?.getTime() || 0) - (parseShiftDate(b.tarikh)?.getTime() || 0));
   const nextShift = myUpcomingSlots[0];
+  const trackedSlots = slots.filter(slot => isPaymentTracked(slot) && doctorMatches(slot, currentUser));
+  const unpaidSlots = trackedSlots.filter(slot => !slot.paidConfirmedAt);
+  const unpaidTotal = unpaidSlots.reduce((sum, slot) => sum + (slot.gaji || 0), 0);
   const unreadCount = notifications.filter(item => item.phone?.trim() === currentUser.phone?.trim() && !item.isRead).length;
   const badgeCount = countBadges(currentUser.badges || '');
   const badgeCounts = getBadgeCounts(currentUser.badges || '');
@@ -150,6 +154,48 @@ export const DoctorOverviewTab: React.FC<DoctorOverviewTabProps> = ({
           <ArrowRight className="h-3.5 w-3.5" />
         </button>
       </section>
+
+      {(() => {
+        const receivedPct = trackedSlots.length > 0 ? Math.round(((trackedSlots.length - unpaidSlots.length) / trackedSlots.length) * 100) : 0;
+        return (
+          <button
+            type="button"
+            onClick={() => onNavigate('status')}
+            className="group block w-full rounded-[22px] border border-slate-200 bg-white p-4 text-left shadow-[0_6px_20px_rgba(15,23,42,0.05)] transition hover:border-slate-300 hover:shadow-md"
+          >
+            <span className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2">
+                <span className="font-display text-sm font-bold text-slate-900">Track payment</span>
+                <span className="rounded-md bg-[#082f49] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-sky-100">
+                  New feature · Dec 2026
+                </span>
+              </span>
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 transition group-hover:text-slate-700">
+                Review <ArrowRight className="h-3.5 w-3.5" />
+              </span>
+            </span>
+
+            <span className="mt-3 flex items-end justify-between gap-3">
+              <span>
+                <span className="block font-display text-2xl font-extrabold leading-none text-slate-900">
+                  {trackedSlots.length} shift{trackedSlots.length === 1 ? '' : 's'} done
+                </span>
+                <span className="mt-1.5 block text-[11px] text-slate-500">
+                  <span className="font-semibold text-emerald-600">{trackedSlots.length - unpaidSlots.length} paid</span>
+                  {' · '}
+                  <span className={unpaidSlots.length > 0 ? 'font-semibold text-amber-600' : ''}>{unpaidSlots.length} pending payment</span>
+                  {unpaidTotal > 0 ? ` (${formatRM(unpaidTotal)})` : ''}
+                </span>
+              </span>
+              <span className="shrink-0 text-right text-[11px] font-semibold text-slate-500">{receivedPct}% received</span>
+            </span>
+
+            <span className="mt-3 block h-1.5 overflow-hidden rounded-full bg-slate-100">
+              <span className="block h-full rounded-full bg-emerald-500 transition-all duration-500" style={{ width: `${receivedPct}%` }} />
+            </span>
+          </button>
+        );
+      })()}
 
       <section>
         <div className="mb-3 flex items-end justify-between gap-3">

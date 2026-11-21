@@ -396,6 +396,8 @@ export async function fetchSlotsFromSupabase(): Promise<LocumSlot[] | null> {
       performanceRecorded:
         !!row.performance_recorded ||
         String(row.performance_recorded) === "true",
+      paidConfirmedAt: row.paid_confirmed_at || undefined,
+      paidConfirmedBy: row.paid_confirmed_by || undefined,
     };
   });
 }
@@ -1043,6 +1045,29 @@ export async function releaseSlotByDoctor(slotId: string): Promise<void> {
   if (!data || data.length === 0) {
     throw new Error("Slot could not be released by the current doctor.");
   }
+}
+
+// Doctor ticks / unticks "I've been paid". Deliberately NOT part of
+// slotToSupabaseRecord, so admin slot edits never overwrite it. The DB guard
+// trigger lets a doctor change only this column on their own approved slot.
+export async function setSlotPaidConfirmed(
+  slotId: string,
+  paid: boolean,
+  by: 'doctor' | 'admin' = 'doctor',
+): Promise<string | null> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("Supabase client not initialized");
+  const value = paid ? new Date().toISOString() : null;
+  const { data, error } = await client
+    .from("slots")
+    .update({ paid_confirmed_at: value, paid_confirmed_by: paid ? by : null })
+    .eq("id", slotId)
+    .select("id");
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("Could not update this slot.");
+  }
+  return value;
 }
 
 export async function deleteSlotFromSupabase(slotId: string) {

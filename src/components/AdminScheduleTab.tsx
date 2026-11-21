@@ -14,6 +14,7 @@ interface AdminScheduleTabProps {
   currentUserRole: string;
   onManageSlot: (action: 'DELETE' | 'CANCEL' | 'REPLACE', id: string, phone?: string, manualName?: string) => Promise<string>;
   onEditTiming: (id: string, newMasa: string) => Promise<string>;
+  onConfirmPaid?: (slotId: string, paid: boolean) => Promise<void>;
   onBulkCreateSlots: (dates: string[], branch: string, time: string, pay: number) => string | Promise<string>;
   adminAlerts?: AdminAlert[];
   onDismissAlert?: (id: string) => void;
@@ -25,6 +26,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
   currentUserRole,
   onManageSlot,
   onEditTiming,
+  onConfirmPaid,
   onBulkCreateSlots,
   adminAlerts = [],
   onDismissAlert
@@ -574,6 +576,7 @@ export const AdminScheduleTab: React.FC<AdminScheduleTabProps> = ({
         onClose={() => setManagingSlot(null)}
         onManage={onManageSlot}
         onEditTiming={onEditTiming}
+        onConfirmPaid={onConfirmPaid}
       />
 
       {/* Staff WhatsApp broadcast picker — pick one or more doctors to
