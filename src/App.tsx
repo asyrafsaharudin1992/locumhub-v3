@@ -18,6 +18,7 @@ import { PreShiftDeclarationForm, DECLARATION_TEXT } from "./components/PreShift
 import { DoctorStatusTab } from "./components/DoctorStatusTab";
 import { DoctorProfileTab } from "./components/DoctorProfileTab";
 import { DoctorFeedbackView } from "./components/DoctorFeedbackView";
+import { AdminAnalysisTab } from "./components/AdminAnalysisTab";
 import { DoctorNotificationsTab } from "./components/DoctorNotificationsTab";
 import { DoctorOverviewTab } from "./components/DoctorOverviewTab";
 import { PediatricCalculator } from "./components/PediatricCalculator";
@@ -73,6 +74,7 @@ import {
   Database,
   RefreshCw,
   Server,
+  BarChart3,
 } from "lucide-react";
 
 // Doctor names show up inconsistently across sources ("Dr Pravinaa", "DR PRAVINAA",
@@ -400,20 +402,57 @@ export default function App() {
   useEffect(() => {
     if (activeTab === "admin-fb" || activeTab === "admin-tasks" || activeTab === "feedback" || activeTab === "overview") {
       setLoadingFeedback(true);
+      // Staff feedback and locum surveys are admin-only. Never fetch them for
+      // doctors, so that data never even reaches a doctor's browser.
+      const canSeeStaffFeedback = isAdminRole(state.currentUser?.role);
       Promise.all([
         fetchPatientFeedbackFromSheets(),
-        fetchStaffFeedbackResponses(),
-        fetchLocumSurveyResponses(),
+        canSeeStaffFeedback ? fetchStaffFeedbackResponses() : Promise.resolve([]),
+        canSeeStaffFeedback ? fetchLocumSurveyResponses() : Promise.resolve([]),
       ])
         .then(([patients, staff, locum]) => {
           setPatientFeedbackEntries(patients);
           setStaffFeedbackEntries(staff);
           setLocumSurveyEntries(locum);
+          setFeedbackFetched(true);
         })
         .catch((err) => console.error("Failed to fetch feedback data:", err))
         .finally(() => setLoadingFeedback(false));
     }
-  }, [activeTab]);
+  }, [activeTab, state.currentUser?.role]);
+
+  // New patient-review alert for doctors. Reviews are read straight from
+  // Google Sheets, so "new" = this doctor's review count minus the count they
+  // last saw on this device. First run only sets a baseline (no false alarm).
+  const [feedbackFetched, setFeedbackFetched] = useState(false);
+  const [seenReviewCount, setSeenReviewCount] = useState<number | null>(null);
+  const reviewDoctorName = state.currentUser?.name || "";
+  const reviewDoctorPhone = state.currentUser?.phone?.trim() || "";
+  const myReviewCount =
+    state.currentUser?.role === "Doctor"
+      ? patientFeedbackEntries.filter(
+          (f) => f.target?.trim() && doctorNamesMatch(f.target, reviewDoctorName),
+        ).length
+      : 0;
+  const seenReviewsKey = `ara_seen_reviews_${reviewDoctorPhone}`;
+
+  useEffect(() => {
+    if (state.currentUser?.role !== "Doctor" || !reviewDoctorPhone || !feedbackFetched) return;
+    try {
+      const stored = localStorage.getItem(seenReviewsKey);
+      if (stored === null || activeTab === "feedback") {
+        localStorage.setItem(seenReviewsKey, String(myReviewCount));
+        setSeenReviewCount(myReviewCount);
+      } else {
+        setSeenReviewCount(Number(stored) || 0);
+      }
+    } catch {
+      setSeenReviewCount(myReviewCount);
+    }
+  }, [feedbackFetched, myReviewCount, activeTab, reviewDoctorPhone, seenReviewsKey, state.currentUser?.role]);
+
+  const newReviewCount =
+    seenReviewCount === null ? 0 : Math.max(0, myReviewCount - seenReviewCount);
 
   // Admin announcement state
   const [annText, setAnnText] = useState("");
@@ -728,6 +767,11 @@ export default function App() {
       id: "admin-dash",
       label: "Analytics dashboard",
       icon: <Activity className="w-4 h-4" />,
+    },
+    {
+      id: "admin-analysis",
+      label: "Analysis",
+      icon: <BarChart3 className="w-4 h-4 text-indigo-500" />,
     },
     {
       id: "admin-cal",
@@ -1051,7 +1095,9 @@ export default function App() {
                     ? unreadNotificationsCount
                     : isPendingTasksTab
                       ? pendingApprovalCount
-                      : 0;
+                      : tab.id === "feedback"
+                        ? newReviewCount
+                        : 0;
                   const showRedBadge = badgeCount > 0;
                   return (
                     <button
@@ -1229,6 +1275,22 @@ export default function App() {
                   {/* --- DOCTOR PORTALS --- */}
                   {activeRole === "Doctor" && (activeTab === "status" || activeTab === "peds-calc") && (
                     <DoctorTabHeader tab={activeTab} />
+                  )}
+
+                  {activeTab === "overview" && activeRole === "Doctor" && newReviewCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("feedback")}
+                      className="mb-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-100"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-xs font-bold text-white">
+                          {newReviewCount > 9 ? "9+" : newReviewCount}
+                        </span>
+                        You have {newReviewCount} new patient review{newReviewCount > 1 ? "s" : ""} from Google Form
+                      </span>
+                      <span className="text-xs font-bold">View →</span>
+                    </button>
                   )}
 
                   {activeTab === "overview" && activeRole === "Doctor" && state.currentUser && (
@@ -1427,6 +1489,10 @@ export default function App() {
                   )}
 
                   {/* --- ADMIN PORTALS --- */}
+                  {activeTab === "admin-analysis" && isAdminRole(activeRole) && (
+                    <AdminAnalysisTab slots={state.slots} />
+                  )}
+
                   {activeTab === "admin-dash" && isAdminRole(activeRole) && (
                     <AdminDashTab
                       slots={state.slots}
