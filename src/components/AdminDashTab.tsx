@@ -132,6 +132,18 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   }, null);
 
   const reminderDateKey = formatReminderDate(latestPendingDate);
+
+  // Past clinical shifts (Kajang / Seri Kembangan) that still have no payment amount.
+  // Unlike the reminder above, this does not depend on performanceRecorded.
+  const noPaymentShifts = slots
+    .filter(s => {
+      const d = parseCalendarDate(s.tarikh);
+      const branch = String(s.cawangan || '').toLowerCase();
+      const clinical = branch.includes('kajang') || branch.includes('seri kembangan');
+      return String(s.status || '').toLowerCase() === 'approved'
+        && !!s.dr && clinical && !!d && d < todayStart && !(Number(s.gaji) > 0);
+    })
+    .sort((a, b) => (parseCalendarDate(a.tarikh)?.getTime() || 0) - (parseCalendarDate(b.tarikh)?.getTime() || 0));
   const previousDayPendingCloseOuts = pendingHistoricalCloseOuts.filter(s => {
     const parsedDate = parseCalendarDate(s.tarikh);
     return !!parsedDate && !!latestPendingDate
@@ -583,6 +595,30 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
               ))}
             </div>
           </>
+        )}
+
+        {noPaymentShifts.length > 0 && (
+          <details className="mt-3 rounded-xl border border-slate-200 bg-white/80 p-3.5">
+            <summary className="cursor-pointer text-xs font-bold text-slate-800">
+              {noPaymentShifts.length} past shift{noPaymentShifts.length === 1 ? '' : 's'} without payment
+            </summary>
+            <div className="mt-2 space-y-1.5 max-h-96 overflow-y-auto pr-1">
+              {noPaymentShifts.map(slot => (
+                <button
+                  key={slot.id}
+                  type="button"
+                  onClick={() => handleReminderSelect(slot)}
+                  className="w-full rounded-lg border border-slate-100 bg-white px-3 py-2 text-left transition hover:border-amber-300 hover:bg-amber-50/50 flex items-center gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold text-slate-800 truncate">{slot.tarikh} · {slot.dr}</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{slot.masa} · {slot.cawangan}</p>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                </button>
+              ))}
+            </div>
+          </details>
         )}
       </div>
       </div>
