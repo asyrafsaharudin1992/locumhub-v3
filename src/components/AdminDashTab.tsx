@@ -118,11 +118,8 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   const pendingHistoricalCloseOuts = slots.filter(s => {
     const parsedDate = parseCalendarDate(s.tarikh);
     const isApproved = String(s.status || '').toLowerCase() === 'approved';
-    const hasRecordedData = s.performanceRecorded || (
-      s.sales !== undefined &&
-      s.pesakit !== undefined &&
-      (s.sales > 0 || s.pesakit > 0)
-    );
+    // Sales and patients are optional now, so either one having a value counts.
+    const hasRecordedData = s.performanceRecorded || (s.sales || 0) > 0 || (s.pesakit || 0) > 0;
 
     return isApproved && !!parsedDate && parsedDate < todayStart && !!s.dr && !hasRecordedData;
   });
