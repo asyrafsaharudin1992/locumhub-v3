@@ -118,8 +118,9 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
   const pendingHistoricalCloseOuts = slots.filter(s => {
     const parsedDate = parseCalendarDate(s.tarikh);
     const isApproved = String(s.status || '').toLowerCase() === 'approved';
-    // Sales and patients are optional now, so either one having a value counts.
-    const hasRecordedData = s.performanceRecorded || (s.sales || 0) > 0 || (s.pesakit || 0) > 0;
+    // Only payment matters. Sales and patients are never required and are ignored here.
+    // gaji can't be used: it is prefilled with the base rate when the slot is created.
+    const hasRecordedData = !!s.performanceRecorded || !!s.paidConfirmedAt;
 
     return isApproved && !!parsedDate && parsedDate < todayStart && !!s.dr && !hasRecordedData;
   });
@@ -562,7 +563,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                 {previousDayPendingCloseOuts.length} shift{previousDayPendingCloseOuts.length === 1 ? '' : 's'} need{previousDayPendingCloseOuts.length === 1 ? 's' : ''} attention
               </p>
               <p className="text-[11px] leading-relaxed text-amber-700 mt-1">
-                Please complete the sales and patient details for {reminderDateKey}.
+                Please complete the payment details for {reminderDateKey}.
               </p>
             </div>
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
