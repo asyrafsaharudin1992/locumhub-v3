@@ -475,10 +475,12 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
                               <span className="text-[9px] tracking-wider text-indigo-600 font-bold block uppercase">Total Sales (Closed)</span>
                               <span className="font-display text-lg font-extrabold text-indigo-900">RM {totalSales.toLocaleString()}</span>
+                              <span className="text-[9px] text-indigo-400 block mt-0.5">since 2027</span>
                             </div>
                             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
                               <span className="text-[9px] tracking-wider text-emerald-600 font-bold block uppercase">Total Patients (Closed)</span>
                               <span className="font-display text-lg font-extrabold text-emerald-800">{totalPatients.toLocaleString()}</span>
+                              <span className="text-[9px] text-emerald-500 block mt-0.5">since 2027</span>
                             </div>
                           </div>
                         ) : null;
