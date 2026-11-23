@@ -468,7 +468,9 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                         );
                         const totalSales = closedShifts.reduce((sum, s) => sum + (s.sales || 0), 0);
                         const totalPatients = closedShifts.reduce((sum, s) => sum + (s.pesakit || 0), 0);
-                        return closedShifts.length > 0 ? (
+                        // Sales/patients are only recorded from Jan 2027, so hide these totals until then.
+                        const showSalesPatients = new Date().getFullYear() >= 2027;
+                        return showSalesPatients && closedShifts.length > 0 ? (
                           <div className="grid grid-cols-2 gap-2 mb-2">
                             <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 text-center">
                               <span className="text-[9px] tracking-wider text-indigo-600 font-bold block uppercase">Total Sales (Closed)</span>
