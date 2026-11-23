@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DashboardCharts } from './DashboardCharts';
 import { LocumSlot, UserProfile } from '../types';
+import { parseShiftTime } from './AdminAnalysisTab';
 import { ClipboardCheck, Sparkles, Filter, CheckCircle2, UserCheck, BarChart2, MessageSquare, Coins, Loader2, BellRing, ArrowRight } from 'lucide-react';
 
 interface BadgeAwardRow {
@@ -94,7 +95,8 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
     return new Date(year, month - 1, day);
   };
 
-  const completedApprovedShifts = displaySlots
+  // Uses ALL slots (not displaySlots) so the close-out form shows a doctor's shifts irrespective of month.
+  const completedApprovedShifts = slots
     .filter(s => {
     if (s.status !== 'Approved') return false;
     if (selectedDoctorFilter) {
@@ -108,6 +110,25 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
       if (dateA !== dateB) return dateA - dateB;
       return a.masa.localeCompare(b.masa);
     });
+
+  // Per-doctor totals for shifts already taken (today or earlier), any month.
+  const doctorTaken = (() => {
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    let shifts = 0;
+    let hours = 0;
+    let since: Date | null = null;
+    for (const s of completedApprovedShifts) {
+      const d = parseCalendarDate(s.tarikh);
+      if (!d || d > todayEnd) continue;
+      const branch = String(s.cawangan || '').toLowerCase();
+      if (!(branch.includes('kajang') || branch.includes('seri kembangan'))) continue; // skip CME/briefing
+      shifts += 1;
+      hours += parseShiftTime(s.masa)?.hours || 0;
+      if (!since || d < since) since = d;
+    }
+    return { shifts, hours, since };
+  })();
 
   const formatReminderDate = (date: Date | null) => {
     if (!date) return '';
@@ -427,6 +448,20 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                           Checking actual sales/pesakit values (not just the performanceRecorded
                           flag) since older/imported records often have real data but were never
                           explicitly marked "closed" through this specific form. */}
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                          <span className="text-[9px] tracking-wider text-slate-500 font-bold block uppercase">Shifts Taken</span>
+                          <span className="font-display text-lg font-extrabold text-slate-800">{doctorTaken.shifts}</span>
+                        </div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                          <span className="text-[9px] tracking-wider text-slate-500 font-bold block uppercase">Hours Taken</span>
+                          <span className="font-display text-lg font-extrabold text-slate-800">{Math.round(doctorTaken.hours * 10) / 10}</span>
+                        </div>
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                          <span className="text-[9px] tracking-wider text-slate-500 font-bold block uppercase">Since</span>
+                          <span className="font-display text-sm font-extrabold text-slate-800">{doctorTaken.since ? formatReminderDate(doctorTaken.since) : '-'}</span>
+                        </div>
+                      </div>
                       {(() => {
                         const closedShifts = completedApprovedShifts.filter(
                           s => s.performanceRecorded || s.sales !== undefined || s.pesakit !== undefined
