@@ -15,7 +15,7 @@ interface BadgeAwardRow {
 interface AdminDashTabProps {
   slots: LocumSlot[];
   users: UserProfile[];
-  onCompleteSlot: (slotId: string, sales: number, patients: number, pay: number, period: string) => string;
+  onCompleteSlot: (slotId: string, sales: number | undefined, patients: number | undefined, pay: number, period: string) => string;
   onRecalculateBadges: (month: string, year: string) => Promise<string>;
   allBadgeAwards: BadgeAwardRow[];
 }
@@ -196,11 +196,16 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
     // Note: previously recorded slots can now be re-saved (e.g. to correct a
     // typo in sales/patients/payout) rather than being permanently locked.
 
-    const sales = Number.parseFloat(salesVal);
-    const patients = Number.parseInt(ptsVal, 10);
+    // Only payout is mandatory; sales and patients may be left blank.
+    const sales = salesVal.trim() === '' ? undefined : Number.parseFloat(salesVal);
+    const patients = ptsVal.trim() === '' ? undefined : Number.parseInt(ptsVal, 10);
     const payment = Number.parseFloat(payVal);
-    if (!Number.isFinite(sales) || sales < 0 || !Number.isFinite(patients) || patients < 0 || !Number.isFinite(payment) || payment < 0) {
-      alert('⚠️ Please enter valid non-negative sales, patient and payout values.');
+    if (!Number.isFinite(payment) || payment < 0) {
+      alert('⚠️ Please enter a valid payout value (required).');
+      return;
+    }
+    if ((sales !== undefined && (!Number.isFinite(sales) || sales < 0)) || (patients !== undefined && (!Number.isFinite(patients) || patients < 0))) {
+      alert('⚠️ Sales and patients must be valid non-negative numbers, or left blank.');
       return;
     }
 
@@ -483,11 +488,10 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
 
                           <div className="grid grid-cols-3 gap-3">
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-600 uppercase">Sales RM</label>
+                              <label className="text-[10px] font-bold text-slate-600 uppercase">Sales RM <span className="normal-case font-medium text-slate-400">(optional)</span></label>
                               <input
                                 type="text"
                                 inputMode="decimal"
-                                required
                                 value={salesVal}
                                 onChange={e => setSalesVal(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
                                 placeholder="0.00"
@@ -495,11 +499,10 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-600 uppercase">Patients pts</label>
+                              <label className="text-[10px] font-bold text-slate-600 uppercase">Patients pts <span className="normal-case font-medium text-slate-400">(optional)</span></label>
                               <input
                                 type="text"
                                 inputMode="numeric"
-                                required
                                 value={ptsVal}
                                 onChange={e => setPtsVal(e.target.value.replace(/\D/g, ''))}
                                 placeholder="0"
@@ -507,7 +510,7 @@ export const AdminDashTab: React.FC<AdminDashTabProps> = ({
                               />
                             </div>
                             <div className="space-y-1">
-                              <label className="text-[10px] font-bold text-slate-600 uppercase">Payout RM</label>
+                              <label className="text-[10px] font-bold text-slate-600 uppercase">Payout RM <span className="text-rose-500">*</span></label>
                               <input
                                 type="text"
                                 inputMode="decimal"

@@ -2597,8 +2597,8 @@ export function useAppState() {
 
   const completeSlotAndAwardPoints = async (
     slotId: string,
-    sales: number,
-    patients: number,
+    sales: number | undefined,
+    patients: number | undefined,
     payment: number,
     period: string,
   ): Promise<string> => {
