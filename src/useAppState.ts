@@ -1474,6 +1474,26 @@ export function useAppState() {
     if (!slot) return "Error: Slot not found.";
     if (slot.status !== "Available") return "Slot is no longer available.";
 
+    // The database only lets a doctor claim a slot under the phone number of
+    // the signed-in Auth session. Check that here so a stale or different
+    // session gets a clear instruction instead of a raw database error.
+    const sessionMismatchMessage =
+      "Your login session has expired or does not match this profile. Please log out and log in again.";
+    if (
+      isSupabaseEnabled &&
+      isSupabaseActive() &&
+      state.currentUser?.role === "Doctor"
+    ) {
+      try {
+        const session = await getFreshSupabaseSession();
+        const sessionPhone = String(session.user.user_metadata?.phone || "").trim();
+        if (sessionPhone !== doctorPhone.trim()) return sessionMismatchMessage;
+      } catch (err) {
+        console.warn("Booking session check failed:", err);
+        return sessionMismatchMessage;
+      }
+    }
+
     const bookedAt = new Date().toLocaleString("en-GB");
 
     // The real fix: atomically claim the slot in Supabase first — this
@@ -1495,6 +1515,9 @@ export function useAppState() {
         // doctor immediately sees the slot is really gone, rather than
         // it lingering as "Available" in their view until the next poll.
         await pullTier1FromSupabase();
+        if (claimResult.error?.includes("Doctors may only claim available slots")) {
+          return sessionMismatchMessage;
+        }
         if (claimResult.error && claimResult.error !== "Slot is no longer available.") {
           return `Booking could not be saved: ${claimResult.error}`;
         }

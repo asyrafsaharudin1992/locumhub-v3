@@ -4,7 +4,7 @@ import { CustomCalendar } from './CustomCalendar';
 import { LocumSlot, UserProfile } from '../types';
 import { useClinicBranches } from '../useClinicBranches';
 import { isSlotAllowed } from '../slotRestrictions';
-import { MapPin, Info, AlertTriangle, Clock, X, CheckCircle2, CalendarDays, Hourglass, Check } from 'lucide-react';
+import { MapPin, Info, AlertTriangle, Clock, X, CheckCircle2, CalendarDays, Hourglass, Check, XCircle } from 'lucide-react';
 
 interface DoctorBookingTabProps {
   slots: LocumSlot[];
@@ -287,7 +287,11 @@ export const DoctorBookingTab: React.FC<DoctorBookingTabProps> = ({
             exit={{ opacity: 0, y: 20 }}
             className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs font-semibold px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-2.5 max-w-[90vw]"
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            {resultMessage.startsWith('Application successfully') ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            ) : (
+              <XCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+            )}
             <span>{resultMessage}</span>
             <button onClick={() => setResultMessage(null)} className="text-slate-400 hover:text-white ml-2">
               <X className="w-3.5 h-3.5" />
